@@ -1,0 +1,41 @@
+# compiled output
+/dist
+/node_modules
+
+# logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# environment
+.env
+.env.local
+.env.*.local
+
+# tests
+/coverage
+/.nyc_output
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c4k
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-search
+
+# OS
+.DS_Store
+Thumbs.db
+
+# prisma
+prisma/*.db

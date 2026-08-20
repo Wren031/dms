@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------------
+// Enums
+// -------------------------------------------------------------------
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  LOCKED
+  PENDING
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  ON_LEAVE
+  RESIGNED
+  RETIRED
+  TERMINATED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+// -------------------------------------------------------------------
+// User
+// -------------------------------------------------------------------
+
+model User {
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  passwordHash        String
+  role                UserRole  @default(USER)
+  status              AccountStatus @default(PENDING)
+  emailVerified       Boolean   @default(false)
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  lastLoginIp         String?
+  passwordChangedAt   DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  refreshTokens           RefreshToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  auditLogs               AuditLog[]
+  employee                Employee?
+
+  @@index([status])
+  @@index([role])
+}
+
+// -------------------------------------------------------------------
+// Office
+// -------------------------------------------------------------------
+
+model Office {
+  id        String     @id @default(uuid())
+  name      String
+  code      String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  employees Employee[]
+
+  @@index([name])
+}
+
+// -------------------------------------------------------------------
+// Employee (people who create/review/approve documents)
+// -------------------------------------------------------------------
+
+model Employee {
+  id               String           @id @default(uuid())
+  employeeId       String           @unique
+  firstName        String
+  middleName       String?
+  lastName         String
+  suffix           String?
+  email            String?          @unique
+  phone            String?
+  dateOfBirth      DateTime?
+  gender           Gender?
+  position         String
+  officeId         String?
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  dateHired        DateTime?
+  dateSeparated    DateTime?
+  profilePhoto     String?
+  userId           String?          @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  office Office? @relation(fields: [officeId], references: [id], onDelete: SetNull)
+
+  @@index([officeId])
+  @@index([employmentStatus])
+  @@index([lastName])
+}
+
+// -------------------------------------------------------------------
+// Refresh token sessions (only hashes are stored, never raw tokens)
+// -------------------------------------------------------------------
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  ipAddress  String?
+  userAgent  String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// -------------------------------------------------------------------
+// Email verification tokens (hash only)
+// -------------------------------------------------------------------
+
+model EmailVerificationToken {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// -------------------------------------------------------------------
+// Password reset tokens (hash only)
+// -------------------------------------------------------------------
+
+model PasswordResetToken {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// -------------------------------------------------------------------
+// Audit log - security sensitive events
+// -------------------------------------------------------------------
+
+model AuditLog {
+  id         String    @id @default(uuid())
+  userId     String?
+  action     String
+  resource   String?
+  resourceId String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
