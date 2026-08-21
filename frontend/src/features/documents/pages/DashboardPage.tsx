@@ -1,0 +1,436 @@
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  FileText,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Users as UsersIcon,
+  ArrowRight,
+  FilePlus,
+  ChevronRight,
+  Bell,
+  TrendingUp,
+} from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Card, CardHeader } from '@/components/ui/Card';
+import { StatusBadge, PriorityBadge, Tag } from '@/components/ui/StatusBadge';
+import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { useAuth } from '@/hooks/useAuth';
+import { documents } from '@/mocks/documents';
+import { getOfficeById } from '@/mocks/offices';
+import { getUserById } from '@/mocks/users';
+import { auditLogs } from '@/mocks/auditLogs';
+import { notifications as allNotifications } from '@/mocks/notifications';
+import {
+  DOCUMENT_STATUS_LABELS,
+  ROLE_LABELS,
+} from '@/constants';
+import { formatRelative, cn } from '@/lib/utils';
+import type { DocumentStatus } from '@/types';
+
+export function DashboardPage() {
+  const { user } = useAuth();
+  if (!user) return null;
+
+  const stats = useMemo(() => {
+    const total = documents.length;
+    const inProgress = documents.filter(d =>
+      ['registered', 'received', 'in_routing', 'under_review', 'recommended'].includes(d.status)
+    ).length;
+    const completed = documents.filter(d => d.status === 'released' || d.status === 'archived').length;
+    const overdue = documents.filter(d => {
+      if (!d.dueDate) return false;
+      if (d.status === 'released' || d.status === 'archived' || d.status === 'rejected') return false;
+      return new Date(d.dueDate).getTime() < new Date().getTime();
+    }).length;
+
+    const myDocuments = documents.filter(d =>
+      d.encodedById === user.id ||
+      d.currentHolderId === user.id ||
+      d.receivedById === user.id
+    ).length;
+
+    return { total, inProgress, completed, overdue, myDocuments };
+  }, [user.id]);
+
+  const myInbox = useMemo(() => {
+    return documents.filter(d => d.currentHolderId === user.id).slice(0, 5);
+  }, [user.id]);
+
+  const recent = useMemo(() => {
+    return [...documents]
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 6);
+  }, []);
+
+  const statusDistribution = useMemo(() => {
+    const counts: Record<DocumentStatus, number> = {
+      registered: 0, received: 0, in_routing: 0, under_review: 0, recommended: 0,
+      approved: 0, rejected: 0, returned: 0, released: 0, archived: 0,
+    };
+    documents.forEach(d => counts[d.status]++);
+    return counts;
+  }, []);
+
+  const activeStatuses = useMemo(() => {
+    const active: DocumentStatus[] = [
+      'registered', 'received', 'in_routing', 'under_review', 'recommended', 'approved',
+    ];
+    return active.map(s => ({ status: s, count: statusDistribution[s] }));
+  }, [statusDistribution]);
+
+  const completedCount = useMemo(
+    () => statusDistribution.released + statusDistribution.archived,
+    [statusDistribution]
+  );
+
+  const completionRate = stats.total === 0 ? 0 : Math.round((completedCount / stats.total) * 100);
+
+  const myNotifications = useMemo(
+    () => allNotifications.filter(n => n.userId === user.id).slice(0, 5),
+    [user.id]
+  );
+
+  const unreadCount = useMemo(
+    () => allNotifications.filter(n => n.userId === user.id && !n.read).length,
+    [user.id]
+  );
+
+  const recentLogs = useMemo(() => auditLogs.slice(0, 5), []);
+
+  const workflowSteps = [
+    'registered', 'received', 'in_routing', 'under_review', 'recommended', 'approved', 'released', 'archived',
+  ] as const;
+
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={`Welcome back, ${user.fullName.split(' ')[0]}`}
+        description={`${today} · ${ROLE_LABELS[user.role]}`}
+        actions={
+          <>
+            <Link to="/documents">
+              <Button variant="outline" leftIcon={<FileText className="w-4 h-4" />}>
+                View All Documents
+              </Button>
+            </Link>
+            {user.role !== 'reviewing_officer' && user.role !== 'receiving_officer' && (
+              <Link to="/documents/register">
+                <Button variant="primary" leftIcon={<FilePlus className="w-4 h-4" />}>
+                  Register Document
+                </Button>
+              </Link>
+            )}
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard
+          label="Total Documents"
+          value={stats.total}
+          icon={<FileText className="w-4 h-4" />}
+        />
+        <StatCard
+          label="In Progress"
+          value={stats.inProgress}
+          icon={<Clock className="w-4 h-4" />}
+        />
+        <StatCard
+          label="Completed"
+          value={stats.completed}
+          icon={<CheckCircle2 className="w-4 h-4" />}
+          footer={
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+              <TrendingUp className="w-3 h-3" />
+              <span>{completionRate}% completion rate</span>
+            </div>
+          }
+        />
+        <StatCard
+          label="Overdue"
+          value={stats.overdue}
+          icon={<AlertTriangle className="w-4 h-4" />}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <Card className="lg:col-span-2">
+          <CardHeader
+            title="Document Status Overview"
+            description="Distribution of documents across workflow stages"
+            action={
+              <Link to="/documents">
+                <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
+                  View all
+                </Button>
+              </Link>
+            }
+          />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {activeStatuses.map(({ status, count }) => (
+              <Link
+                to={`/documents?status=${status}`}
+                key={status}
+                className="group p-3.5 rounded-md border border-slate-200 hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <StatusBadge status={status} className="!text-[10px] !px-1.5 !py-0" />
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-brand-600 transition-colors" />
+                </div>
+                <p className="text-2xl font-semibold text-slate-900 tabular-nums">{count}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{DOCUMENT_STATUS_LABELS[status]}</p>
+              </Link>
+            ))}
+          </div>
+        </Card>
+
+        <Card padded={false}>
+          <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-semibold text-slate-900">Notifications</h3>
+              {unreadCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-semibold bg-brand-600 text-white rounded-full">
+                  {unreadCount}
+                </span>
+              )}
+            </div>
+            <Link to="/notifications">
+              <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
+                View all
+              </Button>
+            </Link>
+          </div>
+          <div className="px-5 pb-5 space-y-1">
+            {myNotifications.length === 0 ? (
+              <div className="py-8 text-center">
+                <Bell className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm text-slate-500">No notifications</p>
+              </div>
+            ) : (
+              myNotifications.map(n => (
+                <Link
+                  key={n.id}
+                  to={n.link || '/notifications'}
+                  className="flex items-start gap-3 py-2.5 -mx-1 px-1 rounded-md hover:bg-slate-50 transition-colors group"
+                >
+                  <span className={cn(
+                    'mt-1.5 w-1.5 h-1.5 rounded-full shrink-0',
+                    n.read ? 'bg-slate-200' : 'bg-brand-500'
+                  )} />
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      'text-sm truncate group-hover:text-brand-700',
+                      n.read ? 'font-medium text-slate-700' : 'font-semibold text-slate-900'
+                    )}>
+                      {n.title}
+                    </p>
+                    <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{n.message}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">{formatRelative(n.createdAt)}</p>
+                  </div>
+                </Link>
+              ))
+            )}
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader
+          title="Workflow Pipeline"
+          description="End-to-end document flow from registration to archive"
+        />
+        <div className="overflow-x-auto pb-1 -mx-2 px-2 scrollbar-thin">
+          <ol className="flex items-stretch gap-0 min-w-[820px]">
+            {workflowSteps.map((step, idx) => {
+              const count = statusDistribution[step];
+              const isLast = idx === workflowSteps.length - 1;
+              return (
+                <li key={step} className="flex items-stretch flex-1">
+                  <Link
+                    to={`/documents?status=${step}`}
+                    className="group flex-1 min-w-0 px-3 py-2.5 rounded-md border border-slate-200 hover:border-brand-300 hover:bg-slate-50/60 transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        Step {idx + 1}
+                      </span>
+                      <span
+                        className={cn(
+                          'text-sm font-semibold tabular-nums',
+                          count > 0 ? 'text-slate-900' : 'text-slate-300'
+                        )}
+                      >
+                        {count}
+                      </span>
+                    </div>
+                    <StatusBadge status={step} className="!text-[10px] !px-1.5 !py-0" />
+                    <p className="text-[11px] text-slate-500 mt-1.5 truncate">
+                      {DOCUMENT_STATUS_LABELS[step]}
+                    </p>
+                  </Link>
+                  {!isLast && (
+                    <div className="flex items-center justify-center px-1.5 text-slate-300 shrink-0">
+                      <ArrowRight className="w-4 h-4" />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      </Card>
+
+      <Card padded={false}>
+        <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">
+              {user.role === 'reviewing_officer' || user.role === 'receiving_officer'
+                ? 'My Assigned Documents'
+                : 'Recently Updated'}
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">Documents requiring your attention</p>
+          </div>
+          <Link to="/documents">
+            <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
+              View all
+            </Button>
+          </Link>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {(user.role === 'reviewing_officer' || user.role === 'receiving_officer' ? myInbox : recent).map(doc => {
+            const office = getOfficeById(doc.currentOfficeId);
+            const holder = doc.currentHolderId ? getUserById(doc.currentHolderId) : null;
+            return (
+              <Link
+                key={doc.id}
+                to={`/documents/${doc.id}`}
+                className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
+              >
+                <div className="w-9 h-9 rounded-md bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-[11px] font-mono font-semibold text-slate-500">
+                      {doc.trackingNumber}
+                    </span>
+                    <StatusBadge status={doc.status} className="!text-[10px] !px-1.5 !py-0" />
+                    <PriorityBadge priority={doc.priority} className="!text-[10px] !px-1.5 !py-0" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-900 truncate group-hover:text-brand-700">
+                    {doc.title}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                    {office && <span>{office.code}</span>}
+                    {holder && (
+                      <>
+                        <span className="text-slate-300">·</span>
+                        <span className="truncate">{holder.fullName}</span>
+                      </>
+                    )}
+                    <span className="text-slate-300">·</span>
+                    <span>{formatRelative(doc.updatedAt)}</span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-600 transition-colors shrink-0 mt-2" />
+              </Link>
+            );
+          })}
+        </div>
+      </Card>
+
+      {(user.role === 'system_admin' || user.role === 'office_admin') && recentLogs.length > 0 && (
+        <Card padded={false}>
+          <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900">Recent System Activity</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Latest actions across the system</p>
+            </div>
+            <Link to="/audit">
+              <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
+                View audit log
+              </Button>
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-y border-slate-200 bg-slate-50/50 text-[10px] uppercase tracking-wider text-slate-500">
+                  <th className="px-5 py-2.5 text-left font-semibold">Actor</th>
+                  <th className="px-5 py-2.5 text-left font-semibold">Action</th>
+                  <th className="px-5 py-2.5 text-left font-semibold">Module</th>
+                  <th className="px-5 py-2.5 text-left font-semibold">Description</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Time</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {recentLogs.map(log => (
+                  <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar
+                          name={log.actorName}
+                          color={getUserById(log.actorId)?.avatarColor ?? 'bg-slate-600'}
+                          size="sm"
+                        />
+                        <span className="text-xs font-medium text-slate-900 truncate">{log.actorName}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <Tag
+                        variant={
+                          log.action === 'APPROVE' ? 'emerald' :
+                          log.action === 'REJECT' ? 'rose' :
+                          log.action === 'RETURN' ? 'orange' :
+                          log.action === 'REVIEW' || log.action === 'RECOMMEND' ? 'indigo' :
+                          'slate'
+                        }
+                      >
+                        {log.action}
+                      </Tag>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-slate-600">{log.module}</td>
+                    <td className="px-5 py-3 text-xs text-slate-700 max-w-md truncate">{log.description}</td>
+                    <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap text-right">
+                      {formatRelative(log.createdAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+  footer,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-colors">
+      <div className="flex items-center justify-between mb-3">
+        <div className="w-8 h-8 rounded-md border border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center">
+          {icon}
+        </div>
+      </div>
+      <p className="text-2xl font-semibold text-slate-900 tabular-nums leading-none">{value}</p>
+      <p className="text-xs text-slate-500 mt-1.5">{label}</p>
+      {footer && <div className="mt-2 pt-2 border-t border-slate-100">{footer}</div>}
+    </div>
+  );
+}

@@ -1,0 +1,108 @@
+import type { Notification } from '@/types';
+
+export const notifications: Notification[] = [
+  {
+    id: 'notif-001',
+    userId: 'usr-001',
+    type: 'document',
+    title: 'New document for review',
+    message: 'DMS-2026-0001: Request for Budget Allocation requires your review.',
+    read: false,
+    link: '/documents/doc-001',
+    createdAt: '2026-08-20T08:30:00Z',
+  },
+  {
+    id: 'notif-002',
+    userId: 'usr-001',
+    type: 'document',
+    title: 'Document recommended for approval',
+    message: 'DMS-2026-0002 has been recommended by the City Administrator.',
+    read: false,
+    link: '/documents/doc-002',
+    createdAt: '2026-08-19T11:15:00Z',
+  },
+  {
+    id: 'notif-003',
+    userId: 'usr-001',
+    type: 'system',
+    title: 'Weekly backup completed',
+    message: 'System backup completed successfully. 2.3 GB of data archived.',
+    read: true,
+    createdAt: '2026-08-19T02:00:00Z',
+  },
+  {
+    id: 'notif-004',
+    userId: 'usr-002',
+    type: 'document',
+    title: 'New document routed to you',
+    message: 'DMS-2026-0005 from DILG requires urgent attention.',
+    read: false,
+    link: '/documents/doc-005',
+    createdAt: '2026-08-19T14:15:00Z',
+  },
+  {
+    id: 'notif-005',
+    userId: 'usr-002',
+    type: 'document',
+    title: 'Document pending your review',
+    message: 'DMS-2026-0001: Request for Budget Allocation is awaiting your review.',
+    read: false,
+    link: '/documents/doc-001',
+    createdAt: '2026-08-10T10:00:00Z',
+  },
+  {
+    id: 'notif-006',
+    userId: 'usr-007',
+    type: 'document',
+    title: 'New document received',
+    message: 'DMS-2026-0006 has been received and is pending routing.',
+    read: false,
+    link: '/documents/doc-006',
+    createdAt: '2026-08-20T08:00:00Z',
+  },
+  {
+    id: 'notif-007',
+    userId: 'usr-007',
+    type: 'reminder',
+    title: 'Daily inbox reminder',
+    message: 'You have 3 documents pending routing today.',
+    read: true,
+    createdAt: '2026-08-20T07:00:00Z',
+  },
+  {
+    id: 'notif-008',
+    userId: 'usr-011',
+    type: 'document',
+    title: 'Document encoded successfully',
+    message: 'DMS-2026-0006 has been registered in the system.',
+    read: true,
+    link: '/documents/doc-006',
+    createdAt: '2026-08-20T08:00:00Z',
+  },
+  {
+    id: 'notif-009',
+    userId: 'usr-003',
+    type: 'document',
+    title: 'New document for review',
+    message: 'DMS-2026-0003: Construction Contract Agreement requires legal review.',
+    read: false,
+    link: '/documents/doc-003',
+    createdAt: '2026-08-15T12:00:00Z',
+  },
+  {
+    id: 'notif-010',
+    userId: 'usr-009',
+    type: 'document',
+    title: 'New residency request',
+    message: 'DMS-2026-0011: Certificate of Residency request received.',
+    read: false,
+    link: '/documents/doc-011',
+    createdAt: '2026-08-19T12:00:00Z',
+  },
+];
+
+export function getNotificationsByUser(userId: string) {
+  return notifications
+    .filter(n => n.userId === userId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
