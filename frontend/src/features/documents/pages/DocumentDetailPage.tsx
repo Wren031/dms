@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -8,7 +8,6 @@ import {
   User as UserIcon,
   Tag as TagIcon,
   Send,
-  ClipboardCheck,
   PackageOpen,
   Archive as ArchiveIcon,
   Download,
@@ -20,9 +19,9 @@ import {
   AlertCircle,
   FileText,
   History as HistoryIcon,
-  Activity as ActivityIcon,
+  Hash,
+  Route as RouteIcon,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge, PriorityBadge, ClassificationBadge, Tag } from '@/components/ui/StatusBadge';
@@ -32,16 +31,46 @@ import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { documents } from '@/mocks/documents';
-import { getRoutingStepsByDocument } from '@/mocks/routes';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
-import { auditLogs } from '@/mocks/auditLogs';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
-import { DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_LABELS } from '@/constants';
+import {
+  DOCUMENT_TYPE_LABELS,
+  DOCUMENT_STATUS_LABELS,
+  DOCUMENT_CLASSIFICATION_LABELS,
+} from '@/constants';
 import { formatDate, formatRelative, cn } from '@/lib/utils';
+import {
+  useDocument,
+  useRoutingSteps,
+  useAuditLogs,
+  updateDocumentStatus,
+  addRoutingStep,
+} from '@/lib/store';
+import { offices } from '@/mocks/offices';
+import { users } from '@/mocks/users';
+import type { DocumentStatus } from '@/types';
+import { DocumentJourneyView } from '@/features/documents/components/DocumentJourneyView';
+
+const ACTION_STATUS_MAP: Record<string, DocumentStatus> = {
+  recommend: 'recommended',
+  approve: 'approved',
+  reject: 'rejected',
+  return: 'returned',
+  release: 'released',
+  archive: 'archived',
+};
+
+const ACTION_AUDIT_MAP: Record<string, 'APPROVE' | 'REJECT' | 'RETURN' | 'RECOMMEND' | 'RELEASE' | 'ARCHIVE'> = {
+  recommend: 'RECOMMEND',
+  approve: 'APPROVE',
+  reject: 'REJECT',
+  return: 'RETURN',
+  release: 'RELEASE',
+  archive: 'ARCHIVE',
+};
 
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -50,15 +79,19 @@ export function DocumentDetailPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  const doc = useMemo(() => documents.find(d => d.id === id), [id]);
-  const routing = useMemo(() => (id ? getRoutingStepsByDocument(id) : []), [id]);
-  const logs = useMemo(() => auditLogs.filter(l => l.targetId === id), [id]);
+  const doc = useDocument(id);
+  const routing = useRoutingSteps(id);
+  const logs = useAuditLogs(id);
 
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState('journey');
   const [actionModal, setActionModal] = useState<'recommend' | 'approve' | 'reject' | 'return' | 'release' | 'archive' | null>(null);
   const [remarks, setRemarks] = useState('');
+  const [routeOffice, setRouteOffice] = useState('');
+  const [routeUser, setRouteUser] = useState('');
+  const [routeInstructions, setRouteInstructions] = useState('');
+  const [routeModal, setRouteModal] = useState(false);
 
-  if (!doc) {
+  if (!doc || !user) {
     return (
       <div className="text-center py-20">
         <p className="text-slate-700 font-medium">Document not found</p>
@@ -72,6 +105,8 @@ export function DocumentDetailPage() {
   const office = getOfficeById(doc.currentOfficeId);
   const holder = doc.currentHolderId ? getUserById(doc.currentHolderId) : null;
   const originator = getOfficeById(doc.originatingOfficeId);
+  const receivingOffice = doc.receivingOfficeId ? getOfficeById(doc.receivingOfficeId) : null;
+  const destinationOffice = doc.destinationOfficeId ? getOfficeById(doc.destinationOfficeId) : null;
   const encoder = getUserById(doc.encodedById);
   const receiver = doc.receivedById ? getUserById(doc.receivedById) : null;
 
@@ -95,11 +130,44 @@ export function DocumentDetailPage() {
   };
 
   const submitAction = () => {
-    if (!actionModal) return;
+    if (!actionModal || !user) return;
+    const newStatus = ACTION_STATUS_MAP[actionModal];
+    const auditAction = ACTION_AUDIT_MAP[actionModal];
+    updateDocumentStatus({
+      documentId: doc.id,
+      status: newStatus,
+      actorId: user.id,
+      action: auditAction,
+      remarks: remarks || `Document ${actionModal}d.`,
+    });
     toast.success('Action recorded', `Document has been ${actionModal}d.`);
     setActionModal(null);
     setRemarks('');
   };
+
+  const submitRoute = () => {
+    if (!routeOffice || !user) {
+      toast.error('Target office required', 'Please select an office to route this document to.');
+      return;
+    }
+    addRoutingStep({
+      documentId: doc.id,
+      fromOfficeId: doc.currentOfficeId,
+      fromUserId: user.id,
+      toOfficeId: routeOffice,
+      toUserId: routeUser || undefined,
+      instructions: routeInstructions || 'Forwarded for action',
+      remarks: remarks || undefined,
+    });
+    toast.success('Document routed', `Forwarded to ${getOfficeById(routeOffice)?.code}.`);
+    setRouteModal(false);
+    setRouteOffice('');
+    setRouteUser('');
+    setRouteInstructions('');
+    setRemarks('');
+  };
+
+  const officeUsers = routeOffice ? users.filter(u => u.officeId === routeOffice && u.status === 'active') : [];
 
   return (
     <div className="space-y-6">
@@ -114,6 +182,12 @@ export function DocumentDetailPage() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="font-mono text-sm font-semibold text-brand-700">{doc.trackingNumber}</span>
+            {doc.documentNumber && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-mono text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
+                <Hash className="w-3 h-3" />
+                {doc.documentNumber}
+              </span>
+            )}
             <StatusBadge status={doc.status} size="md" />
             <PriorityBadge priority={doc.priority} />
             <ClassificationBadge classification={doc.classification} />
@@ -150,6 +224,11 @@ export function DocumentDetailPage() {
               </Button>
             </>
           )}
+          {hasPermission('documents.route') && doc.status !== 'archived' && doc.status !== 'released' && (
+            <Button variant="outline" leftIcon={<Send className="w-4 h-4" />} onClick={() => setRouteModal(true)}>
+              Route
+            </Button>
+          )}
           {hasPermission('documents.release') && doc.status === 'approved' && (
             <Button leftIcon={<PackageOpen className="w-4 h-4" />} onClick={() => handleAction('release')}>
               Release
@@ -170,7 +249,16 @@ export function DocumentDetailPage() {
         <Card>
           <CardHeader title="Document Information" />
           <DetailRow icon={<FileText className="w-4 h-4" />} label="Type" value={DOCUMENT_TYPE_LABELS[doc.type]} />
+          {doc.documentNumber && (
+            <DetailRow icon={<Hash className="w-4 h-4" />} label="Document Number" value={doc.documentNumber} />
+          )}
           <DetailRow icon={<Building2 className="w-4 h-4" />} label="Originating Office" value={originator?.name} sub={originator?.code} />
+          {receivingOffice && (
+            <DetailRow icon={<Building2 className="w-4 h-4" />} label="Receiving Office" value={receivingOffice.name} sub={receivingOffice.code} />
+          )}
+          {destinationOffice && (
+            <DetailRow icon={<Building2 className="w-4 h-4" />} label="Destination Office" value={destinationOffice.name} sub={destinationOffice.code} />
+          )}
           <DetailRow icon={<Building2 className="w-4 h-4" />} label="Current Office" value={office?.name} sub={office?.code} />
           <DetailRow icon={<UserIcon className="w-4 h-4" />} label="Current Holder" value={holder?.fullName} sub={holder ? DOC_POSITION(holder.role) : undefined} />
           <DetailRow icon={<Calendar className="w-4 h-4" />} label="Date Received" value={doc.dateReceived ? formatDate(doc.dateReceived) : 'Not yet received'} />
@@ -210,32 +298,38 @@ export function DocumentDetailPage() {
         <Card>
           <CardHeader title="Attachments" />
           <div className="space-y-2">
-            {Array.from({ length: doc.attachmentCount }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between gap-2 p-2.5 rounded-md border border-slate-200 hover:bg-slate-50"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-8 h-8 rounded bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
-                    <Paperclip className="w-4 h-4" />
+            {doc.attachments.length === 0 ? (
+              <p className="text-sm text-slate-500 py-3 text-center">No attachments uploaded.</p>
+            ) : (
+              doc.attachments.map(att => (
+                <div
+                  key={att.id}
+                  className="flex items-center justify-between gap-2 p-2.5 rounded-md border border-slate-200 hover:bg-slate-50"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 rounded bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                      <Paperclip className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">
+                        {att.name}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {(att.size / 1024).toFixed(1)} KB · {att.type.split('/').pop()?.toUpperCase() ?? 'FILE'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">
-                      Attachment {i + 1}.pdf
-                    </p>
-                    <p className="text-xs text-slate-500">PDF · {((Math.random() * 4) + 0.5).toFixed(1)} MB</p>
+                  <div className="flex items-center gap-1">
+                    <button className="p-1.5 text-slate-500 hover:text-slate-900 rounded">
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button className="p-1.5 text-slate-500 hover:text-slate-900 rounded">
+                      <Download className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button className="p-1.5 text-slate-500 hover:text-slate-900 rounded">
-                    <Eye className="w-4 h-4" />
-                  </button>
-                  <button className="p-1.5 text-slate-500 hover:text-slate-900 rounded">
-                    <Download className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
       </div>
@@ -246,46 +340,20 @@ export function DocumentDetailPage() {
             value={tab}
             onChange={setTab}
             items={[
-              { id: 'overview', label: 'Overview', icon: <FileText className="w-4 h-4" /> },
+              { id: 'journey', label: 'Document Journey', icon: <RouteIcon className="w-4 h-4" /> },
               { id: 'routing', label: 'Routing History', icon: <Send className="w-4 h-4" />, count: routing.length },
               { id: 'audit', label: 'Audit History', icon: <HistoryIcon className="w-4 h-4" />, count: logs.length },
-              { id: 'tracking', label: 'Live Tracking', icon: <ActivityIcon className="w-4 h-4" /> },
             ]}
           />
         </div>
 
         <div className="p-5">
-          {tab === 'overview' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 mb-3">Workflow Status</h3>
-                <WorkflowTimeline currentStatus={doc.status} />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-900 mb-3">Quick Actions</h3>
-                <div className="space-y-2">
-                  <QuickActionItem
-                    icon={<Send className="w-4 h-4" />}
-                    label="Route to another office"
-                    hint="Forward this document to another office for action"
-                    onClick={() => toast.info('Routing modal will open')}
-                  />
-                  <QuickActionItem
-                    icon={<ClipboardCheck className="w-4 h-4" />}
-                    label="Add review notes"
-                    hint="Attach remarks or recommendation"
-                    onClick={() => toast.info('Review modal will open')}
-                  />
-                  <QuickActionItem
-                    icon={<PackageOpen className="w-4 h-4" />}
-                    label="Mark as released"
-                    hint="Document has been delivered to recipient"
-                    onClick={() => handleAction('release')}
-                    disabled={doc.status !== 'approved'}
-                  />
-                </div>
-              </div>
-            </div>
+          {tab === 'journey' && (
+            <DocumentJourneyView
+              document={doc}
+              routingSteps={routing}
+              auditLogs={logs}
+            />
           )}
 
           {tab === 'routing' && (
@@ -397,21 +465,6 @@ export function DocumentDetailPage() {
               )}
             </div>
           )}
-
-          {tab === 'tracking' && (
-            <div className="space-y-4">
-              <p className="text-sm text-slate-600">
-                Real-time view of where this document currently stands in the workflow.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                <TrackingItem label="Status" value={DOCUMENT_STATUS_LABELS[doc.status]} />
-                <TrackingItem label="Current Office" value={office?.name ?? '—'} />
-                <TrackingItem label="Current Holder" value={holder?.fullName ?? 'Unassigned'} />
-                <TrackingItem label="Last Activity" value={formatRelative(doc.updatedAt)} />
-              </div>
-              <WorkflowTimeline currentStatus={doc.status} />
-            </div>
-          )}
         </div>
       </Card>
 
@@ -443,14 +496,13 @@ export function DocumentDetailPage() {
           <p className="text-sm text-slate-600">
             Document: <span className="font-semibold text-slate-900">{doc.trackingNumber}</span>
           </p>
+          <p className="text-xs text-slate-500">
+            {doc.title} · {DOCUMENT_CLASSIFICATION_LABELS[doc.classification]}
+          </p>
           {actionModal === 'return' && (
             <Select
               label="Return to"
-              options={[
-                { value: 'encoder', label: 'Encoder' },
-                { value: 'originator', label: 'Originating Office' },
-                { value: 'previous', label: 'Previous Office' },
-              ]}
+              options={offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` }))}
             />
           )}
           <Textarea
@@ -460,6 +512,55 @@ export function DocumentDetailPage() {
             value={remarks}
             onChange={e => setRemarks(e.target.value)}
             placeholder={`Provide details for this ${actionModal} action…`}
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        open={routeModal}
+        onClose={() => setRouteModal(false)}
+        title="Route Document"
+        description="Forward this document to another office for action"
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setRouteModal(false)}>Cancel</Button>
+            <Button leftIcon={<Send className="w-4 h-4" />} onClick={submitRoute}>
+              Route Document
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
+            <p className="text-xs text-slate-500">Document</p>
+            <p className="text-sm font-semibold text-slate-900">{doc.trackingNumber} · {doc.title}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              From: {office?.name} ({office?.code})
+            </p>
+          </div>
+          <Select
+            label="Target Office"
+            required
+            placeholder="Choose target office…"
+            value={routeOffice}
+            onChange={e => { setRouteOffice(e.target.value); setRouteUser(''); }}
+            options={offices.filter(o => o.id !== doc.currentOfficeId).map(o => ({ value: o.id, label: `${o.code} — ${o.name}` }))}
+          />
+          <Select
+            label="Assign To (Optional)"
+            placeholder={routeOffice ? 'Choose officer…' : 'Select office first'}
+            value={routeUser}
+            onChange={e => setRouteUser(e.target.value)}
+            options={officeUsers.map(u => ({ value: u.id, label: `${u.fullName} (${u.position})` }))}
+            disabled={!routeOffice}
+          />
+          <Textarea
+            label="Routing Instructions"
+            rows={3}
+            value={routeInstructions}
+            onChange={e => setRouteInstructions(e.target.value)}
+            placeholder="Provide instructions for the receiving office…"
           />
         </div>
       </Modal>
@@ -490,75 +591,6 @@ function PersonRow({ label, userId, fallback }: { label: string; userId?: string
         <p className="text-sm font-medium text-slate-900 truncate">{fallback ?? '—'}</p>
         {u && <p className="text-xs text-slate-500 truncate">{u.email}</p>}
       </div>
-    </div>
-  );
-}
-
-function QuickActionItem({ icon, label, hint, onClick, disabled }: { icon: React.ReactNode; label: string; hint: string; onClick: () => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="w-full flex items-center gap-3 p-3 rounded-md border border-slate-200 hover:border-brand-300 hover:bg-brand-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
-    >
-      <span className="w-8 h-8 rounded-md bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
-        {icon}
-      </span>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-slate-900">{label}</p>
-        <p className="text-xs text-slate-500">{hint}</p>
-      </div>
-    </button>
-  );
-}
-
-function WorkflowTimeline({ currentStatus }: { currentStatus: string }) {
-  const steps = [
-    { id: 'registered', label: 'Registered' },
-    { id: 'received', label: 'Received' },
-    { id: 'in_routing', label: 'In Routing' },
-    { id: 'under_review', label: 'Under Review' },
-    { id: 'recommended', label: 'Recommended' },
-    { id: 'approved', label: 'Approved' },
-    { id: 'released', label: 'Released' },
-    { id: 'archived', label: 'Archived' },
-  ];
-  const currentIdx = steps.findIndex(s => s.id === currentStatus);
-  return (
-    <div className="space-y-2">
-      {steps.map((step, idx) => {
-        const isPast = idx < currentIdx;
-        const isCurrent = idx === currentIdx;
-        return (
-          <div key={step.id} className="flex items-center gap-3">
-            <div className={cn(
-              'w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold border',
-              isPast ? 'bg-emerald-100 text-emerald-700 border-emerald-300' :
-              isCurrent ? 'bg-brand-600 text-white border-brand-600' :
-              'bg-white text-slate-400 border-slate-300'
-            )}>
-              {isPast ? <CheckCircle2 className="w-3.5 h-3.5" /> : idx + 1}
-            </div>
-            <span className={cn(
-              'text-sm',
-              isCurrent ? 'font-semibold text-slate-900' :
-              isPast ? 'text-slate-700' : 'text-slate-400'
-            )}>
-              {step.label}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function TrackingItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="p-3 rounded-md border border-slate-200 bg-slate-50">
-      <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">{label}</p>
-      <p className="text-sm font-semibold text-slate-900 mt-1">{value}</p>
     </div>
   );
 }

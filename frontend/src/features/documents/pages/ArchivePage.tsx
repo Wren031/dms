@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
-import { documents } from '@/mocks/documents';
+import { useDocuments } from '@/lib/store';
 import { getOfficeById } from '@/mocks/offices';
 import {
   ALL_DOCUMENT_STATUSES,
@@ -46,6 +46,7 @@ const DEFAULT_FILTERS = {
 
 export function ArchivePage() {
   const toast = useToast();
+  const documents = useDocuments();
 
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);

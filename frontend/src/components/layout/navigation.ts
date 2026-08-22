@@ -14,7 +14,6 @@ export interface NavItem {
 import {
   LayoutDashboard,
   FileText,
-  PlusCircle,
   Inbox,
   Send,
   ClipboardCheck,
@@ -27,6 +26,7 @@ import {
   History,
   Bell,
   Settings,
+  Mail,
 } from 'lucide-react';
 
 export const navigation: NavItem[] = [
@@ -45,20 +45,19 @@ export const navigation: NavItem[] = [
     section: 'main',
   },
   {
-    id: 'registration',
-    label: 'Registration',
-    to: '/documents/register',
-    icon: 'PlusCircle',
-    section: 'main',
-    roles: ['system_admin', 'office_admin', 'document_encoder'],
-  },
-  {
     id: 'inbox',
     label: 'Inbox',
     to: '/inbox',
     icon: 'Inbox',
     section: 'workspace',
     roles: ['system_admin', 'office_admin', 'receiving_officer'],
+  },
+  {
+    id: 'outbox',
+    label: 'Outbox',
+    to: '/outbox',
+    icon: 'Mail',
+    section: 'workspace',
   },
   {
     id: 'routing',
@@ -150,7 +149,6 @@ export const navigation: NavItem[] = [
 export const iconMap = {
   LayoutDashboard,
   FileText,
-  PlusCircle,
   Inbox,
   Send,
   ClipboardCheck,
@@ -163,6 +161,7 @@ export const iconMap = {
   History,
   Bell,
   Settings,
+  Mail,
 } as const;
 
 export type IconName = keyof typeof iconMap;

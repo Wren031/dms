@@ -102,12 +102,15 @@ export type DocumentType =
 
 export interface Document {
   id: string;
+  documentNumber?: string;
   trackingNumber: string;
   title: string;
   type: DocumentType;
   classification: DocumentClassification;
   status: DocumentStatus;
   originatingOfficeId: string;
+  receivingOfficeId?: string;
+  destinationOfficeId?: string;
   currentOfficeId: string;
   currentHolderId: string;
   encodedById: string;
@@ -116,12 +119,20 @@ export interface Document {
   senderName?: string;
   description: string;
   tags: string[];
-  attachmentCount: number;
+  attachments: DocumentAttachment[];
   priority: 'low' | 'normal' | 'high' | 'urgent';
   dateReceived?: string;
   dueDate?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DocumentAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  uploadedAt: string;
 }
 
 export interface RoutingStep {

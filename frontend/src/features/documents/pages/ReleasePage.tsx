@@ -25,7 +25,7 @@ import { Select } from '@/components/ui/Select';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
-import { documents } from '@/mocks/documents';
+import { useDocuments } from '@/lib/store';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById, users } from '@/mocks/users';
 import { DOCUMENT_TYPE_LABELS } from '@/constants';
@@ -33,6 +33,7 @@ import { formatDate, formatRelative } from '@/lib/utils';
 
 export function ReleasePage() {
   const toast = useToast();
+  const documents = useDocuments();
   const [tab, setTab] = useState('ready');
   const [releaseModal, setReleaseModal] = useState<string | null>(null);
   const [recipient, setRecipient] = useState('');
@@ -177,7 +178,7 @@ export function ReleasePage() {
               cell: d => (
                 <div className="flex items-center gap-1.5 text-xs text-slate-600">
                   <Paperclip className="w-3.5 h-3.5" />
-                  {d.attachmentCount}
+                  {d.attachments.length}
                 </div>
               ),
             },

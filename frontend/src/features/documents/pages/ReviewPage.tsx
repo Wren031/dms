@@ -29,7 +29,7 @@ import { Select } from '@/components/ui/Select';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
-import { documents } from '@/mocks/documents';
+import { useDocuments } from '@/lib/store';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
 import { DOCUMENT_TYPE_LABELS } from '@/constants';
@@ -38,6 +38,7 @@ import { formatDate, formatRelative } from '@/lib/utils';
 export function ReviewPage() {
   const toast = useToast();
   const confirm = useConfirm();
+  const documents = useDocuments();
   const [tab, setTab] = useState('for_review');
   const [actionModal, setActionModal] = useState<{
     docId: string;

@@ -1,0 +1,393 @@
+// Prisma schema for the Document Management System (DMS)
+// Database: dms-city (PostgreSQL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// Enums
+// =====================================================
+
+enum UserStatus {
+  active
+  inactive
+  suspended
+}
+
+enum UserRole {
+  system_admin
+  office_admin
+  document_encoder
+  receiving_officer
+  reviewing_officer
+}
+
+enum OfficeType {
+  main
+  division
+  unit
+}
+
+enum DocumentStatus {
+  registered
+  received
+  routed
+  under_review
+  recommended
+  approved
+  rejected
+  returned
+  released
+  archived
+}
+
+enum DocumentTypeCode {
+  memo
+  letter
+  ordinance
+  resolution
+  report
+  contract
+  circular
+  others
+}
+
+enum DocumentClassification {
+  public
+  internal
+  confidential
+  restricted
+}
+
+enum DocumentPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum DocumentSource {
+  internal
+  external
+}
+
+enum RoutingStepStatus {
+  pending
+  received
+  in_progress
+  completed
+  returned
+}
+
+enum ReviewActionKind {
+  recommended
+  approved
+  rejected
+  returned
+  commented
+}
+
+enum ReleaseMethod {
+  pickup
+  email
+  courier
+  hand_delivery
+}
+
+enum NotificationType {
+  document
+  system
+  reminder
+}
+
+enum AttachmentStatus {
+  uploaded
+  deleted
+}
+
+// =====================================================
+// Auth
+// =====================================================
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  username     String        @unique
+  passwordHash String
+  fullName     String
+  firstName    String?
+  middleName   String?
+  lastName     String?
+  phone        String?
+  role         UserRole
+  status       UserStatus    @default(active)
+  avatarColor  String?
+  employeeId   String?       @unique
+  employee     Employee?     @relation(fields: [employeeId], references: [id])
+  lastLoginAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  sessions     AuthSession[]
+
+  @@index([role])
+  @@index([status])
+}
+
+model AuthSession {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+// =====================================================
+// Organization
+// =====================================================
+
+model Office {
+  id          String     @id @default(uuid())
+  name        String
+  code        String     @unique
+  type        OfficeType
+  parentId    String?
+  parent      Office?    @relation("OfficeTree", fields: [parentId], references: [id])
+  children    Office[]   @relation("OfficeTree")
+  headName    String?
+  description String?
+  isActive    Boolean    @default(true)
+  employees   Employee[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([parentId])
+}
+
+model Employee {
+  id         String   @id @default(uuid())
+  employeeNo String   @unique
+  firstName  String
+  middleName String?
+  lastName   String
+  position   String
+  email      String   @unique
+  phone      String?
+  officeId   String
+  office     Office   @relation(fields: [officeId], references: [id])
+  user       User?
+  isActive   Boolean  @default(true)
+  hiredAt    DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([officeId])
+}
+
+// =====================================================
+// Documents
+// =====================================================
+
+model DocumentType {
+  id          String     @id @default(uuid())
+  code        DocumentTypeCode @unique
+  name        String
+  description String?
+  isActive    Boolean    @default(true)
+  documents   Document[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Document {
+  id                  String           @id @default(uuid())
+  trackingNumber      String           @unique
+  documentNumber      String
+  title               String
+  description         String?
+  typeId              String
+  type                DocumentType     @relation(fields: [typeId], references: [id])
+  classification      DocumentClassification
+  status              DocumentStatus   @default(registered)
+  priority            DocumentPriority @default(normal)
+  source              DocumentSource
+  senderName          String?
+  tags                String[]
+  originatingOfficeId String
+  currentOfficeId     String
+  currentHolderId     String?
+  encodedById         String
+  receivedById        String?
+  dateReceived        DateTime?
+  dueDate             DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  attachments         DocumentAttachment[]
+  routingSteps        DocumentRoutingStep[]
+  reviews             DocumentReview[]
+  releases            DocumentRelease[]
+  trackings           DocumentTracking[]
+  archives            DocumentArchive[]
+  history             DocumentHistory[]
+
+  @@unique([originatingOfficeId, documentNumber])
+  @@index([status])
+  @@index([originatingOfficeId])
+  @@index([currentOfficeId])
+  @@index([currentHolderId])
+  @@index([typeId])
+  @@index([documentNumber])
+}
+
+model DocumentAttachment {
+  id           String           @id @default(uuid())
+  documentId   String
+  document     Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String
+  status       AttachmentStatus @default(uploaded)
+  uploadedById String
+  uploadedAt   DateTime         @default(now())
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([documentId])
+}
+
+model DocumentRoutingStep {
+  id           String            @id @default(uuid())
+  documentId   String
+  document     Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  sequence     Int
+  fromOfficeId String
+  fromUserId   String?
+  toOfficeId   String
+  toUserId     String?
+  instructions String?
+  status       RoutingStepStatus @default(pending)
+  receivedAt   DateTime?
+  completedAt  DateTime?
+  remarks      String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([documentId])
+  @@index([status])
+}
+
+model DocumentReview {
+  id         String           @id @default(uuid())
+  documentId String
+  document   Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  reviewerId String
+  action     ReviewActionKind
+  remarks    String?
+  createdAt  DateTime         @default(now())
+
+  @@index([documentId])
+  @@index([reviewerId])
+}
+
+model DocumentRelease {
+  id            String          @id @default(uuid())
+  documentId    String
+  document      Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  releasedById  String
+  releasedToId  String?
+  method        ReleaseMethod
+  recipientName String?
+  notes         String?
+  releasedAt    DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+
+  @@index([documentId])
+}
+
+model DocumentTracking {
+  id         String   @id @default(uuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  actorId    String
+  event      String
+  payload    Json?
+  occurredAt DateTime @default(now())
+
+  @@index([documentId])
+  @@index([actorId])
+}
+
+model DocumentArchive {
+  id             String   @id @default(uuid())
+  documentId     String
+  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  archivedById   String
+  location       String?
+  retentionUntil DateTime?
+  archivedAt     DateTime @default(now())
+
+  @@index([documentId])
+}
+
+model DocumentHistory {
+  id         String         @id @default(uuid())
+  documentId String
+  document   Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  fromStatus DocumentStatus?
+  toStatus   DocumentStatus
+  actorId    String?
+  remarks    String?
+  occurredAt DateTime       @default(now())
+
+  @@index([documentId])
+}
+
+// =====================================================
+// Cross-cutting
+// =====================================================
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  link      String?
+  read      Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorId     String?
+  action      String
+  module      String
+  description String
+  targetId    String?
+  targetType  String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([actorId])
+  @@index([module])
+  @@index([createdAt])
+}

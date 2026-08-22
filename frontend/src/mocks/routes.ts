@@ -236,3 +236,5 @@ export const routingSteps: RoutingStep[] = [
 
 export const getRoutingStepsByDocument = (documentId: string) =>
   routingSteps.filter(r => r.documentId === documentId).sort((a, b) => a.sequence - b.sequence);
+
+export const seedRoutingSteps = routingSteps;

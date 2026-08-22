@@ -12,6 +12,7 @@ import {
   Calendar,
   CheckCircle2,
   SlidersHorizontal,
+  Hash,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -25,7 +26,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
-import { documents as allDocs } from '@/mocks/documents';
+import { useDocuments } from '@/lib/store';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
 import {
@@ -54,6 +55,7 @@ const DEFAULT_FILTERS = {
 export function DocumentsListPage() {
   const { user, hasPermission } = useAuth();
   const toast = useToast();
+  const allDocs = useDocuments();
 
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);

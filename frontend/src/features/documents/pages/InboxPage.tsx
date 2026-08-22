@@ -21,7 +21,7 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/hooks/useAuth';
-import { documents } from '@/mocks/documents';
+import { useDocuments } from '@/lib/store';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
 import {
@@ -35,6 +35,7 @@ import type { Document } from '@/types';
 
 export function InboxPage() {
   const { user } = useAuth();
+  const documents = useDocuments();
   const [tab, setTab] = useState('pending');
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');

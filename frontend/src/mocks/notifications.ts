@@ -106,3 +106,5 @@ export function getNotificationsByUser(userId: string) {
     .filter(n => n.userId === userId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
+
+export const seedNotifications = notifications;

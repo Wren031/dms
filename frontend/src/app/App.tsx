@@ -11,6 +11,7 @@ import { DocumentsListPage } from '@/features/documents/pages/DocumentsListPage'
 import { DocumentDetailPage } from '@/features/documents/pages/DocumentDetailPage';
 import { DocumentRegistrationPage } from '@/features/documents/pages/DocumentRegistrationPage';
 import { InboxPage } from '@/features/documents/pages/InboxPage';
+import { OutboxPage } from '@/features/documents/pages/OutboxPage';
 import { RoutingPage } from '@/features/documents/pages/RoutingPage';
 import { ReviewPage } from '@/features/documents/pages/ReviewPage';
 import { ReleasePage } from '@/features/documents/pages/ReleasePage';
@@ -54,6 +55,7 @@ export function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route path="/outbox" element={<OutboxPage />} />
                 <Route
                   path="/routing"
                   element={

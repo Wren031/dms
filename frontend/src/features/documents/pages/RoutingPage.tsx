@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
-import { StatusBadge, PriorityBadge, Tag } from '@/components/ui/StatusBadge';
+import { Tag } from '@/components/ui/StatusBadge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Tabs } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -24,8 +24,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
-import { routingSteps } from '@/mocks/routes';
-import { documents } from '@/mocks/documents';
+import { useDocuments, useRoutingSteps } from '@/lib/store';
 import { offices } from '@/mocks/offices';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById, users } from '@/mocks/users';
@@ -34,6 +33,8 @@ import { formatDate, formatRelative } from '@/lib/utils';
 
 export function RoutingPage() {
   const toast = useToast();
+  const documents = useDocuments();
+  const routingSteps = useRoutingSteps();
   const [tab, setTab] = useState('pending');
   const [routeModal, setRouteModal] = useState<string | null>(null);
   const [targetOffice, setTargetOffice] = useState('');
@@ -42,10 +43,10 @@ export function RoutingPage() {
 
   const pendingRoutes = useMemo(() => {
     return routingSteps.filter(r => r.status === 'pending' || r.status === 'in_progress');
-  }, []);
+  }, [routingSteps]);
   const completedRoutes = useMemo(() => {
     return routingSteps.filter(r => r.status === 'completed' || r.status === 'returned');
-  }, []);
+  }, [routingSteps]);
 
   const counts = {
     pending: pendingRoutes.length,

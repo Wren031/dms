@@ -26,8 +26,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { StatusBadge, PriorityBadge } from '@/components/ui/StatusBadge';
-import { documents } from '@/mocks/documents';
-import { routingSteps } from '@/mocks/routes';
+import { useDocuments, useRoutingSteps } from '@/lib/store';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
 import {
@@ -49,6 +48,7 @@ const PRIORITY_ORDER: Record<string, number> = {
 
 export function TrackingPage() {
   const toast = useToast();
+  const documents = useDocuments();
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);
 
@@ -194,10 +194,7 @@ function StatTile({ label, value, icon }: { label: string; value: number; icon: 
 }
 
 function DocumentTracker({ doc }: { doc: Document }) {
-  const steps = useMemo(
-    () => routingSteps.filter(r => r.documentId === doc.id),
-    [doc.id]
-  );
+  const steps = useRoutingSteps(doc.id);
 
   const office = getOfficeById(doc.currentOfficeId);
   const holder = doc.currentHolderId ? getUserById(doc.currentHolderId) : null;
