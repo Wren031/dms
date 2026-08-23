@@ -1,16 +1,20 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { constantTimeVerify, hashPassword } from '../../common/utils/hash.util';
 import { randomToken, sha256Hex } from '../../common/utils/token.util';
 import { AuthConfig, SameSite } from '../../config/auth.config';
 import { COOKIE_NAMES, COOKIE_PATHS } from '../../common/constants/cookie.constants';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import {
   AuthResponseDto,
@@ -19,8 +23,11 @@ import {
 } from './dto/authenticated-user.dto';
 import { Request, Response } from 'express';
 import type { CookieOptions } from 'express';
-import { UserRole } from '@prisma/client';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
+
+type AuthUserWithEmployee = Prisma.UserGetPayload<{
+  include: { employee: { select: { id: true; officeId: true; position: true } } };
+}>;
 
 function toExpressSameSite(value: SameSite): 'strict' | 'lax' | 'none' {
   return value.toLowerCase() as 'strict' | 'lax' | 'none';
@@ -83,20 +90,72 @@ export class AuthService {
       this.logFailedAttempt(req, identifier);
       throw new UnauthorizedException('Invalid credentials');
     }
-    if (user.status !== 'active') {
+    if (user.status !== 'ACTIVE') {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const { refreshRaw } = await this.issueSession(user.id);
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    const accessToken = this.signAccessToken(user.id, user.role, await this.getLatestSessionId(user.id));
+    const { sessionId, refreshRaw } = await this.issueSession(user.id);
+    const accessToken = this.signAccessToken(user.id, user.role, sessionId);
     const csrfRaw = randomToken(32);
     this.setAuthCookies(res, accessToken, refreshRaw, this.refreshTtlMs, csrfRaw);
 
+    return { user: this.toUserDto(user) };
+  }
+
+  async register(dto: RegisterDto, req: Request, res: Response): Promise<AuthResponseDto> {
+    const employeeNo = dto.employeeNo.trim();
+
+    const employee = await this.prisma.employee.findUnique({
+      where: { employeeNo },
+      include: { user: { select: { id: true } } },
+    });
+
+    if (!employee || !employee.isActive) {
+      throw new BadRequestException('Invalid employee number');
+    }
+    if (employee.user) {
+      throw new ConflictException('A user account already exists for this employee');
+    }
+
+    const providedEmail = dto.email?.trim().toLowerCase();
+    if (providedEmail && providedEmail !== employee.email.toLowerCase()) {
+      throw new BadRequestException('Email does not match the employee record');
+    }
+    const email = providedEmail ?? employee.email.toLowerCase();
+
+    const username = dto.username?.trim();
+    if (username) {
+      const taken = await this.prisma.user.findUnique({ where: { username } });
+      if (taken) {
+        throw new ConflictException('Username is already taken');
+      }
+    }
+
+    const emailTaken = await this.prisma.user.findUnique({ where: { email } });
+    if (emailTaken) {
+      throw new ConflictException('Email is already taken');
+    }
+
+    const passwordHash = await hashPassword(dto.password);
+
+    const user = await this.prisma.user.create({
+      data: {
+        username: username ?? null,
+        email,
+        passwordHash,
+        role: 'DOCUMENT_ENCODER',
+        status: 'ACTIVE',
+        employeeId: employee.id,
+      },
+      include: { employee: { select: { id: true, officeId: true, position: true } } },
+    });
+
+    const { sessionId, refreshRaw } = await this.issueSession(user.id);
+    const accessToken = this.signAccessToken(user.id, user.role, sessionId);
+    const csrfRaw = randomToken(32);
+    this.setAuthCookies(res, accessToken, refreshRaw, this.refreshTtlMs, csrfRaw);
+
+    this.logger.log(`Registered user ${user.id} for employee ${employee.employeeNo}`);
     return { user: this.toUserDto(user) };
   }
 
@@ -119,7 +178,7 @@ export class AuthService {
       where: { id: session.userId },
       include: { employee: { select: { id: true, officeId: true, position: true } } },
     });
-    if (!user || user.status !== 'active') {
+    if (!user || user.status !== 'ACTIVE') {
       this.clearAllCookies(res);
       throw new UnauthorizedException('Invalid session');
     }
@@ -215,7 +274,7 @@ export class AuthService {
       where: { id: userId },
       data: {
         passwordHash,
-        sessions: {
+        authSessions: {
           updateMany: {
             where: { revokedAt: null },
             data: { revokedAt: new Date() },
@@ -238,21 +297,7 @@ export class AuthService {
     return { sessionId: session.id, refreshRaw };
   }
 
-  private async getLatestSessionId(userId: string): Promise<string> {
-    const s = await this.prisma.authSession.findFirst({
-      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    });
-    if (!s) {
-      // Should not happen because we just created it, but be defensive.
-      const created = await this.issueSession(userId);
-      return created.sessionId;
-    }
-    return s.id;
-  }
-
-  private signAccessToken(userId: string, role: UserRole, sessionId: string): string {
+  private signAccessToken(userId: string, role: Role, sessionId: string): string {
     const payload: JwtPayload = { sub: userId, role, sid: sessionId };
     return this.jwtService.sign(payload, {
       secret: this.configService.getOrThrow<AuthConfig>('auth').access.secret,
@@ -318,32 +363,16 @@ export class AuthService {
     this.logger.warn(`Login failed for "${identifier}" from ${ip}`);
   }
 
-  private toUserDto(
-    user: {
-      id: string;
-      email: string;
-      username: string;
-      fullName: string;
-      role: UserRole;
-      status: 'active' | 'inactive' | 'suspended';
-      avatarColor: string | null;
-      lastLoginAt: Date | null;
-      createdAt: Date;
-      employee?: { id: string; officeId: string; position: string } | null;
-    },
-  ): AuthenticatedUserDto {
+  private toUserDto(user: AuthUserWithEmployee): AuthenticatedUserDto {
     return {
       id: user.id,
       email: user.email,
       username: user.username,
-      fullName: user.fullName,
       role: user.role,
       status: user.status,
-      avatarColor: user.avatarColor,
-      lastLoginAt: user.lastLoginAt,
-      createdAt: user.createdAt,
       officeId: user.employee?.officeId ?? null,
       position: user.employee?.position ?? null,
+      createdAt: user.createdAt,
     };
   }
 }

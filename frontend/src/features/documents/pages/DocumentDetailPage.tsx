@@ -21,6 +21,9 @@ import {
   History as HistoryIcon,
   Hash,
   Route as RouteIcon,
+  ChevronDown,
+  ChevronUp,
+  Clock,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -30,7 +33,6 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Input';
-import { Badge } from '@/components/ui/Badge';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
 import { useAuth } from '@/hooks/useAuth';
@@ -38,8 +40,8 @@ import { useToast } from '@/hooks/useToast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import {
   DOCUMENT_TYPE_LABELS,
-  DOCUMENT_STATUS_LABELS,
   DOCUMENT_CLASSIFICATION_LABELS,
+  ROLE_LABELS,
 } from '@/constants';
 import { formatDate, formatRelative, cn } from '@/lib/utils';
 import {
@@ -54,7 +56,9 @@ import { users } from '@/mocks/users';
 import type { DocumentStatus } from '@/types';
 import { DocumentJourneyView } from '@/features/documents/components/DocumentJourneyView';
 
-const ACTION_STATUS_MAP: Record<string, DocumentStatus> = {
+type ActionType = 'recommend' | 'approve' | 'reject' | 'return' | 'release' | 'archive';
+
+const ACTION_STATUS_MAP: Record<ActionType, DocumentStatus> = {
   recommend: 'recommended',
   approve: 'approved',
   reject: 'rejected',
@@ -63,13 +67,55 @@ const ACTION_STATUS_MAP: Record<string, DocumentStatus> = {
   archive: 'archived',
 };
 
-const ACTION_AUDIT_MAP: Record<string, 'APPROVE' | 'REJECT' | 'RETURN' | 'RECOMMEND' | 'RELEASE' | 'ARCHIVE'> = {
+const ACTION_AUDIT_MAP: Record<ActionType, 'APPROVE' | 'REJECT' | 'RETURN' | 'RECOMMEND' | 'RELEASE' | 'ARCHIVE'> = {
   recommend: 'RECOMMEND',
   approve: 'APPROVE',
   reject: 'REJECT',
   return: 'RETURN',
   release: 'RELEASE',
   archive: 'ARCHIVE',
+};
+
+const ACTION_META: Record<
+  ActionType,
+  { label: string; description: string; icon: React.ReactNode; tone: 'primary' | 'outline' | 'danger' }
+> = {
+  recommend: {
+    label: 'Recommend',
+    description: 'Add a recommendation for the final approver.',
+    icon: <ThumbsUp className="w-3.5 h-3.5" />,
+    tone: 'outline',
+  },
+  approve: {
+    label: 'Approve',
+    description: 'Final approval — the document can be released.',
+    icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+    tone: 'primary',
+  },
+  return: {
+    label: 'Return',
+    description: 'Return to the originating office for revision.',
+    icon: <RotateCcw className="w-3.5 h-3.5" />,
+    tone: 'outline',
+  },
+  reject: {
+    label: 'Reject',
+    description: 'Reject the document — it will be closed out.',
+    icon: <XCircle className="w-3.5 h-3.5" />,
+    tone: 'danger',
+  },
+  release: {
+    label: 'Release',
+    description: 'Mark as released to the recipient.',
+    icon: <PackageOpen className="w-3.5 h-3.5" />,
+    tone: 'primary',
+  },
+  archive: {
+    label: 'Archive',
+    description: 'Move to long-term archive.',
+    icon: <ArchiveIcon className="w-3.5 h-3.5" />,
+    tone: 'outline',
+  },
 };
 
 export function DocumentDetailPage() {
@@ -83,8 +129,8 @@ export function DocumentDetailPage() {
   const routing = useRoutingSteps(id);
   const logs = useAuditLogs(id);
 
-  const [tab, setTab] = useState('journey');
-  const [actionModal, setActionModal] = useState<'recommend' | 'approve' | 'reject' | 'return' | 'release' | 'archive' | null>(null);
+  const [tab, setTab] = useState<'routing' | 'audit'>('routing');
+  const [actionModal, setActionModal] = useState<ActionType | null>(null);
   const [remarks, setRemarks] = useState('');
   const [routeOffice, setRouteOffice] = useState('');
   const [routeUser, setRouteUser] = useState('');
@@ -105,28 +151,56 @@ export function DocumentDetailPage() {
   const office = getOfficeById(doc.currentOfficeId);
   const holder = doc.currentHolderId ? getUserById(doc.currentHolderId) : null;
   const originator = getOfficeById(doc.originatingOfficeId);
-  const receivingOffice = doc.receivingOfficeId ? getOfficeById(doc.receivingOfficeId) : null;
-  const destinationOffice = doc.destinationOfficeId ? getOfficeById(doc.destinationOfficeId) : null;
   const encoder = getUserById(doc.encodedById);
   const receiver = doc.receivedById ? getUserById(doc.receivedById) : null;
 
-  const isOverdue = doc.dueDate && new Date(doc.dueDate).getTime() < new Date().getTime() &&
+  const isOverdue =
+    doc.dueDate &&
+    new Date(doc.dueDate).getTime() < Date.now() &&
     !['released', 'archived', 'rejected'].includes(doc.status);
 
-  const handleAction = async (action: typeof actionModal) => {
-    if (!action) return;
+  const decisionActions: ActionType[] =
+    doc.status === 'under_review' || doc.status === 'recommended'
+      ? ['recommend', 'approve', 'return', 'reject']
+      : [];
+  const terminalActions: ActionType[] = [];
+  if (doc.status === 'approved' && hasPermission('documents.release')) {
+    terminalActions.push('release');
+  }
+  if (doc.status === 'released' && hasPermission('documents.archive')) {
+    terminalActions.push('archive');
+  }
+  const canRoute =
+    hasPermission('documents.route') &&
+    doc.status !== 'archived' &&
+    doc.status !== 'released';
+  const canDownload = doc.attachments.length > 0;
+
+  const primaryAction: ActionType | null =
+    doc.status === 'under_review' || doc.status === 'recommended'
+      ? 'approve'
+      : doc.status === 'approved'
+        ? 'release'
+        : doc.status === 'released'
+          ? 'archive'
+          : null;
+
+  const openAction = (action: ActionType) => {
     if (action === 'reject' || action === 'archive') {
-      const ok = await confirm({
+      confirm({
         title: action === 'reject' ? 'Reject Document' : 'Archive Document',
-        description: action === 'reject'
-          ? 'Are you sure you want to reject this document? This action cannot be undone.'
-          : 'This document will be archived and moved out of active workflow.',
+        description:
+          action === 'reject'
+            ? 'Are you sure you want to reject this document? This action cannot be undone.'
+            : 'This document will be archived and moved out of active workflow.',
         confirmText: action === 'reject' ? 'Reject' : 'Archive',
         variant: 'danger',
+      }).then(ok => {
+        if (ok) setActionModal(action);
       });
-      if (!ok) return;
+    } else {
+      setActionModal(action);
     }
-    setActionModal(action);
   };
 
   const submitAction = () => {
@@ -138,9 +212,12 @@ export function DocumentDetailPage() {
       status: newStatus,
       actorId: user.id,
       action: auditAction,
-      remarks: remarks || `Document ${actionModal}d.`,
+      remarks: remarks || `${ACTION_META[actionModal].label} action recorded.`,
     });
-    toast.success('Action recorded', `Document has been ${actionModal}d.`);
+    toast.success(
+      'Action recorded',
+      `Document has been ${actionModal === 'recommend' ? 'recommended' : actionModal === 'return' ? 'returned' : `${actionModal}d`}.`,
+    );
     setActionModal(null);
     setRemarks('');
   };
@@ -167,342 +244,103 @@ export function DocumentDetailPage() {
     setRemarks('');
   };
 
-  const officeUsers = routeOffice ? users.filter(u => u.officeId === routeOffice && u.status === 'active') : [];
+  const officeUsers = routeOffice
+    ? users.filter(u => u.officeId === routeOffice && u.status === 'active')
+    : [];
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link to="/documents" className="inline-flex items-center text-xs text-slate-600 hover:text-brand-700 mb-2">
-          <ArrowLeft className="w-3 h-3 mr-1" />
-          Back to Documents
-        </Link>
+      <Link
+        to="/documents"
+        className="inline-flex items-center text-xs text-slate-600 hover:text-slate-900"
+      >
+        <ArrowLeft className="w-3 h-3 mr-1" />
+        Back to Documents
+      </Link>
+
+      <DocumentHero
+        document={doc}
+        holder={holder}
+        office={office}
+        isOverdue={!!isOverdue}
+        primaryAction={primaryAction}
+        onPrimaryAction={() => primaryAction && openAction(primaryAction)}
+        canDownload={canDownload}
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-8 space-y-6">
+          <DocumentJourneyView
+            document={doc}
+            routingSteps={routing}
+            auditLogs={logs}
+          />
+        </div>
+
+        <aside className="lg:col-span-4 space-y-6">
+          <DocumentActions
+            decisionActions={decisionActions}
+            terminalActions={terminalActions}
+            canRoute={canRoute}
+            onAction={openAction}
+            onRoute={() => setRouteModal(true)}
+          />
+          <DocumentInfoSidebar
+            document={doc}
+            originator={originator ?? null}
+            encoder={encoder ?? null}
+            receiver={receiver ?? null}
+            holder={holder ?? null}
+            isOverdue={!!isOverdue}
+          />
+        </aside>
       </div>
 
-      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="font-mono text-sm font-semibold text-brand-700">{doc.trackingNumber}</span>
-            {doc.documentNumber && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-mono text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">
-                <Hash className="w-3 h-3" />
-                {doc.documentNumber}
-              </span>
-            )}
-            <StatusBadge status={doc.status} size="md" />
-            <PriorityBadge priority={doc.priority} />
-            <ClassificationBadge classification={doc.classification} />
-            {isOverdue && (
-              <Tag variant="rose" icon={<AlertCircle className="w-3 h-3" />}>Overdue</Tag>
-            )}
-          </div>
-          <h1 className="text-2xl font-semibold text-slate-900">{doc.title}</h1>
-          <p className="text-sm text-slate-600 mt-2 max-w-3xl">{doc.description}</p>
-          {doc.tags.length > 0 && (
-            <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-              <TagIcon className="w-3.5 h-3.5 text-slate-400" />
-              {doc.tags.map(t => (
-                <Badge key={t} variant="slate" size="sm">#{t}</Badge>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
-          {hasPermission('documents.review') && (doc.status === 'under_review' || doc.status === 'recommended') && (
-            <>
-              <Button variant="outline" leftIcon={<ThumbsUp className="w-4 h-4" />} onClick={() => handleAction('recommend')}>
-                Recommend
-              </Button>
-              <Button leftIcon={<CheckCircle2 className="w-4 h-4" />} onClick={() => handleAction('approve')}>
-                Approve
-              </Button>
-              <Button variant="outline" leftIcon={<RotateCcw className="w-4 h-4" />} onClick={() => handleAction('return')}>
-                Return
-              </Button>
-              <Button variant="danger" leftIcon={<XCircle className="w-4 h-4" />} onClick={() => handleAction('reject')}>
-                Reject
-              </Button>
-            </>
-          )}
-          {hasPermission('documents.route') && doc.status !== 'archived' && doc.status !== 'released' && (
-            <Button variant="outline" leftIcon={<Send className="w-4 h-4" />} onClick={() => setRouteModal(true)}>
-              Route
-            </Button>
-          )}
-          {hasPermission('documents.release') && doc.status === 'approved' && (
-            <Button leftIcon={<PackageOpen className="w-4 h-4" />} onClick={() => handleAction('release')}>
-              Release
-            </Button>
-          )}
-          {hasPermission('documents.archive') && doc.status === 'released' && (
-            <Button variant="outline" leftIcon={<ArchiveIcon className="w-4 h-4" />} onClick={() => handleAction('archive')}>
-              Archive
-            </Button>
-          )}
-          <Button variant="outline" leftIcon={<Download className="w-4 h-4" />}>
-            Download
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-        <Card>
-          <CardHeader title="Document Information" />
-          <DetailRow icon={<FileText className="w-4 h-4" />} label="Type" value={DOCUMENT_TYPE_LABELS[doc.type]} />
-          {doc.documentNumber && (
-            <DetailRow icon={<Hash className="w-4 h-4" />} label="Document Number" value={doc.documentNumber} />
-          )}
-          <DetailRow icon={<Building2 className="w-4 h-4" />} label="Originating Office" value={originator?.name} sub={originator?.code} />
-          {receivingOffice && (
-            <DetailRow icon={<Building2 className="w-4 h-4" />} label="Receiving Office" value={receivingOffice.name} sub={receivingOffice.code} />
-          )}
-          {destinationOffice && (
-            <DetailRow icon={<Building2 className="w-4 h-4" />} label="Destination Office" value={destinationOffice.name} sub={destinationOffice.code} />
-          )}
-          <DetailRow icon={<Building2 className="w-4 h-4" />} label="Current Office" value={office?.name} sub={office?.code} />
-          <DetailRow icon={<UserIcon className="w-4 h-4" />} label="Current Holder" value={holder?.fullName} sub={holder ? DOC_POSITION(holder.role) : undefined} />
-          <DetailRow icon={<Calendar className="w-4 h-4" />} label="Date Received" value={doc.dateReceived ? formatDate(doc.dateReceived) : 'Not yet received'} />
-          <DetailRow icon={<Calendar className="w-4 h-4" />} label="Due Date" value={doc.dueDate ? formatDate(doc.dueDate) : 'No deadline'} />
-          <DetailRow icon={<Calendar className="w-4 h-4" />} label="Created" value={formatDate(doc.createdAt, true)} />
-          <DetailRow icon={<Calendar className="w-4 h-4" />} label="Last Updated" value={formatRelative(doc.updatedAt)} />
-        </Card>
-
-        <Card>
-          <CardHeader title="People" />
-          <PersonRow
-            label="Encoded by"
-            userId={doc.encodedById}
-            fallback={encoder?.fullName}
-          />
-          <PersonRow
-            label="Received by"
-            userId={doc.receivedById}
-            fallback={receiver?.fullName ?? 'Not yet received'}
-          />
-          <PersonRow
-            label="Current holder"
-            userId={doc.currentHolderId}
-            fallback={holder?.fullName}
-          />
-          <div className="mt-3 pt-3 border-t border-slate-200">
-            <p className="text-xs text-slate-500 mb-1">Source</p>
-            <p className="text-sm font-medium text-slate-900">
-              {doc.source === 'internal' ? 'Internal Document' : 'External Document'}
-            </p>
-            {doc.senderName && (
-              <p className="text-xs text-slate-600 mt-0.5">From: {doc.senderName}</p>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="Attachments" />
-          <div className="space-y-2">
-            {doc.attachments.length === 0 ? (
-              <p className="text-sm text-slate-500 py-3 text-center">No attachments uploaded.</p>
-            ) : (
-              doc.attachments.map(att => (
-                <div
-                  key={att.id}
-                  className="flex items-center justify-between gap-2 p-2.5 rounded-md border border-slate-200 hover:bg-slate-50"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 rounded bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
-                      <Paperclip className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-900 truncate">
-                        {att.name}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {(att.size / 1024).toFixed(1)} KB · {att.type.split('/').pop()?.toUpperCase() ?? 'FILE'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button className="p-1.5 text-slate-500 hover:text-slate-900 rounded">
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button className="p-1.5 text-slate-500 hover:text-slate-900 rounded">
-                      <Download className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-      </div>
-
-      <Card padded={false}>
-        <div className="px-5 pt-4">
-          <Tabs
-            value={tab}
-            onChange={setTab}
-            items={[
-              { id: 'journey', label: 'Document Journey', icon: <RouteIcon className="w-4 h-4" /> },
-              { id: 'routing', label: 'Routing History', icon: <Send className="w-4 h-4" />, count: routing.length },
-              { id: 'audit', label: 'Audit History', icon: <HistoryIcon className="w-4 h-4" />, count: logs.length },
-            ]}
-          />
-        </div>
-
-        <div className="p-5">
-          {tab === 'journey' && (
-            <DocumentJourneyView
-              document={doc}
-              routingSteps={routing}
-              auditLogs={logs}
-            />
-          )}
-
-          {tab === 'routing' && (
-            <div className="space-y-3">
-              {routing.length === 0 ? (
-                <p className="text-sm text-slate-500 text-center py-6">No routing history yet.</p>
-              ) : (
-                routing.map((step, idx) => {
-                  const fromOffice = getOfficeById(step.fromOfficeId);
-                  const toOffice = getOfficeById(step.toOfficeId);
-                  const toUser = step.toUserId ? getUserById(step.toUserId) : null;
-                  const fromUser = step.fromUserId ? getUserById(step.fromUserId) : null;
-                  return (
-                    <div key={step.id} className="flex gap-3">
-                      <div className="flex flex-col items-center">
-                        <div className={cn(
-                          'w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold border',
-                          step.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                          step.status === 'in_progress' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                          step.status === 'returned' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                          'bg-slate-100 text-slate-600 border-slate-200'
-                        )}>
-                          {step.status === 'completed' ? <CheckCircle2 className="w-4 h-4" /> :
-                           step.status === 'in_progress' ? idx + 1 :
-                           step.status === 'returned' ? <RotateCcw className="w-4 h-4" /> :
-                           idx + 1}
-                        </div>
-                        {idx < routing.length - 1 && (
-                          <div className="w-px flex-1 bg-slate-200 my-1" />
-                        )}
-                      </div>
-                      <div className="flex-1 pb-4">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-slate-900">
-                            Step {step.sequence}: {fromOffice?.code} → {toOffice?.code}
-                          </p>
-                          <Tag variant={
-                            step.status === 'completed' ? 'emerald' :
-                            step.status === 'in_progress' ? 'amber' :
-                            step.status === 'returned' ? 'rose' :
-                            'slate'
-                          }>
-                            {step.status.replace('_', ' ')}
-                          </Tag>
-                        </div>
-                        {toUser && (
-                          <p className="text-xs text-slate-600 mt-1">Assigned to: <span className="font-medium">{toUser.fullName}</span></p>
-                        )}
-                        {fromUser && (
-                          <p className="text-xs text-slate-500 mt-0.5">Routed by: {fromUser.fullName}</p>
-                        )}
-                        <div className="mt-2 p-3 rounded-md bg-slate-50 border border-slate-200">
-                          <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-1">Instructions</p>
-                          <p className="text-sm text-slate-700">{step.instructions}</p>
-                        </div>
-                        {step.remarks && (
-                          <div className="mt-2 p-3 rounded-md bg-amber-50 border border-amber-200">
-                            <p className="text-xs text-amber-700 font-medium uppercase tracking-wide mb-1">Remarks</p>
-                            <p className="text-sm text-amber-900">{step.remarks}</p>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-3 text-xs text-slate-500 mt-2">
-                          {step.receivedAt && <span>Received: {formatDate(step.receivedAt, true)}</span>}
-                          {step.completedAt && <span>· Completed: {formatDate(step.completedAt, true)}</span>}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-
-          {tab === 'audit' && (
-            <div className="space-y-2">
-              {logs.length === 0 ? (
-                <p className="text-sm text-slate-500 text-center py-6">No audit entries yet.</p>
-              ) : (
-                logs.map(log => {
-                  const actor = getUserById(log.actorId);
-                  return (
-                    <div key={log.id} className="flex items-start gap-3 p-3 rounded-md border border-slate-200 hover:bg-slate-50">
-                      <Avatar name={log.actorName} color={actor?.avatarColor ?? 'bg-slate-600'} size="md" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-slate-900">{log.actorName}</p>
-                          <Tag
-                            variant={
-                              log.action === 'APPROVE' ? 'emerald' :
-                              log.action === 'REJECT' ? 'rose' :
-                              log.action === 'RETURN' ? 'orange' :
-                              log.action === 'REVIEW' || log.action === 'RECOMMEND' ? 'indigo' :
-                              log.action === 'RECEIVE' ? 'blue' :
-                              'slate'
-                            }
-                          >
-                            {log.action}
-                          </Tag>
-                          <span className="text-xs text-slate-500">in {log.module}</span>
-                        </div>
-                        <p className="text-sm text-slate-700 mt-1">{log.description}</p>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {formatDate(log.createdAt, true)} · IP: {log.ipAddress}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </div>
-      </Card>
+      <HistoryTabs
+        tab={tab}
+        onTabChange={setTab}
+        routing={routing}
+        logs={logs}
+      />
 
       <Modal
         open={!!actionModal}
         onClose={() => setActionModal(null)}
-        title={
-          actionModal === 'recommend' ? 'Recommend for Approval' :
-          actionModal === 'approve' ? 'Approve Document' :
-          actionModal === 'reject' ? 'Reject Document' :
-          actionModal === 'return' ? 'Return for Revision' :
-          actionModal === 'release' ? 'Release Document' :
-          actionModal === 'archive' ? 'Archive Document' : ''
-        }
+        title={actionModal ? `${ACTION_META[actionModal].label} Document` : ''}
+        description={actionModal ? ACTION_META[actionModal].description : ''}
         size="md"
         footer={
           <>
-            <Button variant="outline" onClick={() => setActionModal(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setActionModal(null)}>
+              Cancel
+            </Button>
             <Button
               variant={actionModal === 'reject' ? 'danger' : 'primary'}
               onClick={submitAction}
             >
-              Confirm {actionModal}
+              {actionModal ? `Confirm ${ACTION_META[actionModal].label.toLowerCase()}` : ''}
             </Button>
           </>
         }
       >
         <div className="space-y-3">
-          <p className="text-sm text-slate-600">
-            Document: <span className="font-semibold text-slate-900">{doc.trackingNumber}</span>
-          </p>
-          <p className="text-xs text-slate-500">
-            {doc.title} · {DOCUMENT_CLASSIFICATION_LABELS[doc.classification]}
-          </p>
+          <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
+            <p className="text-xs text-slate-500">Document</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {doc.trackingNumber} · {doc.title}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              Current office: {office?.name} ({office?.code}) · Status:{' '}
+              {doc.status.replace(/_/g, ' ')}
+            </p>
+          </div>
           {actionModal === 'return' && (
             <Select
               label="Return to"
-              options={offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` }))}
+              options={offices.map(o => ({
+                value: o.id,
+                label: `${o.code} — ${o.name}`,
+              }))}
             />
           )}
           <Textarea
@@ -511,7 +349,7 @@ export function DocumentDetailPage() {
             rows={4}
             value={remarks}
             onChange={e => setRemarks(e.target.value)}
-            placeholder={`Provide details for this ${actionModal} action…`}
+            placeholder="Provide context for this action…"
           />
         </div>
       </Modal>
@@ -524,7 +362,9 @@ export function DocumentDetailPage() {
         size="md"
         footer={
           <>
-            <Button variant="outline" onClick={() => setRouteModal(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setRouteModal(false)}>
+              Cancel
+            </Button>
             <Button leftIcon={<Send className="w-4 h-4" />} onClick={submitRoute}>
               Route Document
             </Button>
@@ -534,7 +374,9 @@ export function DocumentDetailPage() {
         <div className="space-y-3">
           <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
             <p className="text-xs text-slate-500">Document</p>
-            <p className="text-sm font-semibold text-slate-900">{doc.trackingNumber} · {doc.title}</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {doc.trackingNumber} · {doc.title}
+            </p>
             <p className="text-xs text-slate-500 mt-1">
               From: {office?.name} ({office?.code})
             </p>
@@ -544,15 +386,23 @@ export function DocumentDetailPage() {
             required
             placeholder="Choose target office…"
             value={routeOffice}
-            onChange={e => { setRouteOffice(e.target.value); setRouteUser(''); }}
-            options={offices.filter(o => o.id !== doc.currentOfficeId).map(o => ({ value: o.id, label: `${o.code} — ${o.name}` }))}
+            onChange={e => {
+              setRouteOffice(e.target.value);
+              setRouteUser('');
+            }}
+            options={offices
+              .filter(o => o.id !== doc.currentOfficeId)
+              .map(o => ({ value: o.id, label: `${o.code} — ${o.name}` }))}
           />
           <Select
             label="Assign To (Optional)"
             placeholder={routeOffice ? 'Choose officer…' : 'Select office first'}
             value={routeUser}
             onChange={e => setRouteUser(e.target.value)}
-            options={officeUsers.map(u => ({ value: u.id, label: `${u.fullName} (${u.position})` }))}
+            options={officeUsers.map(u => ({
+              value: u.id,
+              label: `${u.fullName} (${u.position})`,
+            }))}
             disabled={!routeOffice}
           />
           <Textarea
@@ -568,40 +418,607 @@ export function DocumentDetailPage() {
   );
 }
 
-function DetailRow({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value?: string | null; sub?: string }) {
+interface DocumentHeroProps {
+  document: import('@/types').Document;
+  holder: import('@/types').User | null | undefined;
+  office: import('@/types').Office | null | undefined;
+  isOverdue: boolean;
+  primaryAction: ActionType | null;
+  onPrimaryAction: () => void;
+  canDownload: boolean;
+}
+
+function DocumentHero({
+  document: d,
+  holder,
+  office,
+  isOverdue,
+  primaryAction,
+  onPrimaryAction,
+  canDownload,
+}: DocumentHeroProps) {
+  const isTerminal = ['released', 'archived', 'rejected'].includes(d.status);
   return (
-    <div className="flex items-start gap-3 py-2.5 border-b border-slate-100 last:border-0">
-      <div className="text-slate-400 mt-0.5 shrink-0">{icon}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="text-sm font-medium text-slate-900">{value ?? '—'}</p>
-        {sub && <p className="text-xs text-slate-500">{sub}</p>}
+    <header className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500">
+        <span className="font-mono font-semibold text-slate-700">{d.trackingNumber}</span>
+        {d.documentNumber && (
+          <>
+            <span className="text-slate-300">·</span>
+            <span className="inline-flex items-center gap-1 font-mono">
+              <Hash className="w-3 h-3" />
+              {d.documentNumber}
+            </span>
+          </>
+        )}
+        <span className="text-slate-300">·</span>
+        <span>Created {formatDate(d.createdAt)}</span>
+        {d.source === 'external' && d.senderName && (
+          <>
+            <span className="text-slate-300">·</span>
+            <span>From {d.senderName}</span>
+          </>
+        )}
       </div>
-    </div>
+
+      <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight leading-snug">
+        {d.title}
+      </h1>
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <StatusBadge status={d.status} size="md" />
+        <PriorityBadge priority={d.priority} />
+        <ClassificationBadge classification={d.classification} />
+        <Tag variant="slate">{DOCUMENT_TYPE_LABELS[d.type]}</Tag>
+        {isOverdue && (
+          <Tag variant="rose" icon={<AlertCircle className="w-3 h-3" />}>
+            Overdue
+          </Tag>
+        )}
+      </div>
+
+      {d.description && (
+        <p className="text-sm text-slate-600 max-w-3xl leading-relaxed">{d.description}</p>
+      )}
+
+      {d.tags.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <TagIcon className="w-3.5 h-3.5 text-slate-400" />
+          {d.tags.map(t => (
+            <span
+              key={t}
+              className="text-[11px] font-mono text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded"
+            >
+              #{t}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="border border-slate-200 rounded-md bg-white p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 min-w-0">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              Office
+            </p>
+            <p className="text-sm font-semibold text-slate-900 truncate">
+              {office ? `${office.code} ${office.name}` : '—'}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              Holder
+            </p>
+            {holder ? (
+              <div className="flex items-center gap-2 min-w-0">
+                <Avatar
+                  name={holder.fullName}
+                  color={holder.avatarColor}
+                  size="xs"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 truncate">
+                    {holder.fullName}
+                  </p>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {ROLE_LABELS[holder.role]}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Unassigned</p>
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              Date Received
+            </p>
+            <p className="text-sm font-semibold text-slate-900">
+              {d.dateReceived ? formatDate(d.dateReceived) : '—'}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              Due
+            </p>
+            <p
+              className={cn(
+                'text-sm font-semibold inline-flex items-center gap-1.5',
+                isOverdue ? 'text-rose-700' : 'text-slate-900'
+              )}
+            >
+              <Clock className="w-3 h-3" />
+              {d.dueDate ? formatDate(d.dueDate) : 'No deadline'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {canDownload && (
+            <Button variant="outline" size="sm" leftIcon={<Download className="w-4 h-4" />}>
+              Download
+            </Button>
+          )}
+          {primaryAction && !isTerminal && (
+            <Button
+              size="sm"
+              leftIcon={ACTION_META[primaryAction].icon}
+              onClick={onPrimaryAction}
+            >
+              {ACTION_META[primaryAction].label}
+            </Button>
+          )}
+        </div>
+      </div>
+    </header>
   );
 }
 
-function PersonRow({ label, userId, fallback }: { label: string; userId?: string; fallback?: string }) {
-  const u = userId ? getUserById(userId) : null;
+interface DocumentActionsProps {
+  decisionActions: ActionType[];
+  terminalActions: ActionType[];
+  canRoute: boolean;
+  onAction: (action: ActionType) => void;
+  onRoute: () => void;
+}
+
+function DocumentActions({
+  decisionActions,
+  terminalActions,
+  canRoute,
+  onAction,
+  onRoute,
+}: DocumentActionsProps) {
+  const [open, setOpen] = useState(true);
+  const hasAny = decisionActions.length > 0 || terminalActions.length > 0 || canRoute;
+  if (!hasAny) {
+    return (
+      <Card>
+        <CardHeader title="Actions" description="No actions available for your role" />
+        <p className="text-xs text-slate-500">
+          You don't have permission to act on this document at its current stage.
+        </p>
+      </Card>
+    );
+  }
   return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">
-      <Avatar name={fallback ?? '—'} color={u?.avatarColor ?? 'bg-slate-600'} size="md" />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="text-sm font-medium text-slate-900 truncate">{fallback ?? '—'}</p>
-        {u && <p className="text-xs text-slate-500 truncate">{u.email}</p>}
-      </div>
-    </div>
+    <Card padded={false}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full px-5 py-3.5 flex items-center justify-between gap-2 text-left"
+      >
+        <span className="text-sm font-semibold text-slate-900">Actions</span>
+        {open ? (
+          <ChevronUp className="w-4 h-4 text-slate-400" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-slate-400" />
+        )}
+      </button>
+      {open && (
+        <div className="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+          {decisionActions.length > 0 && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
+                Decision
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {decisionActions.map(action => {
+                  const meta = ACTION_META[action];
+                  const variant =
+                    meta.tone === 'primary'
+                      ? 'primary'
+                      : meta.tone === 'danger'
+                        ? 'danger'
+                        : 'outline';
+                  return (
+                    <Button
+                      key={action}
+                      variant={variant as 'primary' | 'outline' | 'danger'}
+                      size="sm"
+                      leftIcon={meta.icon}
+                      onClick={() => onAction(action)}
+                    >
+                      {meta.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {canRoute && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
+                Workflow
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<Send className="w-3.5 h-3.5" />}
+                onClick={onRoute}
+                fullWidth
+              >
+                Route to another office
+              </Button>
+            </div>
+          )}
+          {terminalActions.length > 0 && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
+                Final
+              </p>
+              <div className="grid grid-cols-1 gap-2">
+                {terminalActions.map(action => {
+                  const meta = ACTION_META[action];
+                  return (
+                    <Button
+                      key={action}
+                      variant={meta.tone === 'primary' ? 'primary' : 'outline'}
+                      size="sm"
+                      leftIcon={meta.icon}
+                      onClick={() => onAction(action)}
+                      fullWidth
+                    >
+                      {meta.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 
-function DOC_POSITION(role: string) {
-  const map: Record<string, string> = {
-    system_admin: 'System Administrator',
-    office_admin: 'Office Administrator',
-    document_encoder: 'Document Encoder',
-    receiving_officer: 'Receiving Officer',
-    reviewing_officer: 'Reviewing Officer',
-  };
-  return map[role] ?? role;
+interface DocumentInfoSidebarProps {
+  document: import('@/types').Document;
+  originator: import('@/types').Office | null | undefined;
+  encoder: import('@/types').User | null | undefined;
+  receiver: import('@/types').User | null | undefined;
+  holder: import('@/types').User | null | undefined;
+  isOverdue: boolean;
+}
+
+function DocumentInfoSidebar({
+  document: d,
+  originator,
+  encoder,
+  receiver,
+  holder,
+  isOverdue,
+}: DocumentInfoSidebarProps) {
+  return (
+    <>
+      <Card padded={false}>
+        <div className="px-5 py-3.5 border-b border-slate-200">
+          <h3 className="text-sm font-semibold text-slate-900">People</h3>
+        </div>
+        <ul className="divide-y divide-slate-100">
+          <PersonLine label="Encoded by" user={encoder} />
+          <PersonLine label="Received by" user={receiver} />
+          <PersonLine label="Current holder" user={holder} />
+          <PersonLine
+            label="Originating office"
+            text={originator ? `${originator.code} — ${originator.name}` : '—'}
+          />
+        </ul>
+      </Card>
+
+      <Card padded={false}>
+        <div className="px-5 py-3.5 border-b border-slate-200">
+          <h3 className="text-sm font-semibold text-slate-900">Document</h3>
+        </div>
+        <ul className="divide-y divide-slate-100 text-sm">
+          <InfoLine label="Type" value={DOCUMENT_TYPE_LABELS[d.type]} />
+          <InfoLine
+            label="Classification"
+            value={DOCUMENT_CLASSIFICATION_LABELS[d.classification]}
+          />
+          <InfoLine
+            label="Source"
+            value={
+              d.source === 'internal' ? 'Internal' : `External${d.senderName ? ` · ${d.senderName}` : ''}`
+            }
+          />
+          <InfoLine label="Created" value={formatDate(d.createdAt, true)} />
+          <InfoLine label="Last updated" value={formatRelative(d.updatedAt)} />
+        </ul>
+      </Card>
+
+      <Card padded={false}>
+        <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-900">Attachments</h3>
+          <span className="text-xs text-slate-500 tabular-nums">{d.attachments.length}</span>
+        </div>
+        {d.attachments.length === 0 ? (
+          <p className="text-sm text-slate-500 px-5 py-6 text-center">No attachments.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {d.attachments.map(att => (
+              <li
+                key={att.id}
+                className="flex items-center gap-2.5 px-5 py-2.5 hover:bg-slate-50"
+              >
+                <div className="w-7 h-7 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                  <Paperclip className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-900 truncate">{att.name}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {(att.size / 1024).toFixed(1)} KB ·{' '}
+                    {att.type.split('/').pop()?.toUpperCase() ?? 'FILE'}
+                  </p>
+                </div>
+                <button
+                  className="p-1.5 text-slate-400 hover:text-slate-700 rounded"
+                  aria-label="Preview"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  className="p-1.5 text-slate-400 hover:text-slate-700 rounded"
+                  aria-label="Download"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      {isOverdue && (
+        <div className="border border-rose-200 bg-rose-50 rounded-md p-3 text-sm text-rose-700 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold">Past due date</p>
+            <p className="text-xs mt-0.5">
+              This document was due {d.dueDate ? formatRelative(d.dueDate) : ''} and still needs an
+              action.
+            </p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function PersonLine({
+  label,
+  user,
+  text,
+}: {
+  label: string;
+  user?: import('@/types').User | null;
+  text?: string;
+}) {
+  if (text) {
+    return (
+      <li className="px-5 py-2.5 flex items-center justify-between gap-3">
+        <span className="text-xs text-slate-500">{label}</span>
+        <span className="text-sm font-medium text-slate-900 truncate text-right">{text}</span>
+      </li>
+    );
+  }
+  return (
+    <li className="px-5 py-2.5 flex items-center gap-3">
+      <Avatar
+        name={user?.fullName ?? '—'}
+        color={user?.avatarColor ?? 'bg-slate-400'}
+        size="sm"
+      />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-sm font-medium text-slate-900 truncate">
+          {user?.fullName ?? 'Unassigned'}
+        </p>
+      </div>
+    </li>
+  );
+}
+
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <li className="px-5 py-2 flex items-center justify-between gap-3">
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-sm font-medium text-slate-900 truncate text-right">{value}</span>
+    </li>
+  );
+}
+
+interface HistoryTabsProps {
+  tab: 'routing' | 'audit';
+  onTabChange: (t: 'routing' | 'audit') => void;
+  routing: import('@/types').RoutingStep[];
+  logs: import('@/types').AuditLog[];
+}
+
+function HistoryTabs({ tab, onTabChange, routing, logs }: HistoryTabsProps) {
+  return (
+    <Card padded={false}>
+      <div className="px-5 pt-4">
+        <Tabs
+          value={tab}
+          onChange={id => onTabChange(id as 'routing' | 'audit')}
+          items={[
+            {
+              id: 'routing',
+              label: 'Routing History',
+              icon: <RouteIcon className="w-4 h-4" />,
+              count: routing.length,
+            },
+            {
+              id: 'audit',
+              label: 'Audit History',
+              icon: <HistoryIcon className="w-4 h-4" />,
+              count: logs.length,
+            },
+          ]}
+        />
+      </div>
+      <div className="p-5">
+        {tab === 'routing' && <RoutingList routing={routing} />}
+        {tab === 'audit' && <AuditList logs={logs} />}
+      </div>
+    </Card>
+  );
+}
+
+function RoutingList({ routing }: { routing: import('@/types').RoutingStep[] }) {
+  if (routing.length === 0) {
+    return <p className="text-sm text-slate-500 text-center py-6">No routing history yet.</p>;
+  }
+  return (
+    <ol className="relative space-y-4">
+      <span
+        aria-hidden
+        className="absolute left-[15px] top-2 bottom-2 w-px bg-slate-200"
+      />
+      {routing.map(step => {
+        const fromOffice = getOfficeById(step.fromOfficeId);
+        const toOffice = getOfficeById(step.toOfficeId);
+        const toUser = step.toUserId ? getUserById(step.toUserId) : null;
+        const fromUser = step.fromUserId ? getUserById(step.fromUserId) : null;
+        return (
+          <li key={step.id} className="relative pl-12">
+            <span
+              className={cn(
+                'absolute left-0 top-0.5 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold border bg-white',
+                step.status === 'completed' &&
+                  'border-slate-300 text-slate-700',
+                step.status === 'in_progress' &&
+                  'border-slate-900 text-slate-900',
+                step.status === 'returned' &&
+                  'border-rose-300 text-rose-700',
+                step.status === 'pending' &&
+                  'border-slate-200 text-slate-400 border-dashed',
+              )}
+            >
+              {step.status === 'completed' ? (
+                <CheckCircle2 className="w-4 h-4" />
+              ) : step.status === 'in_progress' ? (
+                step.sequence
+              ) : step.status === 'returned' ? (
+                <RotateCcw className="w-4 h-4" />
+              ) : (
+                step.sequence
+              )}
+            </span>
+            <div className="rounded-md border border-slate-200 p-3.5 bg-white">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-slate-900">
+                  Step {step.sequence}
+                </p>
+                <span className="text-xs text-slate-500">
+                  {fromOffice?.code} → {toOffice?.code}
+                </span>
+                <Tag
+                  variant={
+                    step.status === 'completed'
+                      ? 'emerald'
+                      : step.status === 'in_progress'
+                        ? 'amber'
+                        : step.status === 'returned'
+                          ? 'rose'
+                          : 'slate'
+                  }
+                >
+                  {step.status.replace('_', ' ')}
+                </Tag>
+              </div>
+              <p className="text-sm text-slate-700 mt-2">{step.instructions}</p>
+              {(toUser || fromUser) && (
+                <p className="text-xs text-slate-500 mt-1.5">
+                  {fromUser && <>Routed by {fromUser.fullName}</>}
+                  {fromUser && toUser && <> · </>}
+                  {toUser && <>To {toUser.fullName}</>}
+                </p>
+              )}
+              {step.remarks && (
+                <div className="mt-2 p-2 rounded-md bg-slate-50 border border-slate-200 text-xs text-slate-700">
+                  {step.remarks}
+                </div>
+              )}
+              <div className="mt-2 text-[11px] text-slate-500">
+                {step.receivedAt && <span>Received {formatDate(step.receivedAt, true)}</span>}
+                {step.completedAt && (
+                  <span> · Completed {formatDate(step.completedAt, true)}</span>
+                )}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function AuditList({ logs }: { logs: import('@/types').AuditLog[] }) {
+  if (logs.length === 0) {
+    return <p className="text-sm text-slate-500 text-center py-6">No audit entries yet.</p>;
+  }
+  return (
+    <ul className="divide-y divide-slate-100 border border-slate-200 rounded-md bg-white">
+      {logs.map(log => {
+        const actor = getUserById(log.actorId);
+        return (
+          <li key={log.id} className="px-4 py-3 flex items-start gap-3">
+            <Avatar
+              name={log.actorName}
+              color={actor?.avatarColor ?? 'bg-slate-600'}
+              size="sm"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-slate-900">{log.actorName}</p>
+                <Tag
+                  variant={
+                    log.action === 'APPROVE'
+                      ? 'emerald'
+                      : log.action === 'REJECT'
+                        ? 'rose'
+                        : log.action === 'RETURN'
+                          ? 'orange'
+                          : log.action === 'REVIEW' || log.action === 'RECOMMEND'
+                            ? 'indigo'
+                            : log.action === 'RECEIVE'
+                              ? 'blue'
+                              : 'slate'
+                  }
+                >
+                  {log.action}
+                </Tag>
+                <span className="text-xs text-slate-500">{log.module}</span>
+              </div>
+              <p className="text-sm text-slate-700 mt-1">{log.description}</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {formatDate(log.createdAt, true)} · IP: {log.ipAddress}
+              </p>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }

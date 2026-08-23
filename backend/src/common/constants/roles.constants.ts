@@ -1,14 +1,14 @@
-import { UserRole } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 export const ROLES = {
-  SYSTEM_ADMIN: 'system_admin' as UserRole,
-  OFFICE_ADMIN: 'office_admin' as UserRole,
-  DOCUMENT_ENCODER: 'document_encoder' as UserRole,
-  RECEIVING_OFFICER: 'receiving_officer' as UserRole,
-  REVIEWING_OFFICER: 'reviewing_officer' as UserRole,
+  SYSTEM_ADMIN: 'SYSTEM_ADMIN' as Role,
+  OFFICE_ADMIN: 'OFFICE_ADMIN' as Role,
+  DOCUMENT_ENCODER: 'DOCUMENT_ENCODER' as Role,
+  RECEIVING_OFFICER: 'RECEIVING_OFFICER' as Role,
+  REVIEWING_OFFICER: 'REVIEWING_OFFICER' as Role,
 } as const;
 
-export const ALL_ROLES: UserRole[] = [
+export const ALL_ROLES: Role[] = [
   ROLES.SYSTEM_ADMIN,
   ROLES.OFFICE_ADMIN,
   ROLES.DOCUMENT_ENCODER,
@@ -16,10 +16,10 @@ export const ALL_ROLES: UserRole[] = [
   ROLES.REVIEWING_OFFICER,
 ];
 
-export const ROLE_LABELS: Record<UserRole, string> = {
-  system_admin: 'System Administrator',
-  office_admin: 'Office Administrator',
-  document_encoder: 'Document Encoder',
-  receiving_officer: 'Receiving Officer',
-  reviewing_officer: 'Reviewing Officer',
+export const ROLE_LABELS: Record<Role, string> = {
+  SYSTEM_ADMIN: 'System Administrator',
+  OFFICE_ADMIN: 'Office Administrator',
+  DOCUMENT_ENCODER: 'Document Encoder',
+  RECEIVING_OFFICER: 'Receiving Officer',
+  REVIEWING_OFFICER: 'Reviewing Officer',
 };

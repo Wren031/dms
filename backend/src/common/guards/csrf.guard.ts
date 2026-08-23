@@ -11,7 +11,7 @@ import { IS_PUBLIC_METADATA_KEY } from '../decorators/public.decorator';
 import { Reflector } from '@nestjs/core';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-const SKIP_PATHS = ['/auth/login', '/auth/refresh'];
+const SKIP_PATHS = ['/auth/login', '/auth/refresh', '/auth/register'];
 
 @Injectable()
 export class CsrfGuard implements CanActivate {

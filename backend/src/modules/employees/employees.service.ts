@@ -1,46 +1,73 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { FilterEmployeesDto } from './dto/filter-employees.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
 
+type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
+  include: {
+    office: true;
+    user: { select: { id: true; username: true; role: true; status: true } };
+  };
+}>;
+
+const employeeInclude = {
+  office: true,
+  user: { select: { id: true, username: true, role: true, status: true } },
+} satisfies Prisma.EmployeeInclude;
+
+const SORTABLE_FIELDS = new Set(['firstName', 'lastName', 'employeeNo', 'createdAt']);
+
 @Injectable()
 export class EmployeesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(dto: CreateEmployeeDto): Promise<unknown> {
+  async create(dto: CreateEmployeeDto): Promise<EmployeeWithRelations> {
+    const data: Prisma.EmployeeCreateInput = {
+      employeeNo: dto.employeeNo,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      position: dto.position,
+      email: dto.email,
+      office: { connect: { id: dto.officeId } },
+    };
+    if (dto.middleName !== undefined) data.middleName = dto.middleName;
+    if (dto.phone !== undefined) data.phone = dto.phone;
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.hiredAt) data.hiredAt = new Date(dto.hiredAt);
+
     return this.prisma.employee.create({
-      data: {
-        ...dto,
-        hiredAt: dto.hiredAt ? new Date(dto.hiredAt) : undefined,
-      },
-      include: { office: true, user: true },
+      data,
+      include: employeeInclude,
     });
   }
 
-  async findAll(filter: FilterEmployeesDto): Promise<PaginatedResult<unknown>> {
+  async findAll(filter: FilterEmployeesDto): Promise<PaginatedResult<EmployeeWithRelations>> {
     const { page, pageSize, search, officeId, isActive, position, sortBy, order } = filter;
-    const where: Record<string, unknown> = {};
+    const where: Prisma.EmployeeWhereInput = {};
+
     if (search) {
-      Object.assign(where, {
-        OR: [
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
-          { employeeNo: { contains: search, mode: 'insensitive' } },
-        ],
-      });
+      where.OR = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { middleName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { employeeNo: { contains: search, mode: 'insensitive' } },
+      ];
     }
     if (officeId) where.officeId = officeId;
     if (typeof isActive === 'boolean') where.isActive = isActive;
     if (position) where.position = { contains: position, mode: 'insensitive' };
 
+    const orderField = sortBy && SORTABLE_FIELDS.has(sortBy) ? sortBy : 'lastName';
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.employee.findMany({
         where,
-        include: { office: true, user: { select: { id: true, username: true, role: true, status: true } } },
-        orderBy: { [sortBy ?? 'lastName']: order },
+        include: employeeInclude,
+        orderBy: { [orderField]: order },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -49,24 +76,37 @@ export class EmployeesService {
     return { items, total, page, pageSize };
   }
 
-  findOne(id: string): Promise<unknown> {
+  async findOne(id: string): Promise<EmployeeWithRelations> {
     return this.prisma.employee.findUniqueOrThrow({
       where: { id },
-      include: { office: true, user: true },
+      include: employeeInclude,
     });
   }
 
-  update(id: string, dto: UpdateEmployeeDto): Promise<unknown> {
-    const data: Record<string, unknown> = { ...dto };
+  async update(id: string, dto: UpdateEmployeeDto): Promise<EmployeeWithRelations> {
+    const data: Prisma.EmployeeUpdateInput = {};
+    if (dto.employeeNo !== undefined) data.employeeNo = dto.employeeNo;
+    if (dto.firstName !== undefined) data.firstName = dto.firstName;
+    if (dto.middleName !== undefined) data.middleName = dto.middleName;
+    if (dto.lastName !== undefined) data.lastName = dto.lastName;
+    if (dto.position !== undefined) data.position = dto.position;
+    if (dto.email !== undefined) data.email = dto.email;
+    if (dto.phone !== undefined) data.phone = dto.phone;
+    if (dto.officeId !== undefined) data.office = { connect: { id: dto.officeId } };
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.hiredAt) data.hiredAt = new Date(dto.hiredAt);
+
     return this.prisma.employee.update({
       where: { id },
       data,
-      include: { office: true, user: true },
+      include: employeeInclude,
     });
   }
 
-  remove(id: string): Promise<unknown> {
-    return this.prisma.employee.delete({ where: { id } });
+  async remove(id: string): Promise<EmployeeWithRelations> {
+    return this.prisma.employee.delete({
+      where: { id },
+      include: employeeInclude,
+    });
   }
 }

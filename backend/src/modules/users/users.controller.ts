@@ -50,10 +50,7 @@ export class UsersController {
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
   @Audit('user.update', 'users', 'User')
   @Patch(':id')
-  update(
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() dto: UpdateUserDto,
-  ) {
+  update(@Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(id, dto);
   }
 

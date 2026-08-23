@@ -1,13 +1,12 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { AccountStatus, Role } from '@prisma/client';
 
 export interface AuthenticatedUser {
   id: string;
-  email: string;
-  username: string;
-  fullName: string;
-  role: UserRole;
-  status: 'active' | 'inactive' | 'suspended';
+  email: string | null;
+  username: string | null;
+  role: Role;
+  status: AccountStatus;
   sessionId: string | null;
   employee?: {
     id: string;

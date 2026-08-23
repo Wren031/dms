@@ -5,12 +5,13 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Users as UsersIcon,
   ArrowRight,
   FilePlus,
   ChevronRight,
   Bell,
   TrendingUp,
+  ListChecks,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -29,6 +30,36 @@ import {
 } from '@/constants';
 import { formatRelative, cn } from '@/lib/utils';
 import type { DocumentStatus } from '@/types';
+
+const PENDING_STATUSES = new Set<DocumentStatus>([
+  'registered',
+  'received',
+  'in_routing',
+  'under_review',
+  'recommended',
+  'approved',
+  'released',
+  'returned',
+]);
+
+function getActionForStatus(status: DocumentStatus): string | null {
+  switch (status) {
+    case 'registered': return 'Receive & log';
+    case 'received': return 'Classify & assign';
+    case 'in_routing': return 'Route to office';
+    case 'under_review': return 'Review & recommend';
+    case 'recommended': return 'Approve / Reject / Return';
+    case 'approved': return 'Release';
+    case 'released': return 'Archive';
+    case 'returned': return 'Correct & resubmit';
+    default: return null;
+  }
+}
+
+function getActionToneForStatus(status: DocumentStatus): 'slate' | 'amber' | 'rose' {
+  if (status === 'returned') return 'amber';
+  return 'slate';
+}
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -55,15 +86,22 @@ export function DashboardPage() {
     return { total, inProgress, completed, overdue, myDocuments };
   }, [user.id]);
 
-  const myInbox = useMemo(() => {
-    return documents.filter(d => d.currentHolderId === user.id).slice(0, 5);
+  const pendingForUser = useMemo(() => {
+    return documents
+      .filter(d => d.currentHolderId === user.id)
+      .filter(d => PENDING_STATUSES.has(d.status))
+      .sort((a, b) => {
+        const overdueA = a.dueDate && new Date(a.dueDate).getTime() < Date.now() ? 0 : 1;
+        const overdueB = b.dueDate && new Date(b.dueDate).getTime() < Date.now() ? 0 : 1;
+        if (overdueA !== overdueB) return overdueA - overdueB;
+        const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+        const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+        if (aTime !== bTime) return aTime - bTime;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
   }, [user.id]);
 
-  const recent = useMemo(() => {
-    return [...documents]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 6);
-  }, []);
+  const pendingTotal = pendingForUser.length;
 
   const statusDistribution = useMemo(() => {
     const counts: Record<DocumentStatus, number> = {
@@ -129,7 +167,7 @@ export function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <StatCard
           label="Total Documents"
           value={stats.total}
@@ -139,6 +177,27 @@ export function DashboardPage() {
           label="In Progress"
           value={stats.inProgress}
           icon={<Clock className="w-4 h-4" />}
+        />
+        <StatCard
+          label="Awaiting My Action"
+          value={pendingTotal}
+          icon={<ListChecks className="w-4 h-4" />}
+          footer={
+            pendingTotal > 0 ? (
+              <Link
+                to="#pending-actions"
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-700 hover:text-slate-900"
+              >
+                Review queue below
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            ) : (
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>All clear</span>
+              </div>
+            )
+          }
         />
         <StatCard
           label="Completed"
@@ -285,15 +344,26 @@ export function DashboardPage() {
         </div>
       </Card>
 
-      <Card padded={false}>
+      <div id="pending-actions">
+        <Card padded={false}>
         <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">
-              {user.role === 'reviewing_officer' || user.role === 'receiving_officer'
-                ? 'My Assigned Documents'
-                : 'Recently Updated'}
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">Documents requiring your attention</p>
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="text-base font-semibold text-slate-900">Pending Actions</h3>
+            <span
+              className={cn(
+                'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums',
+                pendingTotal > 0
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-500'
+              )}
+            >
+              {pendingTotal}
+            </span>
+            <p className="text-xs text-slate-500 ml-2 truncate">
+              {pendingTotal === 0
+                ? 'You have no items waiting on your action.'
+                : 'Documents currently with you that still need an action.'}
+            </p>
           </div>
           <Link to="/documents">
             <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
@@ -301,48 +371,88 @@ export function DashboardPage() {
             </Button>
           </Link>
         </div>
-        <div className="divide-y divide-slate-100">
-          {(user.role === 'reviewing_officer' || user.role === 'receiving_officer' ? myInbox : recent).map(doc => {
-            const office = getOfficeById(doc.currentOfficeId);
-            const holder = doc.currentHolderId ? getUserById(doc.currentHolderId) : null;
-            return (
-              <Link
-                key={doc.id}
-                to={`/documents/${doc.id}`}
-                className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
-              >
-                <div className="w-9 h-9 rounded-md bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
-                  <FileText className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-[11px] font-mono font-semibold text-slate-500">
-                      {doc.trackingNumber}
-                    </span>
-                    <StatusBadge status={doc.status} className="!text-[10px] !px-1.5 !py-0" />
-                    <PriorityBadge priority={doc.priority} className="!text-[10px] !px-1.5 !py-0" />
+        {pendingForUser.length === 0 ? (
+          <div className="px-5 pb-8 pt-2 text-center">
+            <div className="inline-flex items-center gap-2 text-sm text-slate-500">
+              <CheckCircle2 className="w-4 h-4 text-slate-400" />
+              Nothing in your queue right now.
+            </div>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {pendingForUser.map(doc => {
+              const office = getOfficeById(doc.currentOfficeId);
+              const action = getActionForStatus(doc.status);
+              const isOverdue =
+                doc.dueDate &&
+                new Date(doc.dueDate).getTime() < Date.now() &&
+                !['released', 'archived', 'rejected'].includes(doc.status);
+              return (
+                <Link
+                  key={doc.id}
+                  to={`/documents/${doc.id}`}
+                  className="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
+                >
+                  <div className="w-9 h-9 rounded-md bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                    <FileText className="w-4 h-4" />
                   </div>
-                  <p className="text-sm font-medium text-slate-900 truncate group-hover:text-brand-700">
-                    {doc.title}
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                    {office && <span>{office.code}</span>}
-                    {holder && (
-                      <>
-                        <span className="text-slate-300">·</span>
-                        <span className="truncate">{holder.fullName}</span>
-                      </>
-                    )}
-                    <span className="text-slate-300">·</span>
-                    <span>{formatRelative(doc.updatedAt)}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-[11px] font-mono font-semibold text-slate-500">
+                        {doc.trackingNumber}
+                      </span>
+                      <StatusBadge status={doc.status} className="!text-[10px] !px-1.5 !py-0" />
+                      <PriorityBadge priority={doc.priority} className="!text-[10px] !px-1.5 !py-0" />
+                      {action && (
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold',
+                            getActionToneForStatus(doc.status) === 'amber'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-slate-50 text-slate-700 border-slate-200'
+                          )}
+                        >
+                          {action}
+                        </span>
+                      )}
+                      {isOverdue && (
+                        <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 text-rose-700 px-1.5 py-0.5 text-[10px] font-semibold">
+                          <AlertTriangle className="w-3 h-3" />
+                          Overdue
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-slate-900 truncate group-hover:text-brand-700">
+                      {doc.title}
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap">
+                      {office && <span>{office.code}</span>}
+                      {doc.dueDate && (
+                        <>
+                          <span className="text-slate-300">·</span>
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1',
+                              isOverdue && 'text-rose-700 font-medium'
+                            )}
+                          >
+                            <CalendarIcon className="w-3 h-3" />
+                            Due {formatRelative(doc.dueDate)}
+                          </span>
+                        </>
+                      )}
+                      <span className="text-slate-300">·</span>
+                      <span>Updated {formatRelative(doc.updatedAt)}</span>
+                    </div>
                   </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-600 transition-colors shrink-0 mt-2" />
-              </Link>
-            );
-          })}
-        </div>
-      </Card>
+                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-600 transition-colors shrink-0 mt-2" />
+                </Link>
+              );
+            })}
+          </div>
+        )}
+        </Card>
+      </div>
 
       {(user.role === 'system_admin' || user.role === 'office_admin') && recentLogs.length > 0 && (
         <Card padded={false}>

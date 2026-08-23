@@ -187,15 +187,23 @@ export class AuditInterceptor implements NestInterceptor {
       case 'attachment.delete':
         return `Attachment deleted`;
       case 'user.create':
-        return `User created: ${String(body.fullName ?? body.username ?? body.email ?? '?')}`;
+        return `User created: ${String(body.username ?? body.email ?? '?')}`;
       case 'user.update':
         return `User updated`;
       case 'user.delete':
         return `User deleted`;
+      case 'user.reset-password':
+        return `User password reset`;
       case 'office.create':
         return `Office created: ${String(body.name ?? '?')}`;
       case 'office.update':
         return `Office updated`;
+      case 'employee.create':
+        return `Employee created: ${String(body.firstName ?? '')} ${String(body.lastName ?? '')}`.trim();
+      case 'employee.update':
+        return `Employee updated`;
+      case 'employee.delete':
+        return `Employee deleted`;
       default:
         return `${meta.action} via ${request.method} ${request.url}`;
     }

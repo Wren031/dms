@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -6,42 +7,63 @@ import { FilterUsersDto } from './dto/filter-users.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
 import { hashPassword } from '../../common/utils/hash.util';
 
+type UserWithEmployee = Prisma.UserGetPayload<{
+  include: {
+    employee: {
+      include: {
+        office: true;
+      };
+    };
+  };
+}>;
+
+const userWithEmployeeInclude = {
+  employee: {
+    include: {
+      office: true,
+    },
+  },
+} satisfies Prisma.UserInclude;
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateUserDto): Promise<unknown> {
+  async create(dto: CreateUserDto): Promise<UserWithEmployee> {
     const passwordHash = await hashPassword(dto.password);
+
     return this.prisma.user.create({
       data: {
-        email: dto.email,
-        username: dto.username,
+        username: dto.username ?? null,
+        email: dto.email ?? null,
         passwordHash,
-        fullName: dto.fullName,
-        firstName: dto.firstName,
-        middleName: dto.middleName,
-        lastName: dto.lastName,
-        phone: dto.phone,
-        role: dto.role,
-        status: dto.status ?? 'active',
-        avatarColor: dto.avatarColor,
+        role: dto.role ?? 'DOCUMENT_ENCODER',
+        status: dto.status ?? 'ACTIVE',
         employeeId: dto.employeeId,
       },
-      include: { employee: true },
+      include: userWithEmployeeInclude,
     });
   }
 
-  async findAll(filter: FilterUsersDto): Promise<PaginatedResult<unknown>> {
+  async findAll(filter: FilterUsersDto): Promise<PaginatedResult<UserWithEmployee>> {
     const { page, pageSize, search, role, status, officeId, order } = filter;
-    const where: Record<string, unknown> = {};
+    const where: Prisma.UserWhereInput = {};
     if (search) {
-      Object.assign(where, {
-        OR: [
-          { email: { contains: search, mode: 'insensitive' } },
-          { username: { contains: search, mode: 'insensitive' } },
-          { fullName: { contains: search, mode: 'insensitive' } },
-        ],
-      });
+      where.OR = [
+        { email: { contains: search, mode: 'insensitive' } },
+        { username: { contains: search, mode: 'insensitive' } },
+        {
+          employee: {
+            OR: [
+              { firstName: { contains: search, mode: 'insensitive' } },
+              { lastName: { contains: search, mode: 'insensitive' } },
+              { middleName: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } },
+              { employeeNo: { contains: search, mode: 'insensitive' } },
+            ],
+          },
+        },
+      ];
     }
     if (role) where.role = role;
     if (status) where.status = status;
@@ -50,7 +72,7 @@ export class UsersService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
         where,
-        include: { employee: { include: { office: true } } },
+        include: userWithEmployeeInclude,
         orderBy: { createdAt: order },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -61,28 +83,36 @@ export class UsersService {
     return { items, total, page, pageSize };
   }
 
-  async findOne(id: string): Promise<unknown> {
+  async findOne(id: string): Promise<UserWithEmployee> {
     return this.prisma.user.findUniqueOrThrow({
       where: { id },
-      include: { employee: { include: { office: true } } },
+      include: userWithEmployeeInclude,
     });
   }
 
-  async update(id: string, dto: UpdateUserDto): Promise<unknown> {
+  async update(id: string, dto: UpdateUserDto): Promise<UserWithEmployee> {
     const { password, ...rest } = dto;
-    const data: Record<string, unknown> = { ...rest };
+    const data: Prisma.UserUpdateInput = {};
+    if (rest.username !== undefined) data.username = rest.username;
+    if (rest.email !== undefined) data.email = rest.email;
+    if (rest.role !== undefined) data.role = rest.role;
+    if (rest.status !== undefined) data.status = rest.status;
+    if (rest.employeeId !== undefined) data.employee = { connect: { id: rest.employeeId } };
     if (password) {
       data.passwordHash = await hashPassword(password);
     }
     return this.prisma.user.update({
       where: { id },
       data,
-      include: { employee: { include: { office: true } } },
+      include: userWithEmployeeInclude,
     });
   }
 
-  async remove(id: string): Promise<unknown> {
-    return this.prisma.user.delete({ where: { id } });
+  async remove(id: string): Promise<UserWithEmployee> {
+    return this.prisma.user.delete({
+      where: { id },
+      include: userWithEmployeeInclude,
+    });
   }
 
   async resetPassword(id: string, newPassword?: string): Promise<{ success: true }> {
@@ -92,7 +122,12 @@ export class UsersService {
       where: { id },
       data: {
         passwordHash,
-        sessions: { updateMany: { where: { revokedAt: null }, data: { revokedAt: new Date() } } },
+        authSessions: {
+          updateMany: {
+            where: { revokedAt: null },
+            data: { revokedAt: new Date() },
+          },
+        },
       },
     });
     return { success: true };

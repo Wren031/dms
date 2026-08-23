@@ -4,67 +4,36 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  Length,
+  MinLength,
+  MaxLength,
   Matches,
 } from 'class-validator';
-import { UserRole, UserStatus } from '@prisma/client';
+import { AccountStatus, Role } from '@prisma/client';
 
 export class CreateUserDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  username?: string;
+
+  @IsOptional()
   @IsEmail()
-  @Length(3, 254)
-  email!: string;
+  @MaxLength(255)
+  email?: string;
 
   @IsString()
-  @Length(3, 32)
-  @Matches(/^[a-zA-Z0-9._-]+$/, {
-    message: 'username may only contain letters, digits, dot, dash, underscore',
-  })
-  username!: string;
-
-  @IsString()
-  @Length(8, 128)
-  @Matches(/^(?=.*[A-Za-z])(?=.*\d).+$/, {
-    message: 'password must contain at least one letter and one number',
-  })
+  @MinLength(8)
+  @MaxLength(128)
   password!: string;
 
-  @IsString()
-  @Length(1, 150)
-  fullName!: string;
+  @IsOptional()
+  @IsEnum(Role)
+  role?: Role;
 
   @IsOptional()
-  @IsString()
-  @Length(1, 100)
-  firstName?: string;
+  @IsEnum(AccountStatus)
+  status?: AccountStatus;
 
-  @IsOptional()
-  @IsString()
-  @Length(1, 100)
-  middleName?: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(1, 100)
-  lastName?: string;
-
-  @IsOptional()
-  @IsString()
-  @Length(5, 32)
-  phone?: string;
-
-  @IsEnum(UserRole)
-  role!: UserRole;
-
-  @IsOptional()
-  @IsEnum(UserStatus)
-  status?: UserStatus;
-
-  @IsOptional()
-  @IsString()
-  @Length(1, 50)
-  avatarColor?: string;
-
-  @IsOptional()
   @IsUUID()
-  employeeId?: string;
+  employeeId!: string;
 }

@@ -1,6 +1,5 @@
-import { Type } from 'class-transformer';
 import { IsEnum, IsOptional, IsString, IsUUID, Length } from 'class-validator';
-import { UserRole, UserStatus } from '@prisma/client';
+import { AccountStatus, Role } from '@prisma/client';
 import { PaginationDto, SortOrder } from '../../../common/dto/pagination.dto';
 
 export class FilterUsersDto extends PaginationDto {
@@ -10,29 +9,18 @@ export class FilterUsersDto extends PaginationDto {
   search?: string;
 
   @IsOptional()
-  @IsEnum(UserRole)
-  role?: UserRole;
+  @IsEnum(Role)
+  role?: Role;
 
   @IsOptional()
-  @IsEnum(UserStatus)
-  status?: UserStatus;
+  @IsEnum(AccountStatus)
+  status?: AccountStatus;
 
   @IsOptional()
   @IsUUID()
   officeId?: string;
 
   @IsOptional()
-  @IsEnum(SortOrder)
-  order: SortOrder = SortOrder.DESC;
-}
-
-export class UsersSortDto {
-  @IsOptional()
-  @IsEnum(['createdAt', 'updatedAt', 'fullName', 'username', 'email', 'lastLoginAt'] as const)
-  sortBy?: 'createdAt' | 'updatedAt' | 'fullName' | 'username' | 'email' | 'lastLoginAt';
-
-  @IsOptional()
-  @Type(() => Number)
   @IsEnum(SortOrder)
   order: SortOrder = SortOrder.DESC;
 }

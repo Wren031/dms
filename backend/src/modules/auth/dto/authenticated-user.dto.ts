@@ -1,16 +1,13 @@
-import { UserRole, UserStatus } from '@prisma/client';
+import { AccountStatus, Role } from '@prisma/client';
 
 export class AuthenticatedUserDto {
   id!: string;
-  email!: string;
-  username!: string;
-  fullName!: string;
-  role!: UserRole;
-  status!: UserStatus;
-  avatarColor?: string | null;
+  email!: string | null;
+  username!: string | null;
+  role!: Role;
+  status!: AccountStatus;
   officeId?: string | null;
   position?: string | null;
-  lastLoginAt?: Date | null;
   createdAt!: Date;
 }
 

@@ -19,6 +19,7 @@ import { FilterEmployeesDto } from './dto/filter-employees.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Audit } from '../../common/decorators/audit.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -27,23 +28,27 @@ export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Audit('employee.create', 'employees', 'Employee')
   @Post()
   @HttpCode(HttpStatus.CREATED)
   create(@Body() dto: CreateEmployeeDto) {
     return this.employeesService.create(dto);
   }
 
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
   @Get()
   findAll(@Query() filter: FilterEmployeesDto) {
     return this.employeesService.findAll(filter);
   }
 
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.employeesService.findOne(id);
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Audit('employee.update', 'employees', 'Employee')
   @Patch(':id')
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -52,7 +57,8 @@ export class EmployeesController {
     return this.employeesService.update(id, dto);
   }
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Roles(ROLES.SYSTEM_ADMIN)
+  @Audit('employee.delete', 'employees', 'Employee')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   remove(@Param('id', new ParseUUIDPipe()) id: string) {

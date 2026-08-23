@@ -14,18 +14,18 @@ datasource db {
 // Enums
 // =====================================================
 
-enum UserStatus {
-  active
-  inactive
-  suspended
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
 }
 
-enum UserRole {
-  system_admin
-  office_admin
-  document_encoder
-  receiving_officer
-  reviewing_officer
+enum Role {
+  SYSTEM_ADMIN
+  OFFICE_ADMIN
+  DOCUMENT_ENCODER
+  RECEIVING_OFFICER
+  REVIEWING_OFFICER
 }
 
 enum OfficeType {
@@ -117,23 +117,19 @@ enum AttachmentStatus {
 
 model User {
   id           String        @id @default(uuid())
-  email        String        @unique
-  username     String        @unique
+  username     String?       @unique
+  email        String?       @unique
   passwordHash String
-  fullName     String
-  firstName    String?
-  middleName   String?
-  lastName     String?
-  phone        String?
-  role         UserRole
-  status       UserStatus    @default(active)
-  avatarColor  String?
-  employeeId   String?       @unique
-  employee     Employee?     @relation(fields: [employeeId], references: [id])
-  lastLoginAt  DateTime?
+  role         Role          @default(DOCUMENT_ENCODER)
+  status       AccountStatus @default(ACTIVE)
+
+  employeeId   String        @unique
+  employee     Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  authSessions AuthSession[]
+
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  sessions     AuthSession[]
 
   @@index([role])
   @@index([status])

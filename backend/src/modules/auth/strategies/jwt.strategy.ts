@@ -49,7 +49,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       },
     });
 
-    if (!user || user.status !== 'active') {
+    if (!user || user.status !== 'ACTIVE') {
       throw new UnauthorizedException('Account is not active');
     }
 
@@ -76,7 +76,6 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       id: user.id,
       email: user.email,
       username: user.username,
-      fullName: user.fullName,
       role: user.role,
       status: user.status,
       sessionId: payload.sid ?? null,

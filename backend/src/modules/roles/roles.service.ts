@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { Role } from '@prisma/client';
 
 export interface RoleDefinition {
-  id: string;
+  id: Role;
   name: string;
   description: string;
   permissions: string[];
@@ -11,13 +12,13 @@ export interface RoleDefinition {
 export class RolesService {
   private readonly roles: RoleDefinition[] = [
     {
-      id: 'system_admin',
+      id: 'SYSTEM_ADMIN',
       name: 'System Administrator',
       description: 'Full system access.',
       permissions: ['*'],
     },
     {
-      id: 'office_admin',
+      id: 'OFFICE_ADMIN',
       name: 'Office Administrator',
       description: 'Manages office operations.',
       permissions: [
@@ -32,19 +33,19 @@ export class RolesService {
       ],
     },
     {
-      id: 'document_encoder',
+      id: 'DOCUMENT_ENCODER',
       name: 'Document Encoder',
       description: 'Encodes and registers documents.',
       permissions: ['documents.view', 'documents.create', 'documents.register', 'documents.track', 'notifications.view'],
     },
     {
-      id: 'receiving_officer',
+      id: 'RECEIVING_OFFICER',
       name: 'Receiving Officer',
       description: 'Receives and routes incoming documents.',
       permissions: ['documents.view', 'documents.receive', 'documents.route', 'documents.track', 'notifications.view'],
     },
     {
-      id: 'reviewing_officer',
+      id: 'REVIEWING_OFFICER',
       name: 'Reviewing Officer',
       description: 'Reviews, recommends, approves, rejects, returns.',
       permissions: [
@@ -66,7 +67,7 @@ export class RolesService {
     return this.roles;
   }
 
-  findOne(id: string): RoleDefinition | undefined {
+  findOne(id: Role): RoleDefinition | undefined {
     return this.roles.find((r) => r.id === id);
   }
 }
