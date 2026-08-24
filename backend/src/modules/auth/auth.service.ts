@@ -143,7 +143,7 @@ export class AuthService {
         username: username ?? null,
         email,
         passwordHash,
-        role: 'DOCUMENT_ENCODER',
+        role: dto.role,
         status: 'ACTIVE',
         employeeId: employee.id,
       },

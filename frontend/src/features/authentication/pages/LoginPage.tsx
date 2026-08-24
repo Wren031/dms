@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Archive as ArchiveIcon, Lock, User, LogIn, Info } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { Archive as ArchiveIcon, Lock, User, LogIn } from 'lucide-react';
+import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/hooks/useToast';
-import { ALL_ROLES, ROLE_LABELS, ROLE_SHORT_LABELS } from '@/constants';
 
 export function LoginPage() {
-  const { login, isAuthenticated, allSwitchableUsers } = useAuth();
+  const { login, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const [username, setUsername] = useState('');
@@ -29,11 +28,6 @@ export function LoginPage() {
     } else {
       setError(res.error ?? 'Sign in failed');
     }
-  };
-
-  const fillDemo = (uname: string) => {
-    setUsername(uname);
-    setPassword('password123');
   };
 
   return (
@@ -132,46 +126,10 @@ export function LoginPage() {
                 Forgot password?
               </a>
             </div>
-            <Button type="submit" fullWidth leftIcon={<LogIn className="w-4 h-4" />}>
-              Sign in
-            </Button>
-          </form>
-
-          <div className="mt-6 rounded-md border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-start gap-2.5">
-              <Info className="w-4 h-4 text-brand-600 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-900">Demo Accounts</p>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  Use any of the following usernames with password{' '}
-                  <code className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[11px]">
-                    password123
-                  </code>
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {ALL_ROLES.map(role => {
-                const user = allSwitchableUsers.find(u => u.role === role);
-                if (!user) return null;
-                return (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => fillDemo(user.username)}
-                    className="text-left p-2.5 rounded-md bg-white border border-slate-200 hover:border-brand-400 hover:bg-brand-50 transition-colors"
-                  >
-                    <p className="text-xs font-semibold text-slate-900">{ROLE_SHORT_LABELS[role]}</p>
-                    <p className="text-[11px] text-slate-500 truncate">{user.username}</p>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-[11px] text-slate-500 mt-3">
-              Tip: Once signed in, you can switch roles anytime using the Development switcher in the top-right.
-            </p>
-          </div>
+             <Button type="submit" fullWidth disabled={loading} leftIcon={<LogIn className="w-4 h-4" />}>
+               Sign in
+             </Button>
+           </form>
         </div>
       </div>
     </div>

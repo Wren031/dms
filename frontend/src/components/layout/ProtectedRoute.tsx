@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { ShieldAlert } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -10,7 +10,11 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, permission, roles }: ProtectedRouteProps) {
-  const { isAuthenticated, user, hasPermission } = useAuth();
+  const { isAuthenticated, loading, user, hasPermission } = useAuth();
+
+  if (loading) {
+    return null;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

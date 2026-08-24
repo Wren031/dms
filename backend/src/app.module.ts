@@ -44,7 +44,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
       useFactory: (config: ConfigService) => [
         {
           ttl: config.get<number>('throttler.ttl') ?? 900_000,
-          limit: config.get<number>('throttler.limit') ?? 5,
+          limit: config.get<number>('throttler.limit') ?? 100,
         },
       ],
     }),

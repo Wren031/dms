@@ -1,0 +1,4 @@
+{
+    "emailOrUsername": "jdelacruz",
+    "password": "Password123"
+}

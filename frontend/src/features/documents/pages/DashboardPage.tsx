@@ -18,7 +18,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { StatusBadge, PriorityBadge, Tag } from '@/components/ui/StatusBadge';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { useAuth } from '@/hooks/useAuth';
+import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { documents } from '@/mocks/documents';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
@@ -62,8 +62,7 @@ function getActionToneForStatus(status: DocumentStatus): 'slate' | 'amber' | 'ro
 }
 
 export function DashboardPage() {
-  const { user } = useAuth();
-  if (!user) return null;
+  const user = useCurrentUser();
 
   const stats = useMemo(() => {
     const total = documents.length;

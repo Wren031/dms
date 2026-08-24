@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Menu, Search, Bell, LogOut, RefreshCw, User as UserIcon, Settings as SettingsIcon } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { Avatar } from '@/components/ui/Avatar';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { ROLE_LABELS, ALL_ROLES, ROLE_SHORT_LABELS } from '@/constants';
@@ -15,13 +15,12 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
-  const { user, logout, switchRole, switchUser, allSwitchableUsers } = useAuth();
+  const user = useCurrentUser();
+  const { logout, switchRole, switchUser, allSwitchableUsers } = useAuth();
   const navigate = useNavigate();
   const [, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-
-  if (!user) return null;
   const notifications = getNotificationsByUser(user.id);
   const unread = notifications.filter(n => !n.read);
 

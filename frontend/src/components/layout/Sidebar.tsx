@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { navigation, iconMap } from './navigation';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { getNotificationsByUser } from '@/mocks/notifications';
 import { ROLE_LABELS } from '@/constants';
 import { Archive as ArchiveIcon } from 'lucide-react';

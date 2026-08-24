@@ -23,7 +23,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
-import { useAuth } from '@/hooks/useAuth';
+import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useDocuments } from '@/lib/store';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
@@ -48,7 +48,7 @@ const DEFAULT_FILTERS = {
 };
 
 export function OutboxPage() {
-  const { user } = useAuth();
+  const user = useCurrentUser();
   const toast = useToast();
   const documents = useDocuments();
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
@@ -56,8 +56,6 @@ export function OutboxPage() {
   const [typeFilter, setTypeFilter] = useState(DEFAULT_FILTERS.type);
   const [scope, setScope] = useState<OutboxScope>(DEFAULT_FILTERS.scope);
   const [tab, setTab] = useState('active');
-
-  if (!user) return null;
 
   const myOutbox = useMemo(() => {
     return documents.filter(d => {

@@ -22,7 +22,7 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { useAuth } from '@/hooks/useAuth';
+import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { offices } from '@/mocks/offices';
 import { users } from '@/mocks/users';
@@ -88,13 +88,13 @@ const ACCEPTED_TYPES = [
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
 export function DocumentRegistrationPage() {
-  const { user } = useAuth();
+  const user = useCurrentUser();
   const navigate = useNavigate();
   const toast = useToast();
 
   const [form, setForm] = useState<FormState>(() => ({
     ...INITIAL_STATE,
-    originatingOfficeId: user?.officeId ?? '',
+    originatingOfficeId: user.officeId,
   }));
 
   const [files, setFiles] = useState<File[]>([]);

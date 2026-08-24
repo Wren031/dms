@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from '@/hooks/useAuth';
+import { AuthProvider } from '@/features/authentication/hooks/useAuth';
 import { ToastProvider } from '@/hooks/useToast';
 import { ConfirmDialogProvider } from '@/components/ui/ConfirmDialog';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -17,9 +17,13 @@ import { ReviewPage } from '@/features/documents/pages/ReviewPage';
 import { ReleasePage } from '@/features/documents/pages/ReleasePage';
 import { TrackingPage } from '@/features/documents/pages/TrackingPage';
 import { ArchivePage } from '@/features/documents/pages/ArchivePage';
-import { UsersPage } from '@/features/system-admin/users/UsersPage';
-import { AddUserPage } from '@/features/system-admin/users/AddUserPage';
-import { OfficesPage } from '@/features/system-admin/offices/OfficesPage';
+import { UsersPage } from '@/features/system-admin/users/pages/UsersPage';
+import { AddUserPage } from '@/features/system-admin/users/pages/AddUserPage';
+import { UserDetailPage } from '@/features/system-admin/users/pages/UserDetailPage';
+import { DocumentTypesPage } from '@/features/system-admin/document-type/pages/DocumentTypesPage';
+import { DocumentTypeDetailPage } from '@/features/system-admin/document-type/pages/DocumentTypeDetailPage';
+import { OfficesPage } from '@/features/system-admin/offices/pages/OfficesPage';
+import { OfficeDetailPage } from '@/features/system-admin/offices/pages/OfficeDetailPage';
 import { RolesPermissionsPage } from '@/features/system-admin/roles-permissions/RolesPermissionsPage';
 import { AuditLogsPage } from '@/features/system-admin/audit-logs/AuditLogsPage';
 import { SettingsPage } from '@/features/system-admin/settings/SettingsPage';
@@ -92,6 +96,14 @@ export function App() {
                   }
                 />
                 <Route
+                  path="/users/:id"
+                  element={
+                    <ProtectedRoute roles={['system_admin', 'office_admin']}>
+                      <UserDetailPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/users/new"
                   element={
                     <ProtectedRoute roles={['system_admin', 'office_admin']}>
@@ -104,6 +116,30 @@ export function App() {
                   element={
                     <ProtectedRoute roles={['system_admin', 'office_admin']}>
                       <OfficesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/offices/:id"
+                  element={
+                    <ProtectedRoute roles={['system_admin', 'office_admin']}>
+                      <OfficeDetailPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/document-types"
+                  element={
+                    <ProtectedRoute roles={['system_admin', 'office_admin']}>
+                      <DocumentTypesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/document-types/:id"
+                  element={
+                    <ProtectedRoute roles={['system_admin', 'office_admin']}>
+                      <DocumentTypeDetailPage />
                     </ProtectedRoute>
                   }
                 />

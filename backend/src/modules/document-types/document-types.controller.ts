@@ -12,6 +12,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { DocumentTypesService } from './document-types.service';
 import { CreateDocumentTypeDto } from './dto/create-document-type.dto';
 import { UpdateDocumentTypeDto } from './dto/update-document-type.dto';
@@ -19,6 +20,7 @@ import { FilterDocumentTypesDto } from './dto/filter-document-types.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Audit } from '../../common/decorators/audit.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -33,11 +35,13 @@ export class DocumentTypesController {
     return this.documentTypesService.create(dto);
   }
 
+  @SkipThrottle()
   @Get()
   findAll(@Query() filter: FilterDocumentTypesDto) {
     return this.documentTypesService.findAll(filter);
   }
 
+  @SkipThrottle()
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.documentTypesService.findOne(id);

@@ -18,22 +18,23 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Avatar } from '@/components/ui/Avatar';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { getOfficeById } from '@/mocks/offices';
 import { ROLE_LABELS } from '@/constants';
 
 export function SettingsPage() {
-  const { user, hasPermission } = useAuth();
+  const user = useCurrentUser();
+  const { hasPermission } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
   const [tab, setTab] = useState('profile');
 
   const [profile, setProfile] = useState({
-    fullName: user?.fullName ?? '',
-    email: user?.email ?? '',
-    position: user?.position ?? '',
+    fullName: user.fullName,
+    email: user.email,
+    position: user.position,
     phone: '+63 917 555 1234',
   });
 
@@ -51,7 +52,6 @@ export function SettingsPage() {
     soundEnabled: true,
   });
 
-  if (!user) return null;
   const office = getOfficeById(user.officeId);
 
   const saveProfile = () => toast.success('Profile updated', 'Your profile has been saved successfully.');

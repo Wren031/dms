@@ -5,7 +5,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/hooks/useToast';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { roles } from '@/mocks/roles';
 import { users } from '@/mocks/users';
 import { ROLE_LABELS, ROLE_PERMISSIONS } from '@/constants';

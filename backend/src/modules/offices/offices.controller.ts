@@ -12,6 +12,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { OfficesService } from './offices.service';
 import { CreateOfficeDto } from './dto/create-office.dto';
 import { UpdateOfficeDto } from './dto/update-office.dto';
@@ -23,6 +24,7 @@ import { Audit } from '../../common/decorators/audit.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Throttle({ default: { limit: 60, ttl: 60_000 } })
 @Controller('offices')
 export class OfficesController {
   constructor(private readonly officesService: OfficesService) {}
@@ -35,16 +37,19 @@ export class OfficesController {
     return this.officesService.create(dto);
   }
 
+  @SkipThrottle()
   @Get()
   findAll(@Query() filter: FilterOfficesDto) {
     return this.officesService.findAll(filter);
   }
 
+  @SkipThrottle()
   @Get('tree')
   findTree() {
     return this.officesService.findTree();
   }
 
+  @SkipThrottle()
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.officesService.findOne(id);

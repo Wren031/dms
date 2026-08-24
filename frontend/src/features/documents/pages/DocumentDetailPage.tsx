@@ -35,7 +35,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Input';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import {
@@ -121,7 +121,8 @@ const ACTION_META: Record<
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, hasPermission } = useAuth();
+  const user = useCurrentUser();
+  const { hasPermission } = useAuth();
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -137,7 +138,7 @@ export function DocumentDetailPage() {
   const [routeInstructions, setRouteInstructions] = useState('');
   const [routeModal, setRouteModal] = useState(false);
 
-  if (!doc || !user) {
+  if (!doc) {
     return (
       <div className="text-center py-20">
         <p className="text-slate-700 font-medium">Document not found</p>

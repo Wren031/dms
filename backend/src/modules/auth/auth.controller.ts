@@ -12,7 +12,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -31,7 +31,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 900_000 } })
+  @Throttle({ default: { limit: 10, ttl: 900_000 } })
   async login(
     @Body() dto: LoginDto,
     @Req() req: Request,
@@ -43,7 +43,7 @@ export class AuthController {
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @Throttle({ default: { limit: 10, ttl: 900_000 } })
+  @Throttle({ default: { limit: 5, ttl: 900_000 } })
   async register(
     @Body() dto: RegisterDto,
     @Req() req: Request,
@@ -53,6 +53,7 @@ export class AuthController {
   }
 
   @Public()
+  @SkipThrottle()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
@@ -74,6 +75,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @SkipThrottle()
   @Get('me')
   async me(@CurrentUser() user: AuthenticatedUser): Promise<AuthenticatedUserDto> {
     return this.authService.me(user.id);

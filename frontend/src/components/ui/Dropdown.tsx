@@ -37,13 +37,12 @@ export function Dropdown({ trigger, items, align = 'right', className }: Dropdow
 
   return (
     <div ref={ref} className={cn('relative inline-block', className)}>
-      <button
-        type="button"
+      <div
         onClick={() => setOpen(o => !o)}
-        className="inline-flex items-center"
+        className="inline-flex items-center cursor-pointer"
       >
         {trigger}
-      </button>
+      </div>
       {open && (
         <div
           className={cn(

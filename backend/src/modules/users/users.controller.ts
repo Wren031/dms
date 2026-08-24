@@ -12,6 +12,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -37,11 +38,13 @@ export class UsersController {
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @SkipThrottle()
   @Get()
   findAll(@Query() filter: FilterUsersDto) {
     return this.usersService.findAll(filter);
   }
 
+  @SkipThrottle()
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.usersService.findOne(id);
@@ -64,6 +67,7 @@ export class UsersController {
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
   @Audit('user.reset-password', 'users', 'User')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post(':id/reset-password')
   @HttpCode(HttpStatus.OK)
   resetPassword(

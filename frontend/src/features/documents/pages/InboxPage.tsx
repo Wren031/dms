@@ -20,7 +20,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
-import { useAuth } from '@/hooks/useAuth';
+import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useDocuments } from '@/lib/store';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
@@ -34,13 +34,11 @@ import { formatDate, formatRelative, cn } from '@/lib/utils';
 import type { Document } from '@/types';
 
 export function InboxPage() {
-  const { user } = useAuth();
+  const user = useCurrentUser();
   const documents = useDocuments();
   const [tab, setTab] = useState('pending');
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
-
-  if (!user) return null;
 
   const myInbox = useMemo(() => {
     return documents.filter(d =>

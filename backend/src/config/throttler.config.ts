@@ -7,5 +7,5 @@ export interface ThrottlerAppConfig {
 
 export default registerAs<ThrottlerAppConfig>('throttler', () => ({
   ttl: parseInt(process.env.THROTTLE_TTL ?? '900000', 10),
-  limit: parseInt(process.env.THROTTLE_LIMIT ?? '5', 10),
+  limit: parseInt(process.env.THROTTLE_LIMIT ?? '100', 10),
 }));

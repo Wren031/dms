@@ -24,7 +24,7 @@ import { Select } from '@/components/ui/Select';
 import { Pagination } from '@/components/ui/Pagination';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Dropdown } from '@/components/ui/Dropdown';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useDocuments } from '@/lib/store';
 import { getOfficeById } from '@/mocks/offices';
@@ -53,7 +53,8 @@ const DEFAULT_FILTERS = {
 };
 
 export function DocumentsListPage() {
-  const { user, hasPermission } = useAuth();
+  const user = useCurrentUser();
+  const { hasPermission } = useAuth();
   const toast = useToast();
   const allDocs = useDocuments();
 

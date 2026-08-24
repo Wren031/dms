@@ -15,7 +15,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
-import { useAuth } from '@/hooks/useAuth';
+import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { notifications as allNotifications, getNotificationsByUser } from '@/mocks/notifications';
@@ -23,13 +23,11 @@ import { formatRelative, cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 
 export function NotificationsPage() {
-  const { user } = useAuth();
+  const user = useCurrentUser();
   const toast = useToast();
   const confirm = useConfirm();
   const [tab, setTab] = useState('all');
-  const [notifications, setNotifications] = useState(() => user ? getNotificationsByUser(user.id) : []);
-
-  if (!user) return null;
+  const [notifications, setNotifications] = useState(() => getNotificationsByUser(user.id));
 
   const counts = {
     all: notifications.length,

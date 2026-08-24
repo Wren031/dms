@@ -12,6 +12,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -35,13 +36,16 @@ export class EmployeesController {
     return this.employeesService.create(dto);
   }
 
+
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @SkipThrottle()
   @Get()
   findAll(@Query() filter: FilterEmployeesDto) {
     return this.employeesService.findAll(filter);
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @SkipThrottle()
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.employeesService.findOne(id);

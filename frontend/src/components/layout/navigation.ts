@@ -27,6 +27,7 @@ import {
   Bell,
   Settings,
   Mail,
+  Tag,
 } from 'lucide-react';
 
 export const navigation: NavItem[] = [
@@ -114,6 +115,14 @@ export const navigation: NavItem[] = [
     roles: ['system_admin', 'office_admin'],
   },
   {
+    id: 'document-types',
+    label: 'Document Types',
+    to: '/document-types',
+    icon: 'Tag',
+    section: 'admin',
+    roles: ['system_admin', 'office_admin'],
+  },
+  {
     id: 'roles',
     label: 'Roles & Permissions',
     to: '/roles',
@@ -162,6 +171,7 @@ export const iconMap = {
   Bell,
   Settings,
   Mail,
+  Tag,
 } as const;
 
 export type IconName = keyof typeof iconMap;
