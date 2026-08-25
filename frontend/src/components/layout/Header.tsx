@@ -6,8 +6,9 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { ROLE_LABELS, ALL_ROLES, ROLE_SHORT_LABELS } from '@/constants';
 import { getOfficeById } from '@/mocks/offices';
-import { getNotificationsByUser } from '@/mocks/notifications';
-import { formatRelative } from '@/lib/utils';
+import { useRecentNotifications } from '@/features/notifications/hooks/useRecentNotifications';
+import { useUnreadNotifications } from '@/features/notifications/hooks/useUnreadNotifications';
+import { formatRelative, cn } from '@/lib/utils';
 import type { UserRole } from '@/types';
 
 interface HeaderProps {
@@ -21,8 +22,8 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const notifications = getNotificationsByUser(user.id);
-  const unread = notifications.filter(n => !n.read);
+  const { items: notifications, markRead } = useRecentNotifications(notifOpen);
+  const { unreadCount } = useUnreadNotifications(true);
 
   const roleItems = ALL_ROLES.map(role => ({
     id: role,
@@ -92,7 +93,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             aria-label="Notifications"
           >
             <Bell className="w-5 h-5" />
-            {unread.length > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full" />
             )}
           </button>
@@ -115,14 +116,22 @@ export function Header({ onMenuClick }: HeaderProps) {
                   {notifications.length === 0 ? (
                     <p className="px-4 py-8 text-sm text-slate-500 text-center">No notifications</p>
                   ) : (
-                    notifications.slice(0, 6).map(n => (
+                    notifications.map(n => (
                       <Link
                         key={n.id}
                         to={n.link || '/notifications'}
-                        onClick={() => setNotifOpen(false)}
+                        onClick={() => {
+                          setNotifOpen(false);
+                          if (!n.read) markRead(n.id);
+                        }}
                         className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition-colors"
                       >
-                        <div className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${n.read ? 'bg-slate-300' : 'bg-brand-500'}`} />
+                        <div
+                          className={cn(
+                            'w-2 h-2 mt-1.5 rounded-full shrink-0',
+                            n.read ? 'bg-slate-300' : 'bg-brand-500',
+                          )}
+                        />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-slate-900 truncate">{n.title}</p>
                           <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{n.message}</p>
@@ -168,7 +177,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               label: (
                 <div className="flex flex-col">
                   <span className="text-xs text-slate-500">Office</span>
-                  <span className="font-semibold text-slate-900">{getOfficeById(user.officeId)?.name ?? '—'}</span>
+                  <span className="font-semibold text-slate-900">{user.officeName ?? '—'}</span>
                 </div>
               ),
               onClick: () => {},

@@ -15,21 +15,37 @@ interface AuthContextValue {
   allSwitchableUsers: User[];
   switchUser: (userId: string) => void;
   switchRole: (role: UserRole) => void;
+  updateCurrentUser: (next: AuthUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function composeFullName(firstName?: string | null, middleName?: string | null, lastName?: string | null): string {
+  const parts = [firstName, middleName, lastName]
+    .map(p => (p ?? '').trim())
+    .filter(Boolean);
+  return parts.join(' ');
+}
+
 function mapUser(user: AuthUser): User {
+  const composed = composeFullName(user.firstName, user.middleName, user.lastName);
+  const fullName = composed || user.username || user.email || user.id;
   return {
     id: user.id,
-    fullName: user.username ?? user.email ?? user.id,
+    fullName,
+    firstName: user.firstName ?? undefined,
+    middleName: user.middleName ?? undefined,
+    lastName: user.lastName ?? undefined,
     email: user.email ?? '',
+    phone: user.phone ?? undefined,
     username: user.username ?? user.email ?? '',
     role: user.role.toLowerCase() as UserRole,
     officeId: user.officeId ?? '',
+    officeName: user.office?.name ?? undefined,
+    officeCode: user.office?.code ?? undefined,
     position: user.position ?? '',
     status: user.status.toLowerCase() as User['status'],
-    avatarColor: 'bg-brand-600',
+    avatarColor: user.avatarColor ?? 'bg-brand-600',
     createdAt: user.createdAt,
   };
 }
@@ -65,6 +81,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { await authService.logout(); } finally { setUser(null); }
   };
 
+  const updateCurrentUser = (next: AuthUser) => {
+    setUser(mapUser(next));
+  };
+
   const hasPermission = (permission: Permission) =>
     !!user && (ROLE_PERMISSIONS[user.role] ?? []).includes(permission);
 
@@ -78,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     allSwitchableUsers: [],
     switchUser: () => undefined,
     switchRole: () => undefined,
+    updateCurrentUser,
   }), [user, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { navigation, iconMap } from './navigation';
 import { useAuth } from '@/features/authentication/hooks/useAuth';
-import { getNotificationsByUser } from '@/mocks/notifications';
+import { useUnreadNotifications } from '@/features/notifications/hooks/useUnreadNotifications';
 import { ROLE_LABELS } from '@/constants';
 import { Archive as ArchiveIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,8 +14,7 @@ interface SidebarProps {
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { user } = useAuth();
-  const userNotifications = user ? getNotificationsByUser(user.id) : [];
-  const unreadCount = userNotifications.filter(n => !n.read).length;
+  const { unreadCount } = useUnreadNotifications(true);
 
   if (!user) return null;
 
@@ -24,9 +23,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     return item.roles.includes(user.role);
   });
 
-  const sections: Array<{ key: 'main' | 'workspace' | 'admin'; label: string }> = [
+  const sections: Array<{ key: 'main' | 'workspace' | 'personal' | 'admin'; label: string }> = [
     { key: 'main', label: 'Overview' },
     { key: 'workspace', label: 'Workflow' },
+    { key: 'personal', label: 'Personal' },
     { key: 'admin', label: 'Administration' },
   ];
 

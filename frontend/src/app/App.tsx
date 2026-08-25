@@ -26,7 +26,7 @@ import { OfficesPage } from '@/features/system-admin/offices/pages/OfficesPage';
 import { OfficeDetailPage } from '@/features/system-admin/offices/pages/OfficeDetailPage';
 import { RolesPermissionsPage } from '@/features/system-admin/roles-permissions/RolesPermissionsPage';
 import { AuditLogsPage } from '@/features/system-admin/audit-logs/AuditLogsPage';
-import { SettingsPage } from '@/features/system-admin/settings/SettingsPage';
+import { SettingsPage } from '@/features/profile/pages/SettingsPage';
 import { NotificationsPage } from '@/features/notifications/pages/NotificationsPage';
 
 export function App() {
@@ -160,14 +160,7 @@ export function App() {
                   }
                 />
                 <Route path="/notifications" element={<NotificationsPage />} />
-                <Route
-                  path="/settings"
-                  element={
-                    <ProtectedRoute roles={['system_admin', 'office_admin']}>
-                      <SettingsPage />
-                    </ProtectedRoute>
-                  }
-                />
+                <Route path="/settings" element={<SettingsPage />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/dashboard" replace />} />

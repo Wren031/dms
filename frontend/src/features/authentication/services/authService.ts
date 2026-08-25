@@ -4,10 +4,11 @@ import type {
   ChangePasswordRequest,
   LoginRequest,
   RegisterRequest,
+  UpdateMyProfileRequest,
 } from '@/features/authentication/api/authApi';
 
 export const authService = {
-  
+
   async login(credentials: LoginRequest): Promise<AuthUser> {
     const response = await authApi.login(credentials);
     return response.user;
@@ -32,4 +33,8 @@ export const authService = {
 
   logout: () => authApi.logout(),
   changePassword: (payload: ChangePasswordRequest) => authApi.changePassword(payload),
+  updateMe: (payload: UpdateMyProfileRequest) => authApi.updateMe(payload),
+  listSessions: () => authApi.sessions(),
+  revokeSession: (sessionId: string) => authApi.revokeSession(sessionId),
+  revokeAllSessions: () => authApi.revokeAllSessions(),
 };

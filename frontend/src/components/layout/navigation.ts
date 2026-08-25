@@ -7,7 +7,7 @@ export interface NavItem {
   icon: string;
   permission?: string;
   roles?: UserRole[];
-  section?: 'main' | 'workspace' | 'admin';
+  section?: 'main' | 'workspace' | 'personal' | 'admin';
   badge?: number;
 }
 
@@ -150,8 +150,7 @@ export const navigation: NavItem[] = [
     label: 'Settings',
     to: '/settings',
     icon: 'Settings',
-    section: 'admin',
-    roles: ['system_admin'],
+    section: 'personal',
   },
 ];
 

@@ -7,7 +7,14 @@ export interface AuthUser {
   role: string;
   status: string;
   officeId: string | null;
+  office?: { id: string; name: string; code: string; type: string } | null;
   position: string | null;
+  employeeId?: string | null;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  avatarColor?: string | null;
   createdAt: string;
 }
 
@@ -39,6 +46,15 @@ export interface RegisterRequest {
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface UpdateMyProfileRequest {
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  position: string;
 }
 
 function readCookie(name: string): string | undefined {
@@ -98,6 +114,12 @@ export const authApi = {
     }),
 
   me: () => request<AuthUser>('/auth/me'),
+
+  updateMe: (payload: UpdateMyProfileRequest) =>
+    request<AuthUser>('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
 
   changePassword: (payload: ChangePasswordRequest) =>
     request<{ success: true }>('/auth/change-password', {

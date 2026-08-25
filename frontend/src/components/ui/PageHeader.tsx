@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PageHeaderProps {
@@ -6,16 +7,16 @@ interface PageHeaderProps {
   description?: string;
   breadcrumbs?: Array<{ label: string; to?: string }>;
   actions?: ReactNode;
+  eyebrow?: ReactNode;
   className?: string;
 }
-
-import { ChevronRight } from 'lucide-react';
 
 export function PageHeader({
   title,
   description,
   breadcrumbs,
   actions,
+  eyebrow,
   className,
 }: PageHeaderProps) {
   return (
@@ -34,6 +35,11 @@ export function PageHeader({
       )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="min-w-0">
+          {eyebrow && (
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-700 mb-1">
+              {eyebrow}
+            </p>
+          )}
           <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight">{title}</h1>
           {description && (
             <p className="text-sm text-slate-500 mt-1">{description}</p>

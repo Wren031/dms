@@ -16,6 +16,8 @@ export interface User {
   username: string;
   role: UserRole;
   officeId: string;
+  officeName?: string;
+  officeCode?: string;
   position: string;
   status: 'active' | 'inactive';
   avatarColor: string;
