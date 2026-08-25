@@ -1,0 +1,1 @@
+export { RolesApiError, rolesService } from '@/features/system-admin/roles-permissions/services/roles.service';

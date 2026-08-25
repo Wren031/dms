@@ -8,6 +8,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import { normalizeClientIp } from '../../common/utils/ip.util';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('audit-logs')
@@ -22,10 +23,7 @@ export class AuditLogsController {
     @Req() req: Request,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    const ipAddress =
-      (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ??
-      req.socket.remoteAddress ??
-      undefined;
+    const ipAddress = normalizeClientIp(req);
     const userAgent = req.headers['user-agent'];
     return this.auditLogsService.create(dto, {
       actorId: user.id,

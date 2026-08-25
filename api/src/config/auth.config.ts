@@ -16,6 +16,7 @@ export interface AuthConfig {
     secure: boolean;
     sameSite: SameSite;
   };
+  trustProxy: boolean;
 }
 
 function parseSameSite(raw: string | undefined): SameSite {
@@ -40,4 +41,5 @@ export default registerAs<AuthConfig>('auth', () => ({
     secure: (process.env.COOKIE_SECURE ?? 'false').toLowerCase() === 'true',
     sameSite: parseSameSite(process.env.COOKIE_SAMESITE),
   },
+  trustProxy: (process.env.TRUST_PROXY ?? 'false').toLowerCase() === 'true',
 }));

@@ -11,6 +11,7 @@ import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { constantTimeVerify, hashPassword } from '../../common/utils/hash.util';
 import { randomToken, sha256Hex } from '../../common/utils/token.util';
+import { normalizeClientIp } from '../../common/utils/ip.util';
 import { AuthConfig, SameSite } from '../../config/auth.config';
 import { COOKIE_NAMES, COOKIE_PATHS } from '../../common/constants/cookie.constants';
 import { LoginDto } from './dto/login.dto';
@@ -87,6 +88,7 @@ export class AuthService {
   private readonly accessTtlMs: number;
   private readonly refreshTtlMs: number;
   private readonly csrfTtlMs: number;
+  private readonly trustProxy: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -97,6 +99,7 @@ export class AuthService {
     this.accessTtlMs = parseTtlMs(authCfg.access.ttl);
     this.refreshTtlMs = parseTtlMs(authCfg.refresh.ttl);
     this.csrfTtlMs = this.refreshTtlMs;
+    this.trustProxy = authCfg.trustProxy ?? false;
   }
 
   // ---------- Public API ----------
@@ -437,10 +440,7 @@ export class AuthService {
   }
 
   private logFailedAttempt(req: Request, identifier: string): void {
-    const ip =
-      (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ??
-      req.socket.remoteAddress ??
-      'unknown';
+    const ip = normalizeClientIp(req, this.trustProxy) ?? 'unknown';
     this.logger.warn(`Login failed for "${identifier}" from ${ip}`);
   }
 

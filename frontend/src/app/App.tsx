@@ -24,8 +24,8 @@ import { DocumentTypesPage } from '@/features/system-admin/document-type/pages/D
 import { DocumentTypeDetailPage } from '@/features/system-admin/document-type/pages/DocumentTypeDetailPage';
 import { OfficesPage } from '@/features/system-admin/offices/pages/OfficesPage';
 import { OfficeDetailPage } from '@/features/system-admin/offices/pages/OfficeDetailPage';
-import { RolesPermissionsPage } from '@/features/system-admin/roles-permissions/RolesPermissionsPage';
-import { AuditLogsPage } from '@/features/system-admin/audit-logs/AuditLogsPage';
+import { RolesPermissionsPage } from '@/features/system-admin/roles-permissions/pages/RolesPermissionsPage';
+import { AuditLogsPage } from '@/features/system-admin/audit-logs/pages/AuditLogsPage';
 import { SettingsPage } from '@/features/profile/pages/SettingsPage';
 import { NotificationsPage } from '@/features/notifications/pages/NotificationsPage';
 
