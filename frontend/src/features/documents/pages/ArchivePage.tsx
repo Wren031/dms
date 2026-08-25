@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
-import { useDocuments } from '@/lib/store';
+import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { getOfficeById } from '@/mocks/offices';
 import {
   ALL_DOCUMENT_STATUSES,
@@ -46,7 +46,7 @@ const DEFAULT_FILTERS = {
 
 export function ArchivePage() {
   const toast = useToast();
-  const documents = useDocuments();
+  const { items: documents } = useDocuments({ pageSize: 100 });
 
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);
@@ -58,7 +58,7 @@ export function ArchivePage() {
 
   const archivedDocs = useMemo(
     () => documents.filter(d => d.status === 'archived' || d.status === 'released'),
-    []
+    [documents]
   );
 
   const officeOptions = useMemo(

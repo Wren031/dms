@@ -1,7 +1,6 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  FileText,
   AlertTriangle,
   CheckCircle2,
   Clock,
@@ -12,18 +11,16 @@ import {
   TrendingUp,
   ListChecks,
   Calendar as CalendarIcon,
+  FileText,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { StatusBadge, PriorityBadge, Tag } from '@/components/ui/StatusBadge';
-import { Avatar } from '@/components/ui/Avatar';
+import { StatusBadge, PriorityBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
-import { documents } from '@/mocks/documents';
+import { useDocuments } from '@/features/documents/hooks/useDocuments';
+import { useToast } from '@/hooks/useToast';
 import { getOfficeById } from '@/mocks/offices';
-import { getUserById } from '@/mocks/users';
-import { auditLogs } from '@/mocks/auditLogs';
-import { notifications as allNotifications } from '@/mocks/notifications';
 import {
   DOCUMENT_STATUS_LABELS,
   ROLE_LABELS,
@@ -34,7 +31,7 @@ import type { DocumentStatus } from '@/types';
 const PENDING_STATUSES = new Set<DocumentStatus>([
   'registered',
   'received',
-  'in_routing',
+  'routed',
   'under_review',
   'recommended',
   'approved',
@@ -46,7 +43,7 @@ function getActionForStatus(status: DocumentStatus): string | null {
   switch (status) {
     case 'registered': return 'Receive & log';
     case 'received': return 'Classify & assign';
-    case 'in_routing': return 'Route to office';
+    case 'routed': return 'Route to office';
     case 'under_review': return 'Review & recommend';
     case 'recommended': return 'Approve / Reject / Return';
     case 'approved': return 'Release';
@@ -56,18 +53,24 @@ function getActionForStatus(status: DocumentStatus): string | null {
   }
 }
 
-function getActionToneForStatus(status: DocumentStatus): 'slate' | 'amber' | 'rose' {
+function getActionToneForStatus(status: DocumentStatus): 'slate' | 'amber' {
   if (status === 'returned') return 'amber';
   return 'slate';
 }
 
 export function DashboardPage() {
   const user = useCurrentUser();
+  const toast = useToast();
+  const { items: documents, loading, error } = useDocuments({ pageSize: 100 });
+
+  useEffect(() => {
+    if (error) toast.error('Failed to load dashboard data', error);
+  }, [error, toast]);
 
   const stats = useMemo(() => {
     const total = documents.length;
     const inProgress = documents.filter(d =>
-      ['registered', 'received', 'in_routing', 'under_review', 'recommended'].includes(d.status)
+      ['registered', 'received', 'routed', 'under_review', 'recommended'].includes(d.status)
     ).length;
     const completed = documents.filter(d => d.status === 'released' || d.status === 'archived').length;
     const overdue = documents.filter(d => {
@@ -75,15 +78,13 @@ export function DashboardPage() {
       if (d.status === 'released' || d.status === 'archived' || d.status === 'rejected') return false;
       return new Date(d.dueDate).getTime() < new Date().getTime();
     }).length;
-
     const myDocuments = documents.filter(d =>
       d.encodedById === user.id ||
       d.currentHolderId === user.id ||
       d.receivedById === user.id
     ).length;
-
     return { total, inProgress, completed, overdue, myDocuments };
-  }, [user.id]);
+  }, [documents, user.id]);
 
   const pendingForUser = useMemo(() => {
     return documents
@@ -98,22 +99,22 @@ export function DashboardPage() {
         if (aTime !== bTime) return aTime - bTime;
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-  }, [user.id]);
+  }, [documents, user.id]);
 
   const pendingTotal = pendingForUser.length;
 
   const statusDistribution = useMemo(() => {
     const counts: Record<DocumentStatus, number> = {
-      registered: 0, received: 0, in_routing: 0, under_review: 0, recommended: 0,
+      registered: 0, received: 0, routed: 0, under_review: 0, recommended: 0,
       approved: 0, rejected: 0, returned: 0, released: 0, archived: 0,
     };
-    documents.forEach(d => counts[d.status]++);
+    documents.forEach(d => { counts[d.status as DocumentStatus]++; });
     return counts;
-  }, []);
+  }, [documents]);
 
   const activeStatuses = useMemo(() => {
     const active: DocumentStatus[] = [
-      'registered', 'received', 'in_routing', 'under_review', 'recommended', 'approved',
+'registered', 'received', 'routed', 'under_review', 'recommended', 'approved',
     ];
     return active.map(s => ({ status: s, count: statusDistribution[s] }));
   }, [statusDistribution]);
@@ -125,20 +126,8 @@ export function DashboardPage() {
 
   const completionRate = stats.total === 0 ? 0 : Math.round((completedCount / stats.total) * 100);
 
-  const myNotifications = useMemo(
-    () => allNotifications.filter(n => n.userId === user.id).slice(0, 5),
-    [user.id]
-  );
-
-  const unreadCount = useMemo(
-    () => allNotifications.filter(n => n.userId === user.id && !n.read).length,
-    [user.id]
-  );
-
-  const recentLogs = useMemo(() => auditLogs.slice(0, 5), []);
-
   const workflowSteps = [
-    'registered', 'received', 'in_routing', 'under_review', 'recommended', 'approved', 'released', 'archived',
+    'registered', 'received', 'routed', 'under_review', 'recommended', 'approved', 'released', 'archived',
   ] as const;
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -251,11 +240,6 @@ export function DashboardPage() {
           <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <h3 className="text-base font-semibold text-slate-900">Notifications</h3>
-              {unreadCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-semibold bg-brand-600 text-white rounded-full">
-                  {unreadCount}
-                </span>
-              )}
             </div>
             <Link to="/notifications">
               <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
@@ -264,35 +248,12 @@ export function DashboardPage() {
             </Link>
           </div>
           <div className="px-5 pb-5 space-y-1">
-            {myNotifications.length === 0 ? (
-              <div className="py-8 text-center">
-                <Bell className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-                <p className="text-sm text-slate-500">No notifications</p>
-              </div>
-            ) : (
-              myNotifications.map(n => (
-                <Link
-                  key={n.id}
-                  to={n.link || '/notifications'}
-                  className="flex items-start gap-3 py-2.5 -mx-1 px-1 rounded-md hover:bg-slate-50 transition-colors group"
-                >
-                  <span className={cn(
-                    'mt-1.5 w-1.5 h-1.5 rounded-full shrink-0',
-                    n.read ? 'bg-slate-200' : 'bg-brand-500'
-                  )} />
-                  <div className="flex-1 min-w-0">
-                    <p className={cn(
-                      'text-sm truncate group-hover:text-brand-700',
-                      n.read ? 'font-medium text-slate-700' : 'font-semibold text-slate-900'
-                    )}>
-                      {n.title}
-                    </p>
-                    <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{n.message}</p>
-                    <p className="text-[10px] text-slate-400 mt-1">{formatRelative(n.createdAt)}</p>
-                  </div>
-                </Link>
-              ))
-            )}
+            <div className="py-8 text-center">
+              <Bell className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">
+                {loading ? 'Loading notifications…' : 'Visit Notifications to see your latest alerts'}
+              </p>
+            </div>
           </div>
         </Card>
       </div>
@@ -381,9 +342,9 @@ export function DashboardPage() {
           <div className="divide-y divide-slate-100">
             {pendingForUser.map(doc => {
               const office = getOfficeById(doc.currentOfficeId);
-              const action = getActionForStatus(doc.status);
+              const action = getActionForStatus(doc.status as DocumentStatus);
               const isOverdue =
-                doc.dueDate &&
+                !!doc.dueDate &&
                 new Date(doc.dueDate).getTime() < Date.now() &&
                 !['released', 'archived', 'rejected'].includes(doc.status);
               return (
@@ -400,13 +361,13 @@ export function DashboardPage() {
                       <span className="text-[11px] font-mono font-semibold text-slate-500">
                         {doc.trackingNumber}
                       </span>
-                      <StatusBadge status={doc.status} className="!text-[10px] !px-1.5 !py-0" />
+                      <StatusBadge status={doc.status as DocumentStatus} className="!text-[10px] !px-1.5 !py-0" />
                       <PriorityBadge priority={doc.priority} className="!text-[10px] !px-1.5 !py-0" />
                       {action && (
                         <span
                           className={cn(
                             'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold',
-                            getActionToneForStatus(doc.status) === 'amber'
+                            getActionToneForStatus(doc.status as DocumentStatus) === 'amber'
                               ? 'bg-amber-50 text-amber-700 border-amber-200'
                               : 'bg-slate-50 text-slate-700 border-slate-200'
                           )}
@@ -452,69 +413,6 @@ export function DashboardPage() {
         )}
         </Card>
       </div>
-
-      {(user.role === 'system_admin' || user.role === 'office_admin') && recentLogs.length > 0 && (
-        <Card padded={false}>
-          <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">Recent System Activity</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Latest actions across the system</p>
-            </div>
-            <Link to="/audit">
-              <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
-                View audit log
-              </Button>
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-y border-slate-200 bg-slate-50/50 text-[10px] uppercase tracking-wider text-slate-500">
-                  <th className="px-5 py-2.5 text-left font-semibold">Actor</th>
-                  <th className="px-5 py-2.5 text-left font-semibold">Action</th>
-                  <th className="px-5 py-2.5 text-left font-semibold">Module</th>
-                  <th className="px-5 py-2.5 text-left font-semibold">Description</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {recentLogs.map(log => (
-                  <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar
-                          name={log.actorName}
-                          color={getUserById(log.actorId)?.avatarColor ?? 'bg-slate-600'}
-                          size="sm"
-                        />
-                        <span className="text-xs font-medium text-slate-900 truncate">{log.actorName}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <Tag
-                        variant={
-                          log.action === 'APPROVE' ? 'emerald' :
-                          log.action === 'REJECT' ? 'rose' :
-                          log.action === 'RETURN' ? 'orange' :
-                          log.action === 'REVIEW' || log.action === 'RECOMMEND' ? 'indigo' :
-                          'slate'
-                        }
-                      >
-                        {log.action}
-                      </Tag>
-                    </td>
-                    <td className="px-5 py-3 text-xs text-slate-600">{log.module}</td>
-                    <td className="px-5 py-3 text-xs text-slate-700 max-w-md truncate">{log.description}</td>
-                    <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap text-right">
-                      {formatRelative(log.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
     </div>
   );
 }

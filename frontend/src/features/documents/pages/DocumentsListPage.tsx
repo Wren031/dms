@@ -12,11 +12,10 @@ import {
   Calendar,
   CheckCircle2,
   SlidersHorizontal,
-  Hash,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { Card, CardHeader } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Table } from '@/components/ui/Table';
 import { StatusBadge, PriorityBadge, ClassificationBadge } from '@/components/ui/StatusBadge';
 import { SearchInput } from '@/components/ui/SearchInput';
@@ -26,7 +25,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
-import { useDocuments } from '@/lib/store';
+import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
 import {
@@ -39,7 +38,7 @@ import {
 } from '@/constants';
 import { usePagination } from '@/hooks/usePagination';
 import { useTableSort } from '@/hooks/useTableSort';
-import type { Document } from '@/types';
+import type { DocumentListItem } from '@/features/documents/types/document';
 import { formatDate, toCsv, downloadCsv, cn } from '@/lib/utils';
 
 const DEFAULT_FILTERS = {
@@ -56,7 +55,7 @@ export function DocumentsListPage() {
   const user = useCurrentUser();
   const { hasPermission } = useAuth();
   const toast = useToast();
-  const allDocs = useDocuments();
+  const { items: allDocs, loading, error } = useDocuments({ pageSize: 50 });
 
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);
@@ -66,7 +65,7 @@ export function DocumentsListPage() {
   const [priorityFilter, setPriorityFilter] = useState(DEFAULT_FILTERS.priority);
   const [sourceFilter, setSourceFilter] = useState(DEFAULT_FILTERS.source);
 
-  const { sortKey, sortDirection, toggleSort, sortFn } = useTableSort<Document>({
+  const { sortKey, sortDirection, toggleSort, sortFn } = useTableSort<DocumentListItem>({
     initialKey: 'updatedAt',
     initialDirection: 'desc',
   });
@@ -313,7 +312,7 @@ export function DocumentsListPage() {
           keyExtractor={d => d.id}
           sortKey={String(sortKey)}
           sortDirection={sortDirection}
-          onSort={(k) => toggleSort(k as keyof Document)}
+          onSort={(k) => toggleSort(k as keyof DocumentListItem)}
           emptyState={
             <EmptyState
               icon={<FileText className="w-7 h-7" />}

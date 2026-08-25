@@ -25,7 +25,8 @@ import { Select } from '@/components/ui/Select';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
-import { useDocuments } from '@/lib/store';
+import { useDocuments } from '@/features/documents/hooks/useDocuments';
+import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById, users } from '@/mocks/users';
 import { DOCUMENT_TYPE_LABELS } from '@/constants';
@@ -33,7 +34,8 @@ import { formatDate, formatRelative } from '@/lib/utils';
 
 export function ReleasePage() {
   const toast = useToast();
-  const documents = useDocuments();
+  const { items: documents } = useDocuments({ pageSize: 100 });
+  const transition = useDocumentTransition();
   const [tab, setTab] = useState('ready');
   const [releaseModal, setReleaseModal] = useState<string | null>(null);
   const [recipient, setRecipient] = useState('');
@@ -41,8 +43,8 @@ export function ReleasePage() {
   const [remarks, setRemarks] = useState('');
   const [notifyRecipient, setNotifyRecipient] = useState(true);
 
-  const readyToRelease = useMemo(() => documents.filter(d => d.status === 'approved'), []);
-  const released = useMemo(() => documents.filter(d => d.status === 'released' || d.status === 'archived'), []);
+  const readyToRelease = useMemo(() => documents.filter(d => d.status === 'approved'), [documents]);
+  const released = useMemo(() => documents.filter(d => d.status === 'released' || d.status === 'archived'), [documents]);
 
   const counts = {
     ready: readyToRelease.length,

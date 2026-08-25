@@ -29,7 +29,8 @@ import { Select } from '@/components/ui/Select';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
-import { useDocuments } from '@/lib/store';
+import { useDocuments } from '@/features/documents/hooks/useDocuments';
+import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
 import { DOCUMENT_TYPE_LABELS } from '@/constants';
@@ -38,7 +39,8 @@ import { formatDate, formatRelative } from '@/lib/utils';
 export function ReviewPage() {
   const toast = useToast();
   const confirm = useConfirm();
-  const documents = useDocuments();
+  const { items: documents } = useDocuments({ pageSize: 100 });
+  const transition = useDocumentTransition();
   const [tab, setTab] = useState('for_review');
   const [actionModal, setActionModal] = useState<{
     docId: string;
@@ -46,10 +48,10 @@ export function ReviewPage() {
   } | null>(null);
   const [remarks, setRemarks] = useState('');
 
-  const forReview = useMemo(() => documents.filter(d => d.status === 'under_review'), []);
-  const recommended = useMemo(() => documents.filter(d => d.status === 'recommended'), []);
-  const returned = useMemo(() => documents.filter(d => d.status === 'returned'), []);
-  const completed = useMemo(() => documents.filter(d => d.status === 'approved' || d.status === 'rejected'), []);
+  const forReview = useMemo(() => documents.filter(d => d.status === 'under_review'), [documents]);
+  const recommended = useMemo(() => documents.filter(d => d.status === 'recommended'), [documents]);
+  const returned = useMemo(() => documents.filter(d => d.status === 'returned'), [documents]);
+  const completed = useMemo(() => documents.filter(d => d.status === 'approved' || d.status === 'rejected'), [documents]);
 
   const counts = {
     for_review: forReview.length,
@@ -77,9 +79,22 @@ export function ReviewPage() {
       toast.error('Remarks required', 'Please provide a reason for rejection.');
       return;
     }
+    const nextStatus =
+      actionModal.action === 'recommend' ? 'recommended' :
+      actionModal.action === 'approve' ? 'approved' :
+      actionModal.action === 'reject' ? 'rejected' :
+      'returned';
+    const updated = await transition.transition(actionModal.docId, {
+      toStatus: nextStatus,
+      remarks: remarks.trim() || undefined,
+    });
     setActionModal(null);
-    const labels = { recommend: 'Recommended', approve: 'Approved', reject: 'Rejected', return: 'Returned' };
-    toast.success(`Document ${labels[actionModal.action]}`, 'Your action has been recorded in the audit log.');
+    if (updated) {
+      const labels = { recommend: 'Recommended', approve: 'Approved', reject: 'Rejected', return: 'Returned' };
+      toast.success(`Document ${labels[actionModal.action]}`, 'Your action has been recorded.');
+    } else if (transition.error) {
+      toast.error('Action failed', transition.error);
+    }
     setRemarks('');
   };
 

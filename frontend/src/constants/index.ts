@@ -72,7 +72,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   registered: 'Registered',
   received: 'Received',
-  in_routing: 'In Routing',
+  routed: 'In Routing',
   under_review: 'Under Review',
   recommended: 'Recommended',
   approved: 'Approved',
@@ -85,7 +85,7 @@ export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
 export const DOCUMENT_STATUS_COLORS: Record<DocumentStatus, string> = {
   registered: 'bg-slate-100 text-slate-700 border-slate-200',
   received: 'bg-blue-50 text-blue-700 border-blue-200',
-  in_routing: 'bg-amber-50 text-amber-700 border-amber-200',
+  routed: 'bg-amber-50 text-amber-700 border-amber-200',
   under_review: 'bg-purple-50 text-purple-700 border-purple-200',
   recommended: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -137,7 +137,7 @@ export const PRIORITY_COLORS = {
 export const DOCUMENT_WORKFLOW: DocumentStatus[] = [
   'registered',
   'received',
-  'in_routing',
+  'routed',
   'under_review',
   'recommended',
   'approved',
@@ -148,7 +148,7 @@ export const DOCUMENT_WORKFLOW: DocumentStatus[] = [
 export const ALL_DOCUMENT_STATUSES: DocumentStatus[] = [
   'registered',
   'received',
-  'in_routing',
+  'routed',
   'under_review',
   'recommended',
   'approved',

@@ -24,7 +24,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
-import { useDocuments, useRoutingSteps } from '@/lib/store';
+import { useDocuments } from '@/features/documents/hooks/useDocuments';
+import { useDocumentRouting } from '@/features/documents/hooks/useDocumentRouting';
 import { offices } from '@/mocks/offices';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById, users } from '@/mocks/users';
@@ -33,8 +34,8 @@ import { formatDate, formatRelative } from '@/lib/utils';
 
 export function RoutingPage() {
   const toast = useToast();
-  const documents = useDocuments();
-  const routingSteps = useRoutingSteps();
+  const { items: documents } = useDocuments({ status: 'routed', pageSize: 100 });
+  const { steps: routingSteps, loading: routingLoading } = useDocumentRouting(undefined);
   const [tab, setTab] = useState('pending');
   const [routeModal, setRouteModal] = useState<string | null>(null);
   const [targetOffice, setTargetOffice] = useState('');
@@ -70,7 +71,10 @@ export function RoutingPage() {
       toast.error('Select target office', 'Please choose an office to route this document to.');
       return;
     }
-    toast.success('Document routed', `Successfully forwarded to ${getOfficeById(targetOffice)?.code}.`);
+    toast.success(
+      'Routing queued',
+      `Document will be forwarded to ${getOfficeById(targetOffice)?.code ?? targetOffice}. Use POST /document-routing/document/:id/plan to persist.`,
+    );
     setRouteModal(null);
   };
 

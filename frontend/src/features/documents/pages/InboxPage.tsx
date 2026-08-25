@@ -21,7 +21,7 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
-import { useDocuments } from '@/lib/store';
+import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
 import {
@@ -35,7 +35,10 @@ import type { Document } from '@/types';
 
 export function InboxPage() {
   const user = useCurrentUser();
-  const documents = useDocuments();
+  const { items: documents } = useDocuments({
+    currentOfficeId: user.officeId,
+    pageSize: 100,
+  });
   const [tab, setTab] = useState('pending');
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
@@ -46,11 +49,11 @@ export function InboxPage() {
       d.receivedById === user.id ||
       d.currentOfficeId === user.officeId
     );
-  }, [user.id, user.officeId]);
+  }, [documents, user.id, user.officeId]);
 
   const counts = useMemo(() => {
     return {
-      pending: myInbox.filter(d => ['received', 'in_routing'].includes(d.status)).length,
+      pending: myInbox.filter(d => ['received', 'routed'].includes(d.status)).length,
       reviewing: myInbox.filter(d => ['under_review', 'recommended'].includes(d.status)).length,
       completed: myInbox.filter(d => ['approved', 'released', 'archived'].includes(d.status)).length,
       all: myInbox.length,
@@ -60,7 +63,7 @@ export function InboxPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return myInbox.filter(d => {
-      if (tab === 'pending' && !['received', 'in_routing'].includes(d.status)) return false;
+      if (tab === 'pending' && !['received', 'routed'].includes(d.status)) return false;
       if (tab === 'reviewing' && !['under_review', 'recommended'].includes(d.status)) return false;
       if (tab === 'completed' && !['approved', 'released', 'archived'].includes(d.status)) return false;
       if (priorityFilter !== 'all' && d.priority !== priorityFilter) return false;

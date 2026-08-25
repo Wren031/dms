@@ -138,7 +138,7 @@ function statusToCurrentStage(status: DocumentStatus): JourneyStageId {
       return 'registered';
     case 'received':
       return 'classified';
-    case 'in_routing':
+    case 'routed':
       return 'routed';
     case 'under_review':
       return 'reviewed';

@@ -24,7 +24,7 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
-import { useDocuments } from '@/lib/store';
+import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
 import {
@@ -50,7 +50,7 @@ const DEFAULT_FILTERS = {
 export function OutboxPage() {
   const user = useCurrentUser();
   const toast = useToast();
-  const documents = useDocuments();
+  const { items: documents } = useDocuments({ pageSize: 100 });
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);
   const [typeFilter, setTypeFilter] = useState(DEFAULT_FILTERS.type);
@@ -75,7 +75,7 @@ export function OutboxPage() {
 
   const counts = useMemo(() => {
     const inProgress = myOutbox.filter(d =>
-      ['registered', 'received', 'in_routing', 'under_review', 'recommended'].includes(d.status)
+['registered', 'received', 'routed', 'under_review', 'recommended'].includes(d.status)
     ).length;
     const completed = myOutbox.filter(d =>
       ['approved', 'released', 'archived'].includes(d.status)
@@ -94,7 +94,7 @@ export function OutboxPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return myOutbox.filter(d => {
-      if (tab === 'active' && !['registered', 'received', 'in_routing', 'under_review', 'recommended'].includes(d.status))
+      if (tab === 'active' && !['registered', 'received', 'routed', 'under_review', 'recommended'].includes(d.status))
         return false;
       if (tab === 'completed' && !['approved', 'released', 'archived'].includes(d.status))
         return false;

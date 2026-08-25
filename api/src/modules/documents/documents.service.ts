@@ -26,6 +26,31 @@ const ALLOWED_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
   archived: [],
 };
 
+export type DocumentTypeMeta = Prisma.DocumentTypeGetPayload<Record<string, never>>;
+
+export type DocumentListItem = Prisma.DocumentGetPayload<{
+  include: {
+    type: true;
+    _count: { select: { routingSteps: true; reviews: true; releases: true; archives: true } };
+  };
+}>;
+
+export type DocumentDetail = Prisma.DocumentGetPayload<{
+  include: {
+    type: true;
+    attachments: true;
+    routingSteps: true;
+    reviews: true;
+    releases: true;
+    archives: true;
+    history: true;
+  };
+}>;
+
+export type DocumentHistoryEntry = Prisma.DocumentHistoryGetPayload<Record<string, never>>;
+
+export type DocumentTimelineEntry = Prisma.DocumentTrackingGetPayload<Record<string, never>>;
+
 @Injectable()
 export class DocumentsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -95,7 +120,7 @@ export class DocumentsService {
     });
   }
 
-  async findAll(filter: FilterDocumentsDto): Promise<PaginatedResult<unknown>> {
+  async findAll(filter: FilterDocumentsDto): Promise<PaginatedResult<DocumentListItem>> {
     const {
       page,
       pageSize,
@@ -150,7 +175,6 @@ export class DocumentsService {
         where,
         include: {
           type: true,
-          attachments: { where: { status: 'uploaded' }, select: { id: true } },
           _count: { select: { routingSteps: true, reviews: true, releases: true, archives: true } },
         },
         orderBy: { [sortBy ?? 'createdAt']: order },
@@ -160,16 +184,10 @@ export class DocumentsService {
       this.prisma.document.count({ where }),
     ]);
 
-    const shaped = (items as Array<{ attachments: unknown[] } & Record<string, unknown>>).map((d) => ({
-      ...d,
-      attachmentCount: d.attachments.length,
-      attachments: undefined,
-    }));
-
-    return { items: shaped, total, page, pageSize };
+    return { items, total, page, pageSize };
   }
 
-  async findOne(id: string): Promise<unknown> {
+  async findOne(id: string): Promise<DocumentDetail> {
     const doc = await this.prisma.document.findUnique({
       where: { id },
       include: {
@@ -196,8 +214,9 @@ export class DocumentsService {
     });
   }
 
-  async remove(id: string): Promise<unknown> {
-    return this.prisma.document.delete({ where: { id } });
+  async remove(id: string): Promise<{ id: string }> {
+    await this.prisma.document.delete({ where: { id } });
+    return { id };
   }
 
   async transition(
@@ -270,14 +289,14 @@ export class DocumentsService {
     });
   }
 
-  async getHistory(id: string): Promise<unknown> {
+  async getHistory(id: string): Promise<DocumentHistoryEntry[]> {
     return this.prisma.documentHistory.findMany({
       where: { documentId: id },
       orderBy: { occurredAt: 'asc' },
     });
   }
 
-  async getTimeline(id: string): Promise<unknown> {
+  async getTimeline(id: string): Promise<DocumentTimelineEntry[]> {
     return this.prisma.documentTracking.findMany({
       where: { documentId: id },
       orderBy: { occurredAt: 'asc' },

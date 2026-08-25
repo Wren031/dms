@@ -26,7 +26,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { StatusBadge, PriorityBadge } from '@/components/ui/StatusBadge';
-import { useDocuments, useRoutingSteps } from '@/lib/store';
+import { useDocuments } from '@/features/documents/hooks/useDocuments';
+import { useDocumentRouting } from '@/features/documents/hooks/useDocumentRouting';
 import { getOfficeById } from '@/mocks/offices';
 import { getUserById } from '@/mocks/users';
 import {
@@ -35,7 +36,7 @@ import {
 } from '@/constants';
 import { formatRelative, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
-import type { Document } from '@/types';
+import type { DocumentListItem } from '@/features/documents/types/document';
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -48,7 +49,8 @@ const PRIORITY_ORDER: Record<string, number> = {
 
 export function TrackingPage() {
   const toast = useToast();
-  const documents = useDocuments();
+  const { items: documents } = useDocuments({ pageSize: 100 });
+  const { steps: routingSteps } = useDocumentRouting(undefined);
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);
 
@@ -72,7 +74,7 @@ export function TrackingPage() {
 
   const stats = useMemo(() => {
     const active = documents.filter(d =>
-      ['registered', 'received', 'in_routing', 'under_review', 'recommended'].includes(d.status)
+      ['registered', 'received', 'routed', 'under_review', 'recommended'].includes(d.status)
     ).length;
     const completed = documents.filter(d => d.status === 'released' || d.status === 'archived').length;
     const overdue = documents.filter(d => {
@@ -193,8 +195,8 @@ function StatTile({ label, value, icon }: { label: string; value: number; icon: 
   );
 }
 
-function DocumentTracker({ doc }: { doc: Document }) {
-  const steps = useRoutingSteps(doc.id);
+function DocumentTracker({ doc }: { doc: DocumentListItem }) {
+  const { steps } = useDocumentRouting(doc.id);
 
   const office = getOfficeById(doc.currentOfficeId);
   const holder = doc.currentHolderId ? getUserById(doc.currentHolderId) : null;

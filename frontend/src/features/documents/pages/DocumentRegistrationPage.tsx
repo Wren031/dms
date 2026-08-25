@@ -243,7 +243,7 @@ export function DocumentRegistrationPage() {
       attachments,
       encodedById: user.id,
       initialHolderId: form.assignedUserId || user.id,
-      initialStatus: mode === 'route' ? 'in_routing' : 'registered',
+      initialStatus: mode === 'route' ? 'routed' : 'registered',
     });
 
     setSubmitting(false);

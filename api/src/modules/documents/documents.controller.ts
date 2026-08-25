@@ -12,6 +12,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -38,11 +39,13 @@ export class DocumentsController {
     return this.documentsService.create(dto, user.id);
   }
 
+  @SkipThrottle()
   @Get()
   findAll(@Query() filter: FilterDocumentsDto) {
     return this.documentsService.findAll(filter);
   }
 
+  @SkipThrottle()
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.RECEIVING_OFFICER)
   @Get('document-number-suggestion/:officeId')
   suggestDocumentNumber(
@@ -51,6 +54,7 @@ export class DocumentsController {
     return this.documentsService.getDocumentNumberSuggestion(officeId);
   }
 
+  @SkipThrottle()
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.documentsService.findOne(id);
@@ -96,11 +100,13 @@ export class DocumentsController {
     return this.documentsService.assignHolder(id, dto, user.id);
   }
 
+  @SkipThrottle()
   @Get(':id/history')
   getHistory(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.documentsService.getHistory(id);
   }
 
+  @SkipThrottle()
   @Get(':id/timeline')
   getTimeline(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.documentsService.getTimeline(id);
