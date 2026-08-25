@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   FileText,
   PlusCircle,
@@ -26,7 +26,7 @@ import { Dropdown } from '@/components/ui/Dropdown';
 import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
-import { getOfficeById } from '@/mocks/offices';
+import { useOfficeDirectory } from '@/features/system-admin/offices/hooks/useOffices';
 import { getUserById } from '@/mocks/users';
 import {
   ALL_DOCUMENT_STATUSES,
@@ -55,15 +55,22 @@ export function DocumentsListPage() {
   const user = useCurrentUser();
   const { hasPermission } = useAuth();
   const toast = useToast();
-  const { items: allDocs, loading, error } = useDocuments({ pageSize: 50 });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedStatus = searchParams.get('status');
+  const initialStatus = ALL_DOCUMENT_STATUSES.includes(requestedStatus as DocumentListItem['status'])
+    ? requestedStatus!
+    : DEFAULT_FILTERS.status;
+  const { items: allDocs, total, loading, error, setFilters } = useDocuments({ fetchAll: true });
+  const { offices: officeDirectory } = useOfficeDirectory();
 
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
-  const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [typeFilter, setTypeFilter] = useState(DEFAULT_FILTERS.type);
   const [classificationFilter, setClassificationFilter] = useState(DEFAULT_FILTERS.classification);
   const [officeFilter, setOfficeFilter] = useState(DEFAULT_FILTERS.office);
   const [priorityFilter, setPriorityFilter] = useState(DEFAULT_FILTERS.priority);
   const [sourceFilter, setSourceFilter] = useState(DEFAULT_FILTERS.source);
+  const filterInitialized = useRef(false);
 
   const { sortKey, sortDirection, toggleSort, sortFn } = useTableSort<DocumentListItem>({
     initialKey: 'updatedAt',
@@ -90,7 +97,7 @@ export function DocumentsListPage() {
       if (sourceFilter !== 'all' && d.source !== sourceFilter) return false;
       return true;
     });
-  }, [search, statusFilter, typeFilter, classificationFilter, officeFilter, priorityFilter, sourceFilter]);
+  }, [allDocs, search, statusFilter, typeFilter, classificationFilter, officeFilter, priorityFilter, sourceFilter]);
 
   const sorted = useMemo(() => sortFn(filtered), [sortFn, filtered]);
 
@@ -99,17 +106,37 @@ export function DocumentsListPage() {
     initialPageSize: 10,
   });
 
+  useEffect(() => {
+    if (!filterInitialized.current) {
+      filterInitialized.current = true;
+      return;
+    }
+    pagination.reset();
+    setFilters({
+      fetchAll: true,
+      ...(statusFilter !== 'all' ? { status: statusFilter as DocumentListItem['status'] } : {}),
+      ...(classificationFilter !== 'all' ? { classification: classificationFilter as DocumentListItem['classification'] } : {}),
+      ...(officeFilter !== 'all' ? { currentOfficeId: officeFilter } : {}),
+      ...(priorityFilter !== 'all' ? { priority: priorityFilter as DocumentListItem['priority'] } : {}),
+      ...(sourceFilter !== 'all' ? { source: sourceFilter as DocumentListItem['source'] } : {}),
+    });
+    const nextParams = new URLSearchParams(searchParams);
+    if (statusFilter === 'all') nextParams.delete('status');
+    else nextParams.set('status', statusFilter);
+    setSearchParams(nextParams, { replace: true });
+  }, [statusFilter, classificationFilter, officeFilter, priorityFilter, sourceFilter, setFilters]);
+
   const paged = useMemo(
     () => sorted.slice(pagination.start, pagination.end),
     [sorted, pagination.start, pagination.end]
   );
 
   const officeOptions = useMemo(
-    () => Array.from(new Set(allDocs.map(d => d.currentOfficeId))).map(id => ({
-      value: id,
-      label: getOfficeById(id)?.name ?? id,
+    () => officeDirectory.map(office => ({
+      value: office.id,
+      label: `${office.code} — ${office.name}`,
     })),
-    []
+    [officeDirectory]
   );
 
   const hasActiveFilters =
@@ -146,7 +173,9 @@ export function DocumentsListPage() {
       status: DOCUMENT_STATUS_LABELS[d.status],
       priority: d.priority,
       source: d.source,
-      currentOffice: getOfficeById(d.currentOfficeId)?.name ?? '',
+       currentOffice: officeDirectory.find(o => o.id === d.currentOfficeId)?.name
+         ?? (d.currentOfficeId === user.officeId ? user.officeName : undefined)
+         ?? d.currentOfficeId,
       currentHolder: d.currentHolderId ? getUserById(d.currentHolderId)?.fullName ?? '' : '',
       dateReceived: d.dateReceived ? formatDate(d.dateReceived) : '',
       dueDate: d.dueDate ? formatDate(d.dueDate) : '',
@@ -384,13 +413,16 @@ export function DocumentsListPage() {
               header: 'Current Office',
               width: '180px',
               cell: d => {
-                const office = getOfficeById(d.currentOfficeId);
+                 const office = officeDirectory.find(o => o.id === d.currentOfficeId)
+                   ?? (d.currentOfficeId === user.officeId
+                     ? { name: user.officeName ?? 'Current office', code: user.officeCode ?? d.currentOfficeId }
+                     : null);
                 return (
                   <div className="flex items-center gap-1.5 text-xs">
                     <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-slate-700 truncate">{office?.name}</p>
-                      <p className="text-slate-400 font-mono text-[10px]">{office?.code}</p>
+                       <p className="text-slate-700 truncate">{office?.name ?? d.currentOfficeId}</p>
+                       <p className="text-slate-400 font-mono text-[10px]">{office?.code ?? d.currentOfficeId}</p>
                     </div>
                   </div>
                 );

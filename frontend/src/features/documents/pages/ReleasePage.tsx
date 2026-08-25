@@ -67,8 +67,18 @@ export function ReleasePage() {
       toast.error('Recipient required', 'Please specify who will receive this document.');
       return;
     }
-    toast.success('Document released', 'The document has been released and the recipient notified.');
-    setReleaseModal(null);
+    if (!releaseModal) return;
+    void transition.transition(releaseModal, {
+      toStatus: 'released',
+      remarks: remarks.trim() || undefined,
+    }).then(updated => {
+      if (updated) {
+        toast.success('Document released', 'The document has been released and the recipient notified.');
+        setReleaseModal(null);
+      } else {
+        toast.error('Release failed', transition.error ?? 'Please retry.');
+      }
+    });
   };
 
   const recipientOptions = users.filter(u => u.status === 'active');
@@ -180,7 +190,7 @@ export function ReleasePage() {
               cell: d => (
                 <div className="flex items-center gap-1.5 text-xs text-slate-600">
                   <Paperclip className="w-3.5 h-3.5" />
-                  {d.attachments.length}
+                  {d.attachments?.length ?? d.attachmentCount ?? 0}
                 </div>
               ),
             },

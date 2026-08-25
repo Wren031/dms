@@ -34,6 +34,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Input';
 import { getOfficeById } from '@/mocks/offices';
+import { useOfficeDirectory } from '@/features/system-admin/offices/hooks/useOffices';
 import { getUserById } from '@/mocks/users';
 import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
@@ -44,17 +45,16 @@ import {
   ROLE_LABELS,
 } from '@/constants';
 import { formatDate, formatRelative, cn } from '@/lib/utils';
-import {
-  useDocument,
-  useRoutingSteps,
-  useAuditLogs,
-  updateDocumentStatus,
-  addRoutingStep,
-} from '@/lib/store';
+import { attachmentsService } from '@/features/documents/services/documents.service';
+import { useDocumentHistory } from '@/features/documents/hooks/useDocumentHistory';
+import { useDocumentTimeline } from '@/features/documents/hooks/useDocumentTimeline';
+import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
+import { useDocumentDetail } from '@/features/documents/hooks/useDocumentDetail';
 import { offices } from '@/mocks/offices';
 import { users } from '@/mocks/users';
 import type { DocumentStatus } from '@/types';
 import { DocumentJourneyView } from '@/features/documents/components/DocumentJourneyView';
+import type { DocumentDetail } from '@/features/documents/types/document';
 
 type ActionType = 'recommend' | 'approve' | 'reject' | 'return' | 'release' | 'archive';
 
@@ -126,9 +126,11 @@ export function DocumentDetailPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  const doc = useDocument(id);
-  const routing = useRoutingSteps(id);
-  const logs = useAuditLogs(id);
+  const { document: doc, loading: documentLoading, error: documentError, refresh } = useDocumentDetail(id);
+  const { offices: officeDirectory } = useOfficeDirectory();
+  const { history } = useDocumentHistory(id);
+  const { timeline } = useDocumentTimeline(id);
+  const transition = useDocumentTransition();
 
   const [tab, setTab] = useState<'routing' | 'audit'>('routing');
   const [actionModal, setActionModal] = useState<ActionType | null>(null);
@@ -137,6 +139,10 @@ export function DocumentDetailPage() {
   const [routeUser, setRouteUser] = useState('');
   const [routeInstructions, setRouteInstructions] = useState('');
   const [routeModal, setRouteModal] = useState(false);
+
+  if (documentLoading) {
+    return <div className="py-20 text-center text-sm text-slate-500">Loading document…</div>;
+  }
 
   if (!doc) {
     return (
@@ -149,11 +155,14 @@ export function DocumentDetailPage() {
     );
   }
 
-  const office = getOfficeById(doc.currentOfficeId);
-  const holder = doc.currentHolderId ? getUserById(doc.currentHolderId) : null;
+  const office = officeDirectory.find(item => item.id === doc.currentOfficeId)
+    ?? (doc.currentOfficeId === user.officeId
+      ? { id: user.officeId, name: user.officeName ?? 'Current office', code: user.officeCode ?? user.officeId, type: 'unit' as const }
+      : null);
+  const holder = doc.currentHolder ? { ...doc.currentHolder, avatarColor: 'bg-brand-600' } as unknown as import('@/types').User : null;
   const originator = getOfficeById(doc.originatingOfficeId);
-  const encoder = getUserById(doc.encodedById);
-  const receiver = doc.receivedById ? getUserById(doc.receivedById) : null;
+  const encoder = doc.encodedBy ? { ...doc.encodedBy, avatarColor: 'bg-brand-600' } as unknown as import('@/types').User : null;
+  const receiver = doc.receivedBy ? { ...doc.receivedBy, avatarColor: 'bg-emerald-600' } as unknown as import('@/types').User : null;
 
   const isOverdue =
     doc.dueDate &&
@@ -176,6 +185,27 @@ export function DocumentDetailPage() {
     doc.status !== 'archived' &&
     doc.status !== 'released';
   const canDownload = doc.attachments.length > 0;
+  const legacyDocument = doc as unknown as import('@/types').Document;
+  const legacyRouting = doc.routingSteps.map(step => ({
+    ...step,
+    fromUserId: step.fromUserId ?? undefined,
+    toUserId: step.toUserId ?? undefined,
+    instructions: step.instructions ?? '',
+    remarks: step.remarks ?? undefined,
+  })) as unknown as import('@/types').RoutingStep[];
+  const legacyLogs = timeline.map(entry => ({
+    id: entry.id,
+    actorId: entry.actorId ?? '',
+    actorName: entry.actorId ?? 'System',
+    action: entry.event,
+    module: 'Documents',
+    description: entry.event,
+    targetId: doc.id,
+    targetType: 'document',
+    ipAddress: '',
+    userAgent: '',
+    createdAt: entry.occurredAt,
+  })) as import('@/types').AuditLog[];
 
   const primaryAction: ActionType | null =
     doc.status === 'under_review' || doc.status === 'recommended'
@@ -204,17 +234,18 @@ export function DocumentDetailPage() {
     }
   };
 
-  const submitAction = () => {
+  const submitAction = async () => {
     if (!actionModal || !user) return;
     const newStatus = ACTION_STATUS_MAP[actionModal];
-    const auditAction = ACTION_AUDIT_MAP[actionModal];
-    updateDocumentStatus({
-      documentId: doc.id,
-      status: newStatus,
-      actorId: user.id,
-      action: auditAction,
+    const updated = await transition.transition(doc.id, {
+      toStatus: newStatus,
       remarks: remarks || `${ACTION_META[actionModal].label} action recorded.`,
     });
+    if (!updated) {
+      toast.error('Action failed', transition.error ?? 'Please retry.');
+      return;
+    }
+    await refresh();
     toast.success(
       'Action recorded',
       `Document has been ${actionModal === 'recommend' ? 'recommended' : actionModal === 'return' ? 'returned' : `${actionModal}d`}.`,
@@ -223,20 +254,22 @@ export function DocumentDetailPage() {
     setRemarks('');
   };
 
-  const submitRoute = () => {
+  const submitRoute = async () => {
     if (!routeOffice || !user) {
       toast.error('Target office required', 'Please select an office to route this document to.');
       return;
     }
-    addRoutingStep({
-      documentId: doc.id,
-      fromOfficeId: doc.currentOfficeId,
-      fromUserId: user.id,
-      toOfficeId: routeOffice,
-      toUserId: routeUser || undefined,
-      instructions: routeInstructions || 'Forwarded for action',
-      remarks: remarks || undefined,
+    const updated = await transition.transition(doc.id, {
+      toStatus: 'routed',
+      currentOfficeId: routeOffice,
+      currentHolderId: routeUser || undefined,
+      remarks: routeInstructions || remarks || 'Forwarded for action',
     });
+    if (!updated) {
+      toast.error('Routing failed', transition.error ?? 'Please retry.');
+      return;
+    }
+    await refresh();
     toast.success('Document routed', `Forwarded to ${getOfficeById(routeOffice)?.code}.`);
     setRouteModal(false);
     setRouteOffice('');
@@ -260,7 +293,7 @@ export function DocumentDetailPage() {
       </Link>
 
       <DocumentHero
-        document={doc}
+        document={legacyDocument}
         holder={holder}
         office={office}
         isOverdue={!!isOverdue}
@@ -272,9 +305,9 @@ export function DocumentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
           <DocumentJourneyView
-            document={doc}
-            routingSteps={routing}
-            auditLogs={logs}
+            document={legacyDocument}
+            routingSteps={legacyRouting}
+            auditLogs={legacyLogs}
           />
         </div>
 
@@ -300,8 +333,8 @@ export function DocumentDetailPage() {
       <HistoryTabs
         tab={tab}
         onTabChange={setTab}
-        routing={routing}
-        logs={logs}
+        routing={legacyRouting}
+        logs={legacyLogs}
       />
 
       <Modal
@@ -422,7 +455,7 @@ export function DocumentDetailPage() {
 interface DocumentHeroProps {
   document: import('@/types').Document;
   holder: import('@/types').User | null | undefined;
-  office: import('@/types').Office | null | undefined;
+  office: { id: string; name: string; code: string } | null | undefined;
   isOverdue: boolean;
   primaryAction: ActionType | null;
   onPrimaryAction: () => void;
@@ -693,7 +726,7 @@ function DocumentActions({
 }
 
 interface DocumentInfoSidebarProps {
-  document: import('@/types').Document;
+  document: DocumentDetail;
   originator: import('@/types').Office | null | undefined;
   encoder: import('@/types').User | null | undefined;
   receiver: import('@/types').User | null | undefined;
@@ -709,6 +742,14 @@ function DocumentInfoSidebar({
   holder,
   isOverdue,
 }: DocumentInfoSidebarProps) {
+  const downloadAttachment = async (attachmentId: string) => {
+    try {
+      const { url } = await attachmentsService.downloadUrl(attachmentId);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // Keep the existing detail view usable if a signed URL cannot be created.
+    }
+  };
   return (
     <>
       <Card padded={false}>
@@ -765,13 +806,15 @@ function DocumentInfoSidebar({
                   <Paperclip className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-900 truncate">{att.name}</p>
-                  <p className="text-[11px] text-slate-500">
-                    {(att.size / 1024).toFixed(1)} KB ·{' '}
-                    {att.type.split('/').pop()?.toUpperCase() ?? 'FILE'}
+                   <p className="text-sm font-medium text-slate-900 truncate">{att.fileName}</p>
+                   <p className="text-[11px] text-slate-500">
+                     {(att.sizeBytes / 1024).toFixed(1)} KB ·{' '}
+                     {att.mimeType.split('/').pop()?.toUpperCase() ?? 'FILE'}
                   </p>
                 </div>
                 <button
+                  type="button"
+                  onClick={() => void downloadAttachment(att.id)}
                   className="p-1.5 text-slate-400 hover:text-slate-700 rounded"
                   aria-label="Preview"
                 >

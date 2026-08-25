@@ -8,6 +8,7 @@ import type {
   UserAccount,
   UserListFilters,
   UserListResponse,
+  RoutingUserOption,
 } from '@/features/system-admin/users/types/user';
 
 export class ApiError extends Error {
@@ -139,6 +140,10 @@ function buildEmployeeQuery(filters?: EmployeeListFilters): string {
 export const userService = {
   list(filters?: UserListFilters): Promise<UserListResponse> {
     return request<UserListResponse>(`/users${buildQuery(filters)}`);
+  },
+
+  routingOptions(): Promise<RoutingUserOption[]> {
+    return request<RoutingUserOption[]>('/users/routing-options');
   },
 
   getById(id: string): Promise<UserAccount> {

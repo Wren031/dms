@@ -45,6 +45,12 @@ export class UsersController {
   }
 
   @SkipThrottle()
+  @Get('routing-options')
+  routingOptions() {
+    return this.usersService.findRoutingOptions();
+  }
+
+  @SkipThrottle()
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.usersService.findOne(id);

@@ -1,3 +1,5 @@
+import type { DocumentType } from '@/types';
+
 export type DocumentStatus =
   | 'registered'
   | 'received'
@@ -91,7 +93,8 @@ export interface DocumentListItem {
   documentNumber: string;
   title: string;
   description: string | null;
-  type: DocumentTypeMeta;
+  type: DocumentType;
+  typeId?: string;
   classification: DocumentClassification;
   priority: DocumentPriority;
   source: DocumentSource;
@@ -99,6 +102,8 @@ export interface DocumentListItem {
   senderName: string | null;
   tags: string[];
   originatingOfficeId: string;
+  receivingOfficeId?: string | null;
+  destinationOfficeId?: string | null;
   currentOfficeId: string;
   currentHolderId: string | null;
   encodedById: string;
@@ -106,6 +111,7 @@ export interface DocumentListItem {
   dateReceived: string | null;
   dueDate: string | null;
   attachmentCount: number;
+  attachments?: DocumentAttachment[];
   counts: {
     routingSteps: number;
     reviews: number;
@@ -122,6 +128,17 @@ export interface DocumentDetail extends Omit<DocumentListItem, 'attachmentCount'
   reviews: DocumentReview[];
   releases: DocumentRelease[];
   archives: DocumentArchive[];
+  encodedBy: DocumentPerson | null;
+  receivedBy: DocumentPerson | null;
+  currentHolder: DocumentPerson | null;
+}
+
+export interface DocumentPerson {
+  id: string;
+  fullName: string;
+  email: string | null;
+  position: string | null;
+  officeId: string | null;
 }
 
 export interface DocumentHistoryEntry {
@@ -152,6 +169,7 @@ export type DocumentSortBy =
   | 'dueDate';
 
 export interface DocumentFilters {
+  fetchAll?: boolean;
   page?: number;
   pageSize?: number;
   search?: string;
@@ -214,4 +232,24 @@ export interface DocumentAssignHolderInput {
 
 export interface DocumentNumberSuggestion {
   suggestion: string;
+}
+
+export interface AttachmentUploadRequest {
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+export interface AttachmentUploadUrl {
+  uploadUrl: string;
+  storageKey: string;
+  expiresIn: number;
+  method: 'PUT';
+  headers: Record<string, string>;
+}
+
+export interface AttachmentDownloadUrl {
+  url: string;
+  expiresIn: number;
+  fileName: string;
 }

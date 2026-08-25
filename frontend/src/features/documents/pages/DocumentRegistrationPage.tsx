@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   PlusCircle,
@@ -24,16 +24,17 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
-import { offices } from '@/mocks/offices';
-import { users } from '@/mocks/users';
+import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
 import {
-  ALL_DOCUMENT_TYPES,
   ALL_CLASSIFICATIONS,
   DOCUMENT_TYPE_LABELS,
   DOCUMENT_CLASSIFICATION_LABELS,
 } from '@/constants';
-import type { DocumentAttachment, DocumentType, DocumentClassification } from '@/types';
-import { registerDocument } from '@/lib/store';
+import type { DocumentType, DocumentClassification } from '@/types';
+import { useDocumentTypes } from '@/features/system-admin/document-type/hooks/useDocumentTypes';
+import { useRegisterDocument } from '@/features/documents/hooks/useRegisterDocument';
+import { attachmentsService } from '@/features/documents/services/documents.service';
+import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
 import { cn } from '@/lib/utils';
 
 interface FormState {
@@ -91,6 +92,10 @@ export function DocumentRegistrationPage() {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const toast = useToast();
+  const { items: documentTypes } = useDocumentTypes({ pageSize: 100, isActive: true });
+  const registration = useRegisterDocument();
+  const { offices, loading: officesLoading, error: officesError } = useOffices();
+  const { users: routingUsers, loading: usersLoading, error: usersError } = useRoutingOptions();
 
   const [form, setForm] = useState<FormState>(() => ({
     ...INITIAL_STATE,
@@ -112,10 +117,49 @@ export function DocumentRegistrationPage() {
 
   const assignedUsers = useMemo(() => {
     if (!form.receivingOfficeId) return [];
-    return users.filter(
-      u => u.officeId === form.receivingOfficeId && u.status === 'active'
-    );
-  }, [form.receivingOfficeId]);
+    // The current authenticated user is always a valid UUID and can be
+    // selected without exposing the admin-only users list endpoint.
+    return routingUsers.filter(option => option.officeId === form.receivingOfficeId);
+  }, [form.receivingOfficeId, routingUsers]);
+
+  useEffect(() => {
+    if (officesLoading || offices.length === 0) return;
+    const officeIds = new Set(offices.map(office => office.id));
+    const routingUserIds = new Set(routingUsers.map(option => option.id));
+    setForm(previous => {
+      const originatingOfficeId = officeIds.has(previous.originatingOfficeId)
+        ? previous.originatingOfficeId
+        : officeIds.has(user.officeId)
+          ? user.officeId
+          : '';
+      const receivingOfficeId = officeIds.has(previous.receivingOfficeId)
+        ? previous.receivingOfficeId
+        : '';
+      const destinationOfficeId = officeIds.has(previous.destinationOfficeId)
+        ? previous.destinationOfficeId
+        : '';
+      const assignedUserId = routingUserIds.has(previous.assignedUserId)
+        ? previous.assignedUserId
+        : '';
+
+      if (
+        originatingOfficeId === previous.originatingOfficeId &&
+        receivingOfficeId === previous.receivingOfficeId &&
+        destinationOfficeId === previous.destinationOfficeId &&
+        assignedUserId === previous.assignedUserId
+      ) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        originatingOfficeId,
+        receivingOfficeId,
+        destinationOfficeId,
+        assignedUserId,
+      };
+    });
+  }, [offices, officesLoading, routingUsers, user.officeId]);
 
   const validateField = (field: keyof FormState, value: string): string | undefined => {
     if (field === 'title' && !value.trim()) return 'Title is required';
@@ -215,38 +259,54 @@ export function DocumentRegistrationPage() {
       return;
     }
     if (!user) return;
+    if (!offices.some(office => office.id === form.originatingOfficeId)) {
+      toast.error('Invalid originating office', 'Select an office loaded from the server.');
+      return;
+    }
+    if (!offices.some(office => office.id === form.receivingOfficeId)) {
+      toast.error('Invalid receiving office', 'Select an office loaded from the server.');
+      return;
+    }
+
+    const typeId = documentTypes.find(t => t.code === form.type)?.id;
+    if (!typeId) {
+      toast.error('Document type unavailable', 'The selected document type is not configured by the server.');
+      return;
+    }
 
     setSubmitting(true);
-    await new Promise(r => setTimeout(r, 500));
-
-    const attachments: Array<Omit<DocumentAttachment, 'id' | 'uploadedAt'>> = files.map(f => ({
-      name: f.name,
-      size: f.size,
-      type: f.type || 'application/octet-stream',
-    }));
-
-    const doc = registerDocument({
+    const doc = await registration.register({
       documentNumber: form.documentNumber.trim() || undefined,
       title: form.title,
-      type: form.type,
+      typeId,
       classification: form.classification,
       source: form.source,
       senderName: form.source === 'external' ? form.senderName : undefined,
       description: form.description,
       priority: form.priority,
       originatingOfficeId: form.originatingOfficeId,
-      receivingOfficeId: form.receivingOfficeId || undefined,
-      destinationOfficeId: form.destinationOfficeId || undefined,
+      currentOfficeId: user.officeId,
+      currentHolderId: form.assignedUserId || user.id,
       dateReceived: form.dateReceived || undefined,
       dueDate: form.dueDate || undefined,
       tags,
-      attachments,
-      encodedById: user.id,
-      initialHolderId: form.assignedUserId || user.id,
-      initialStatus: mode === 'route' ? 'routed' : 'registered',
     });
 
     setSubmitting(false);
+    if (!doc) {
+      toast.error('Registration failed', registration.error ?? 'Please retry.');
+      return;
+    }
+    if (files.length > 0) {
+      try {
+        await Promise.all(files.map(file => attachmentsService.upload(doc.id, file)));
+      } catch (error) {
+        toast.warning(
+          'Document registered, attachments pending',
+          error instanceof Error ? error.message : 'The document was saved but one or more files failed to upload.',
+        );
+      }
+    }
     toast.success(
       mode === 'register' ? 'Document registered' : 'Document registered & routed',
       `${doc.trackingNumber} has been ${mode === 'register' ? 'successfully registered' : 'registered and forwarded to ' + (form.receivingOfficeId ? offices.find(o => o.id === form.receivingOfficeId)?.code : 'the receiving office')}.`
@@ -368,7 +428,9 @@ export function DocumentRegistrationPage() {
                 required
                 value={form.type}
                 onChange={e => setField('type', e.target.value as DocumentType)}
-                options={ALL_DOCUMENT_TYPES.map(t => ({ value: t, label: DOCUMENT_TYPE_LABELS[t] }))}
+                options={documentTypes.map(t => ({ value: t.code, label: t.name }))}
+                disabled={documentTypes.length === 0}
+                hint={documentTypes.length === 0 ? 'No active document types are configured.' : undefined}
               />
               <Select
                 label="Classification / Confidentiality"
@@ -406,9 +468,10 @@ export function DocumentRegistrationPage() {
                 onBlur={() => markTouched('originatingOfficeId')}
                 error={errors.originatingOfficeId}
                 options={[
-                  { value: '', label: 'Choose originating office…' },
+                  { value: '', label: officesLoading ? 'Loading offices…' : 'Choose originating office…' },
                   ...offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` })),
                 ]}
+                disabled={officesLoading || offices.length === 0}
               />
               <Select
                 label="Source"
@@ -442,9 +505,10 @@ export function DocumentRegistrationPage() {
                 onBlur={() => markTouched('receivingOfficeId')}
                 error={errors.receivingOfficeId}
                 options={[
-                  { value: '', label: 'Choose receiving office…' },
+                  { value: '', label: officesLoading ? 'Loading offices…' : 'Choose receiving office…' },
                   ...offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` })),
                 ]}
+                disabled={officesLoading || offices.length === 0}
                 hint="Office that will receive the document first"
               />
               <Select
@@ -456,9 +520,10 @@ export function DocumentRegistrationPage() {
                 onBlur={() => markTouched('destinationOfficeId')}
                 error={errors.destinationOfficeId}
                 options={[
-                  { value: '', label: 'Choose destination office…' },
+                  { value: '', label: officesLoading ? 'Loading offices…' : 'Choose destination office…' },
                   ...offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` })),
                 ]}
+                disabled={officesLoading || offices.length === 0}
                 hint="Final office responsible for action"
               />
               <Select
@@ -470,10 +535,14 @@ export function DocumentRegistrationPage() {
                 onChange={e => setField('assignedUserId', e.target.value)}
                 options={[
                   { value: '', label: 'Unassigned' },
-                  ...assignedUsers.map(u => ({ value: u.id, label: `${u.fullName} (${u.position})` })),
-                ]}
-                disabled={!form.receivingOfficeId}
-              />
+                   ...assignedUsers.map(u => ({
+                     value: u.id,
+                     label: `${u.fullName}${u.position ? ` (${u.position})` : ''}`,
+                   })),
+                 ]}
+                 disabled={!form.receivingOfficeId || usersLoading}
+                 hint={usersError ?? undefined}
+               />
               <div className="md:col-span-2">
                 <Textarea
                   label="Description"

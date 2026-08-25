@@ -11,7 +11,12 @@ import type {
   DocumentTimelineEntry,
   DocumentTransitionInput,
   DocumentUpdateInput,
+  AttachmentUploadRequest,
+  AttachmentUploadUrl,
+  AttachmentDownloadUrl,
+  DocumentAttachment,
 } from '@/features/documents/types/document';
+import type { DocumentType } from '@/types';
 
 export class DocumentsApiError extends Error {
   readonly status: number;
@@ -53,6 +58,31 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new DocumentsApiError(0, 'Network error — please retry.');
   }
 
+  if (response.status === 401 && path !== '/auth/refresh') {
+    try {
+      const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (refreshResponse.ok) {
+        const retryHeaders = new Headers(init.headers);
+        if (init.body && !retryHeaders.has('Content-Type')) {
+          retryHeaders.set('Content-Type', 'application/json');
+        }
+        const retryCsrf = readCookie('dms_csrf');
+        if (retryCsrf) retryHeaders.set('x-xsrf-token', retryCsrf);
+        response = await fetch(`${API_BASE_URL}${path}`, {
+          ...init,
+          headers: retryHeaders,
+          credentials: 'include',
+        });
+      }
+    } catch {
+      // Fall through to the original 401 error.
+    }
+  }
+
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
     let details: unknown;
@@ -83,6 +113,20 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   ) as T;
 }
 
+function normalizeDocument<T extends DocumentListItem | DocumentDetail>(document: T): T {
+  const rawType = document.type as unknown as { code?: string } | string;
+  const type = (typeof rawType === 'string' ? rawType : rawType?.code) as DocumentType;
+  return {
+    ...document,
+    type,
+    attachments: 'attachments' in document ? (document.attachments ?? []) : undefined,
+  } as T;
+}
+
+function normalizeList(response: DocumentListResponse): DocumentListResponse {
+  return { ...response, items: response.items.map(normalizeDocument) };
+}
+
 function buildQuery(filters?: DocumentFilters): string {
   if (!filters) return '';
   const params = new URLSearchParams();
@@ -108,13 +152,37 @@ function buildQuery(filters?: DocumentFilters): string {
   return qs ? `?${qs}` : '';
 }
 
+async function listAll(filters?: DocumentFilters): Promise<DocumentListResponse> {
+  const pageSize = 200;
+  const first = await request<DocumentListResponse>(
+    `/documents${buildQuery({ ...filters, fetchAll: undefined, page: 1, pageSize })}`,
+  ).then(normalizeList);
+  if (first.items.length >= first.total) return first;
+
+  const totalPages = Math.ceil(first.total / pageSize);
+  const remaining = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      request<DocumentListResponse>(
+        `/documents${buildQuery({ ...filters, fetchAll: undefined, page: index + 2, pageSize })}`,
+      ).then(normalizeList),
+    ),
+  );
+  return {
+    ...first,
+    items: [first, ...remaining].flatMap(response => response.items),
+    page: 1,
+    pageSize: first.total,
+  };
+}
+
 export const documentsService = {
   list(filters?: DocumentFilters): Promise<DocumentListResponse> {
-    return request<DocumentListResponse>(`/documents${buildQuery(filters)}`);
+    if (filters?.fetchAll) return listAll(filters);
+    return request<DocumentListResponse>(`/documents${buildQuery(filters)}`).then(normalizeList);
   },
 
   getById(id: string): Promise<DocumentDetail> {
-    return request<DocumentDetail>(`/documents/${id}`);
+    return request<DocumentDetail>(`/documents/${id}`).then(normalizeDocument);
   },
 
   getDocumentNumberSuggestion(officeId: string): Promise<DocumentNumberSuggestion> {
@@ -165,5 +233,39 @@ export const documentsService = {
 export const routingService = {
   listSteps(documentId: string): Promise<unknown[]> {
     return request<unknown[]>(`/document-routing?documentId=${documentId}`);
+  },
+};
+
+export const attachmentsService = {
+  list(documentId: string): Promise<DocumentAttachment[]> {
+    return request<DocumentAttachment[]>(`/document-attachments/document/${documentId}`);
+  },
+
+  async upload(documentId: string, file: File): Promise<DocumentAttachment> {
+    const metadata: AttachmentUploadRequest = {
+      fileName: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      sizeBytes: file.size,
+    };
+    const presigned = await request<AttachmentUploadUrl>(
+      `/document-attachments/document/${documentId}/upload-url`,
+      { method: 'POST', body: JSON.stringify(metadata) },
+    );
+    const uploaded = await fetch(presigned.uploadUrl, {
+      method: presigned.method,
+      headers: presigned.headers,
+      body: file,
+    });
+    if (!uploaded.ok) {
+      throw new DocumentsApiError(uploaded.status, `Failed to upload ${file.name}`);
+    }
+    return request<DocumentAttachment>(`/document-attachments/document/${documentId}/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ ...metadata, storageKey: presigned.storageKey }),
+    });
+  },
+
+  downloadUrl(id: string): Promise<AttachmentDownloadUrl> {
+    return request<AttachmentDownloadUrl>(`/document-attachments/${id}/download`);
   },
 };

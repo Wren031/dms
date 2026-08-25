@@ -23,7 +23,9 @@ export function useRegisterDocument(): UseRegisterDocumentReturn {
     setSaving(true);
     setError(null);
     try {
-      return await documentsService.register(payload);
+      const created = await documentsService.register(payload);
+      window.dispatchEvent(new Event('documents:invalidate'));
+      return created;
     } catch (err) {
       setError(toMessage(err, 'Could not register document.'));
       return null;

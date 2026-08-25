@@ -83,6 +83,46 @@ export class UsersService {
     return { items, total, page, pageSize };
   }
 
+  async findRoutingOptions(): Promise<Array<{
+    id: string;
+    fullName: string;
+    email: string | null;
+    role: string;
+    officeId: string | null;
+    officeName: string | null;
+    position: string | null;
+  }>> {
+    const users = await this.prisma.user.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        employee: {
+          select: {
+            firstName: true,
+            middleName: true,
+            lastName: true,
+            position: true,
+            officeId: true,
+            office: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return users.map(user => ({
+      id: user.id,
+      fullName:
+        [user.employee?.firstName, user.employee?.middleName, user.employee?.lastName]
+          .filter(Boolean)
+          .join(' ') || user.username || user.email || user.id,
+      email: user.email,
+      role: user.role.toLowerCase(),
+      officeId: user.employee?.officeId ?? null,
+      officeName: user.employee?.office?.name ?? null,
+      position: user.employee?.position ?? null,
+    }));
+  }
+
   async findOne(id: string): Promise<UserWithEmployee> {
     return this.prisma.user.findUniqueOrThrow({
       where: { id },

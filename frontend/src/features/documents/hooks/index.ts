@@ -1,4 +1,5 @@
 export { useDocuments } from '@/features/documents/hooks/useDocuments';
+export { useDocumentDirectory } from '@/features/documents/hooks/useDocuments';
 export type { UseDocumentsReturn } from '@/features/documents/hooks/useDocuments';
 export { useDocumentDetail } from '@/features/documents/hooks/useDocumentDetail';
 export type { UseDocumentDetailReturn } from '@/features/documents/hooks/useDocumentDetail';
@@ -12,3 +13,4 @@ export { useDocumentTimeline } from '@/features/documents/hooks/useDocumentTimel
 export type { UseDocumentTimelineReturn } from '@/features/documents/hooks/useDocumentTimeline';
 export { useDocumentRouting } from '@/features/documents/hooks/useDocumentRouting';
 export type { UseDocumentRoutingReturn, RoutingStep } from '@/features/documents/hooks/useDocumentRouting';
+export { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';

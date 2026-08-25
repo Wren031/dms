@@ -41,22 +41,26 @@ export function useDocuments(initial?: DocumentFilters): UseDocumentsReturn {
 
   const initialRef = useRef<DocumentFilters | undefined>(initial);
   const didInitRef = useRef(false);
+  const requestSequence = useRef(0);
 
   const fetchList = useCallback(async (next?: DocumentFilters): Promise<DocumentListResponse | null> => {
+    const requestId = ++requestSequence.current;
     setLoading(true);
     setError(null);
     try {
       const res = await documentsService.list(next);
-      setItems(res.items);
-      setTotal(res.total);
-      setPage(res.page);
-      setPageSize(res.pageSize);
+      if (requestId === requestSequence.current) {
+        setItems(res.items);
+        setTotal(res.total);
+        setPage(res.page);
+        setPageSize(res.pageSize);
+      }
       return res;
     } catch (err) {
-      setError(toMessage(err, 'Could not load documents.'));
+      if (requestId === requestSequence.current) setError(toMessage(err, 'Could not load documents.'));
       return null;
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
   }, []);
 
@@ -65,6 +69,14 @@ export function useDocuments(initial?: DocumentFilters): UseDocumentsReturn {
     didInitRef.current = true;
     void fetchList(initialRef.current);
   }, [fetchList]);
+
+  useEffect(() => {
+    const handleInvalidation = () => {
+      void fetchList(filters);
+    };
+    window.addEventListener('documents:invalidate', handleInvalidation);
+    return () => window.removeEventListener('documents:invalidate', handleInvalidation);
+  }, [fetchList, filters]);
 
   const refresh = useCallback(async () => {
     await fetchList(filters);
@@ -87,4 +99,8 @@ export function useDocuments(initial?: DocumentFilters): UseDocumentsReturn {
     filters,
     setFilters,
   };
+}
+
+export function useDocumentDirectory(filters?: DocumentFilters): UseDocumentsReturn {
+  return useDocuments({ pageSize: 100, ...filters });
 }

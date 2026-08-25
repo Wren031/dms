@@ -160,3 +160,30 @@ export function useOffices(): UseOfficesReturn {
     clearActionError,
   };
 }
+
+export function useOfficeDirectory(): {
+  offices: Office[];
+  loading: boolean;
+  error: string | null;
+} {
+  const [offices, setOffices] = useState<Office[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    officeService.getTree()
+      .then(tree => {
+        if (active) setOffices(flattenTree(tree));
+      })
+      .catch(err => {
+        if (active) setError(toMessage(err, 'Failed to load offices.'));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  return { offices, loading, error };
+}

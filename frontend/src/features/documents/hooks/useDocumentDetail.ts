@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { documentsService, DocumentsApiError } from '@/features/documents/services/documents.service';
+import { attachmentsService } from '@/features/documents/services/documents.service';
 import type { DocumentDetail } from '@/features/documents/types/document';
 
 function toMessage(err: unknown, fallback: string): string {
@@ -14,6 +15,8 @@ export interface UseDocumentDetailReturn {
   error: string | null;
   refresh: () => Promise<void>;
   setDocument: (next: DocumentDetail | null) => void;
+  uploadAttachments: (files: File[]) => Promise<boolean>;
+  downloadAttachment: (id: string) => Promise<void>;
 }
 
 export function useDocumentDetail(id: string | undefined): UseDocumentDetailReturn {
@@ -39,9 +42,30 @@ export function useDocumentDetail(id: string | undefined): UseDocumentDetailRetu
     }
   }, [id]);
 
+  const uploadAttachments = useCallback(async (files: File[]) => {
+    if (!id || files.length === 0) return true;
+    try {
+      const uploaded = await Promise.all(files.map(file => attachmentsService.upload(id, file)));
+      setDocument(current => current ? { ...current, attachments: [...uploaded, ...current.attachments] } : current);
+      return true;
+    } catch (err) {
+      setError(toMessage(err, 'Could not upload attachments.'));
+      return false;
+    }
+  }, [id]);
+
+  const downloadAttachment = useCallback(async (attachmentId: string) => {
+    try {
+      const { url } = await attachmentsService.downloadUrl(attachmentId);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setError(toMessage(err, 'Could not download attachment.'));
+    }
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  return { document, loading, error, refresh, setDocument };
+  return { document, loading, error, refresh, setDocument, uploadAttachments, downloadAttachment };
 }

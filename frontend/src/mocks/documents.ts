@@ -72,7 +72,7 @@ export const documents: Document[] = [
     title: 'Contract Agreement: Construction of Multi-Purpose Hall',
     type: 'contract',
     classification: 'confidential',
-    status: 'in_routing',
+    status: 'routed',
     originatingOfficeId: 'off-010',
     receivingOfficeId: 'off-003',
     destinationOfficeId: 'off-003',

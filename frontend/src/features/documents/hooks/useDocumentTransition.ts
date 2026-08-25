@@ -28,7 +28,9 @@ export function useDocumentTransition(): UseDocumentTransitionReturn {
     setSaving(true);
     setError(null);
     try {
-      return await documentsService.transition(id, payload);
+      const updated = await documentsService.transition(id, payload);
+      window.dispatchEvent(new Event('documents:invalidate'));
+      return updated;
     } catch (err) {
       setError(toMessage(err, 'Could not change document status.'));
       return null;
@@ -41,7 +43,9 @@ export function useDocumentTransition(): UseDocumentTransitionReturn {
     setSaving(true);
     setError(null);
     try {
-      return await documentsService.assignHolder(id, payload);
+      const updated = await documentsService.assignHolder(id, payload);
+      window.dispatchEvent(new Event('documents:invalidate'));
+      return updated;
     } catch (err) {
       setError(toMessage(err, 'Could not assign holder.'));
       return null;

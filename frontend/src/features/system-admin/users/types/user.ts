@@ -47,6 +47,16 @@ export interface UserAccount {
   updatedAt: string;
 }
 
+export interface RoutingUserOption {
+  id: string;
+  fullName: string;
+  email: string | null;
+  role: string;
+  officeId: string | null;
+  officeName: string | null;
+  position: string | null;
+}
+
 export interface UserListResponse {
   items: UserAccount[];
   total: number;

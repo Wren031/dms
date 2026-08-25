@@ -47,6 +47,20 @@ export type DocumentDetail = Prisma.DocumentGetPayload<{
   };
 }>;
 
+export interface DocumentPerson {
+  id: string;
+  fullName: string;
+  email: string | null;
+  position: string | null;
+  officeId: string | null;
+}
+
+export interface DocumentDetailResponse extends DocumentDetail {
+  encodedBy: DocumentPerson | null;
+  receivedBy: DocumentPerson | null;
+  currentHolder: DocumentPerson | null;
+}
+
 export type DocumentHistoryEntry = Prisma.DocumentHistoryGetPayload<Record<string, never>>;
 
 export type DocumentTimelineEntry = Prisma.DocumentTrackingGetPayload<Record<string, never>>;
@@ -56,6 +70,14 @@ export class DocumentsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateDocumentDto, encodedById: string): Promise<unknown> {
+    const encoder = await this.prisma.user.findUnique({
+      where: { id: encodedById },
+      include: { employee: { select: { officeId: true } } },
+    });
+    const authenticatedOfficeId = encoder?.employee?.officeId;
+    if (!authenticatedOfficeId) {
+      throw new BadRequestException('Authenticated user has no assigned office');
+    }
     const trackingNumber = await this.generateTrackingNumber();
     const documentNumber =
       dto.documentNumber?.trim() ||
@@ -76,7 +98,7 @@ export class DocumentsService {
             senderName: dto.senderName,
             tags: dto.tags ?? [],
             originatingOfficeId: dto.originatingOfficeId,
-            currentOfficeId: dto.currentOfficeId,
+            currentOfficeId: authenticatedOfficeId,
             currentHolderId: dto.currentHolderId ?? null,
             encodedById,
             receivedById: dto.receivedById,
@@ -187,7 +209,7 @@ export class DocumentsService {
     return { items, total, page, pageSize };
   }
 
-  async findOne(id: string): Promise<DocumentDetail> {
+  async findOne(id: string): Promise<DocumentDetailResponse> {
     const doc = await this.prisma.document.findUnique({
       where: { id },
       include: {
@@ -201,7 +223,44 @@ export class DocumentsService {
       },
     });
     if (!doc) throw new NotFoundException('Document not found');
-    return doc;
+    const ids = Array.from(new Set([doc.encodedById, doc.receivedById, doc.currentHolderId].filter((value): value is string => !!value)));
+    const users = ids.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: ids } },
+          include: {
+            employee: {
+              select: {
+                firstName: true,
+                middleName: true,
+                lastName: true,
+                position: true,
+                officeId: true,
+              },
+            },
+          },
+        })
+      : [];
+    const people = new Map(users.map(user => [user.id, this.toDocumentPerson(user)]));
+    return {
+      ...doc,
+      encodedBy: people.get(doc.encodedById) ?? null,
+      receivedBy: doc.receivedById ? people.get(doc.receivedById) ?? null : null,
+      currentHolder: doc.currentHolderId ? people.get(doc.currentHolderId) ?? null : null,
+    };
+  }
+
+  private toDocumentPerson(user: Prisma.UserGetPayload<{
+    include: { employee: { select: { firstName: true; middleName: true; lastName: true; position: true; officeId: true } } };
+  }>): DocumentPerson {
+    return {
+      id: user.id,
+      fullName: [user.employee?.firstName, user.employee?.middleName, user.employee?.lastName]
+        .filter(Boolean)
+        .join(' ') || user.username || user.email || user.id,
+      email: user.email,
+      position: user.employee?.position ?? null,
+      officeId: user.employee?.officeId ?? null,
+    };
   }
 
   async update(id: string, dto: UpdateDocumentDto): Promise<unknown> {
