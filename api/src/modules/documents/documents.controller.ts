@@ -31,7 +31,7 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.DOCUMENT_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
   @Audit('document.register', 'documents', 'Document')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -46,7 +46,7 @@ export class DocumentsController {
   }
 
   @SkipThrottle()
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.DOCUMENT_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
   @Get('document-number-suggestion/:officeId')
   suggestDocumentNumber(
     @Param('officeId', new ParseUUIDPipe()) officeId: string,
@@ -78,6 +78,7 @@ export class DocumentsController {
     return this.documentsService.remove(id);
   }
 
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_OFFICER)
   @Post(':id/transition')
   @HttpCode(HttpStatus.OK)
   @Audit('document.transition', 'documents', 'Document')
@@ -89,6 +90,7 @@ export class DocumentsController {
     return this.documentsService.transition(id, dto, user.id);
   }
 
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
   @Post(':id/assign-holder')
   @HttpCode(HttpStatus.OK)
   @Audit('document.assign-holder', 'documents', 'Document')

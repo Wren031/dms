@@ -50,12 +50,13 @@ const ROLE_DEFINITIONS: Record<Role, { name: string; description: string; permis
   },
   OFFICE_ADMIN: {
     name: 'Office Administrator',
-    description: 'Manages office operations, users within an office, and document workflows.',
+    description:
+      'Manages documents and users within their authorized office, including document assignments and routing.',
     permissions: [
       'dashboard.view',
-      'documents.view', 'documents.register', 'documents.receive', 'documents.route',
-      'documents.review', 'documents.recommend', 'documents.approve', 'documents.reject',
-      'documents.return', 'documents.release', 'documents.archive', 'documents.track',
+      'documents.view', 'documents.create', 'documents.edit', 'documents.route',
+      'documents.approve', 'documents.reject', 'documents.return',
+      'documents.release', 'documents.archive', 'documents.track',
       'users.view', 'users.create', 'users.edit',
       'offices.view', 'offices.edit',
       'document_types.view', 'document_types.create', 'document_types.edit',
@@ -65,23 +66,22 @@ const ROLE_DEFINITIONS: Record<Role, { name: string; description: string; permis
   },
   DOCUMENT_ENCODER: {
     name: 'Document Encoder',
-    description: 'Encodes and registers incoming/outgoing documents into the system.',
+    description:
+      'Registers documents, uploads attachments, and maintains document metadata.',
     permissions: [
       'dashboard.view',
-      'documents.view', 'documents.create', 'documents.register', 'documents.track',
+      'documents.view', 'documents.create', 'documents.edit', 'documents.register', 'documents.track',
       'notifications.view',
     ],
   },
   DOCUMENT_OFFICER: {
     name: 'Document Officer',
     description:
-      'Receives, verifies, and reviews documents. Adds actions/comments/remarks and makes recommendations.',
+      'Receives incoming documents, acknowledges receipt, reviews documents, adds actions/comments/remarks, and makes recommendations.',
     permissions: [
       'dashboard.view',
-      'documents.view', 'documents.receive', 'documents.route',
-      'documents.review', 'documents.recommend',
-      'documents.approve', 'documents.reject', 'documents.return', 'documents.release',
-      'documents.track', 'documents.archive',
+      'documents.view', 'documents.receive', 'documents.review', 'documents.recommend',
+      'documents.track',
       'notifications.view',
     ],
   },

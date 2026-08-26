@@ -23,7 +23,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
-import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
+import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import {
@@ -48,6 +48,7 @@ const DEFAULT_FILTERS = {
 
 export function OutboxPage() {
   const user = useCurrentUser();
+  const { hasPermission } = useAuth();
   const toast = useToast();
   const { items: documents } = useDocuments({ pageSize: 100 });
   const officeById = useOfficeLookup();
@@ -76,7 +77,7 @@ export function OutboxPage() {
 
   const counts = useMemo(() => {
     const inProgress = myOutbox.filter(d =>
-['registered', 'received', 'routed', 'under_review', 'recommended'].includes(d.status)
+['registered', 'received', 'routed', 'assigned', 'under_review', 'recommended'].includes(d.status)
     ).length;
     const completed = myOutbox.filter(d =>
       ['approved', 'released', 'archived'].includes(d.status)
@@ -95,7 +96,7 @@ export function OutboxPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return myOutbox.filter(d => {
-      if (tab === 'active' && !['registered', 'received', 'routed', 'under_review', 'recommended'].includes(d.status))
+      if (tab === 'active' && !['registered', 'received', 'routed', 'assigned', 'under_review', 'recommended'].includes(d.status))
         return false;
       if (tab === 'completed' && !['approved', 'released', 'archived'].includes(d.status))
         return false;
@@ -140,9 +141,11 @@ export function OutboxPage() {
         description="Documents originated, encoded, or forwarded by your office"
         actions={
           <div className="flex items-center gap-2">
-            <Link to="/documents/register">
-              <Button leftIcon={<PlusCircle className="w-4 h-4" />}>Register Document</Button>
-            </Link>
+            {hasPermission('documents.create') && (
+              <Link to="/documents/register">
+                <Button leftIcon={<PlusCircle className="w-4 h-4" />}>Register Document</Button>
+              </Link>
+            )}
             <Link to="/documents">
               <Button variant="outline">All Documents</Button>
             </Link>
@@ -257,11 +260,11 @@ export function OutboxPage() {
                   <Button variant="outline" onClick={reset}>
                     Reset filters
                   </Button>
-                ) : (
+                ) : hasPermission('documents.create') ? (
                   <Link to="/documents/register">
                     <Button leftIcon={<PlusCircle className="w-4 h-4" />}>Register Document</Button>
                   </Link>
-                )
+                ) : null
               }
             />
           }

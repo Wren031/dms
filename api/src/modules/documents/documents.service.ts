@@ -1,10 +1,11 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DocumentStatus, Prisma } from '@prisma/client';
+import { DocumentStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -12,18 +13,35 @@ import { FilterDocumentsDto } from './dto/filter-documents.dto';
 import { TransitionDocumentDto } from './dto/transition-document.dto';
 import { AssignDocumentHolderDto } from './dto/assign-document-holder.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const ALLOWED_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
-  registered: ['received', 'archived'],
-  received: ['routed', 'registered', 'archived'],
-  routed: ['under_review', 'returned', 'archived'],
-  under_review: ['recommended', 'approved', 'rejected', 'returned'],
-  recommended: ['approved', 'rejected', 'returned'],
-  approved: ['released', 'returned'],
+  registered: ['received'],
+  received: ['routed'],
+  routed: ['assigned'],
+  assigned: ['under_review'],
+  under_review: ['recommended', 'returned'],
+  recommended: ['approved', 'rejected'],
+  approved: ['released'],
   rejected: ['archived'],
-  returned: ['received', 'routed', 'under_review', 'archived'],
+  returned: ['under_review'],
   released: ['archived'],
   archived: [],
+};
+
+// Which roles may perform each status transition (SYSTEM_ADMIN is superuser).
+const TRANSITION_ROLES: Record<DocumentStatus, Role[]> = {
+  registered: [Role.SYSTEM_ADMIN, Role.DOCUMENT_ENCODER],
+  received: [Role.SYSTEM_ADMIN, Role.DOCUMENT_OFFICER],
+  routed: [Role.SYSTEM_ADMIN, Role.OFFICE_ADMIN],
+  assigned: [Role.SYSTEM_ADMIN, Role.OFFICE_ADMIN],
+  under_review: [Role.SYSTEM_ADMIN, Role.DOCUMENT_OFFICER],
+  recommended: [Role.SYSTEM_ADMIN, Role.DOCUMENT_OFFICER],
+  approved: [Role.SYSTEM_ADMIN, Role.OFFICE_ADMIN],
+  rejected: [Role.SYSTEM_ADMIN, Role.OFFICE_ADMIN],
+  returned: [Role.SYSTEM_ADMIN, Role.OFFICE_ADMIN],
+  released: [Role.SYSTEM_ADMIN, Role.OFFICE_ADMIN],
+  archived: [Role.SYSTEM_ADMIN, Role.OFFICE_ADMIN],
 };
 
 export type DocumentTypeMeta = Prisma.DocumentTypeGetPayload<Record<string, never>>;
@@ -67,7 +85,30 @@ export type DocumentTimelineEntry = Prisma.DocumentTrackingGetPayload<Record<str
 
 @Injectable()
 export class DocumentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
+
+  /**
+   * Fire-and-forget notification. Never blocks or fails the workflow.
+   */
+  private notify(
+    userId: string | null | undefined,
+    title: string,
+    message: string,
+  ): void {
+    if (!userId) return;
+    void this.notifications
+      .create({
+        userId,
+        type: 'document',
+        title,
+        message,
+        link: 'documents',
+      })
+      .catch(() => undefined);
+  }
 
   async create(dto: CreateDocumentDto, encodedById: string): Promise<unknown> {
     const encoder = await this.prisma.user.findUnique({
@@ -263,6 +304,26 @@ export class DocumentsService {
     };
   }
 
+  /**
+   * OFFICE_ADMIN may only act on documents currently held by their own office.
+   * SYSTEM_ADMIN is a superuser and bypasses this check.
+   */
+  private async assertOfficeOwnership(actorId: string, doc: { currentOfficeId: string | null }): Promise<void> {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { role: true, employee: { select: { officeId: true } } },
+    });
+    if (!actor) throw new NotFoundException('Actor not found');
+    if (actor.role === Role.OFFICE_ADMIN) {
+      const officeId = actor.employee?.officeId;
+      if (!officeId || doc.currentOfficeId !== officeId) {
+        throw new ForbiddenException(
+          'You can only manage documents assigned to your own office',
+        );
+      }
+    }
+  }
+
   async update(id: string, dto: UpdateDocumentDto): Promise<unknown> {
     return this.prisma.document.update({
       where: { id },
@@ -293,12 +354,30 @@ export class DocumentsService {
       );
     }
 
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { role: true, employee: { select: { officeId: true } } },
+    });
+    const permittedRoles = TRANSITION_ROLES[dto.toStatus] ?? [];
+    if (!actor || !permittedRoles.includes(actor.role)) {
+      throw new BadRequestException(
+        `Your role is not permitted to move documents to ${dto.toStatus}`,
+      );
+    }
+
+    await this.assertOfficeOwnership(actorId, doc);
+
+    // Receiving a document brings it into the receiver's own office.
+    const effectiveCurrentOfficeId =
+      dto.currentOfficeId ??
+      (dto.toStatus === 'received' ? actor.employee?.officeId ?? undefined : undefined);
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.document.update({
         where: { id },
         data: {
           status: dto.toStatus,
-          currentOfficeId: dto.currentOfficeId ?? doc.currentOfficeId,
+          currentOfficeId: effectiveCurrentOfficeId ?? doc.currentOfficeId,
           currentHolderId: dto.currentHolderId ?? doc.currentHolderId,
         },
       });
@@ -319,6 +398,81 @@ export class DocumentsService {
           payload: { from: doc.status, to: dto.toStatus, remarks: dto.remarks ?? null } as Prisma.InputJsonValue,
         },
       });
+
+      // Record a routing step whenever a document moves between offices so
+      // routing history / progress views have real data.
+      if (
+        effectiveCurrentOfficeId &&
+        doc.currentOfficeId &&
+        effectiveCurrentOfficeId !== doc.currentOfficeId
+      ) {
+        const last = await tx.documentRoutingStep.findFirst({
+          where: { documentId: id },
+          orderBy: { sequence: 'desc' },
+          select: { sequence: true },
+        });
+        await tx.documentRoutingStep.create({
+          data: {
+            documentId: id,
+            sequence: (last?.sequence ?? 0) + 1,
+            fromOfficeId: doc.currentOfficeId,
+            toOfficeId: effectiveCurrentOfficeId,
+            toUserId: dto.currentHolderId ?? null,
+            instructions: dto.remarks ?? null,
+            status: 'in_progress',
+          },
+        });
+        // The previous in-transit step has arrived at its destination.
+        await tx.documentRoutingStep.updateMany({
+          where: { documentId: id, status: 'in_progress', toOfficeId: doc.currentOfficeId },
+          data: { status: 'completed', completedAt: new Date() },
+        });
+      }
+
+      return updated;
+    }).then(async (updated) => {
+      // Notifications (outside the transaction; never blocks the workflow)
+      const link = 'documents';
+      const title = `${doc.trackingNumber} · ${doc.title}`;
+      switch (dto.toStatus) {
+        case 'received':
+          this.notify(doc.encodedById, 'Document received', `${title} was received by the office.`, );
+          break;
+        case 'routed':
+        case 'assigned':
+          this.notify(
+            dto.currentHolderId ?? updated.currentHolderId,
+            'Document assigned to you',
+            `${title} requires your attention.`,
+          );
+          this.notify(doc.encodedById, 'Document routed', `${title} was routed for action.`);
+          break;
+        case 'under_review':
+        case 'recommended':
+          this.notify(doc.encodedById, `Document ${dto.toStatus.replace('_', ' ')}`, `${title} is progressing through review.`);
+          break;
+        case 'approved':
+          this.notify(doc.encodedById, 'Document approved', `${title} was approved.`);
+          if (updated.currentHolderId && updated.currentHolderId !== doc.encodedById) {
+            this.notify(updated.currentHolderId, 'Document approved', `${title} was approved.`);
+          }
+          break;
+        case 'rejected':
+          this.notify(doc.encodedById, 'Document rejected', dto.remarks ? `${title} was rejected: ${dto.remarks}` : `${title} was rejected.`);
+          break;
+        case 'returned':
+          this.notify(
+            dto.currentHolderId ?? updated.currentHolderId,
+            'Document returned',
+            dto.remarks ? `${title} was returned: ${dto.remarks}` : `${title} was returned for further action.`,
+          );
+          break;
+        case 'released':
+          this.notify(doc.encodedById, 'Document released', `${title} was released.`);
+          break;
+        default:
+          break;
+      }
       return updated;
     });
   }
@@ -328,14 +482,41 @@ export class DocumentsService {
     dto: AssignDocumentHolderDto,
     actorId: string,
   ): Promise<unknown> {
+    const doc = await this.prisma.document.findUnique({ where: { id } });
+    if (!doc) throw new NotFoundException('Document not found');
+    await this.assertOfficeOwnership(actorId, doc);
+
+    // Assigning a holder moves a routed document into the assigned state.
+    const toStatus = doc.status === 'routed' ? 'assigned' : doc.status;
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.document.update({
         where: { id },
         data: {
           currentHolderId: dto.holderId,
           currentOfficeId: dto.officeId ?? undefined,
+          status: toStatus,
         },
       });
+      if (toStatus !== doc.status) {
+        await tx.documentHistory.create({
+          data: {
+            documentId: id,
+            fromStatus: doc.status,
+            toStatus,
+            actorId,
+            remarks: dto.notes ?? 'Document assigned to holder',
+          },
+        });
+        await tx.documentTracking.create({
+          data: {
+            documentId: id,
+            actorId,
+            event: 'status.transition',
+            payload: { from: doc.status, to: toStatus, remarks: dto.notes ?? null } as Prisma.InputJsonValue,
+          },
+        });
+      }
       await tx.documentTracking.create({
         data: {
           documentId: id,
@@ -344,6 +525,20 @@ export class DocumentsService {
           payload: { holderId: dto.holderId, officeId: dto.officeId ?? null, notes: dto.notes ?? null } as Prisma.InputJsonValue,
         },
       });
+      // Mark the routing step that delivered the document to this office as completed.
+      if (doc.currentOfficeId) {
+        await tx.documentRoutingStep.updateMany({
+          where: { documentId: id, status: 'in_progress', toOfficeId: doc.currentOfficeId },
+          data: { status: 'completed', completedAt: new Date() },
+        });
+      }
+      return updated;
+    }).then(async (updated) => {
+      this.notify(
+        dto.holderId,
+        'Document assigned to you',
+        `${doc.trackingNumber} · ${doc.title} requires your attention.`,
+      );
       return updated;
     });
   }

@@ -28,7 +28,7 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-
 export class DocumentArchiveController {
   constructor(private readonly archiveService: DocumentArchiveService) {}
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
   @Audit('archive.create', 'archive', 'DocumentArchive')
   @Post()
   @HttpCode(HttpStatus.CREATED)

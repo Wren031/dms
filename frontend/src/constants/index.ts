@@ -1,14 +1,15 @@
 import type { DocumentStatus, DocumentType, DocumentClassification, UserRole, Permission } from '@/types';
 
 export const ALLOWED_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
-  registered: ['received', 'archived'],
-  received: ['routed', 'registered', 'archived'],
-  routed: ['under_review', 'returned', 'archived'],
-  under_review: ['recommended', 'approved', 'rejected', 'returned'],
-  recommended: ['approved', 'rejected', 'returned'],
-  approved: ['released', 'returned'],
+  registered: ['received'],
+  received: ['routed'],
+  routed: ['assigned'],
+  assigned: ['under_review'],
+  under_review: ['recommended', 'returned'],
+  recommended: ['approved', 'rejected'],
+  approved: ['released'],
   rejected: ['archived'],
-  returned: ['received', 'routed', 'under_review', 'archived'],
+  returned: ['under_review'],
   released: ['archived'],
   archived: [],
 };
@@ -34,10 +35,12 @@ export const ROLE_SHORT_LABELS: Record<UserRole, string> = {
 
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   system_admin: 'Full system access. Manages users, offices, roles, and system configuration.',
-  office_admin: 'Manages office operations, users within an office, and document workflows.',
-  document_encoder: 'Encodes and registers incoming/outgoing documents into the system.',
+  office_admin:
+    'Manages documents and users within their authorized office, including document assignments and routing.',
+  document_encoder:
+    'Registers documents, uploads attachments, and maintains document metadata.',
   document_officer:
-    'Receives, verifies, and reviews documents. Adds actions/comments/remarks and makes recommendations.',
+    'Receives incoming documents, acknowledges receipt, reviews documents, adds actions/comments/remarks, and makes recommendations.',
 };
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -57,9 +60,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
   office_admin: [
     'dashboard.view',
-    'documents.view', 'documents.register', 'documents.receive', 'documents.route',
-    'documents.review', 'documents.recommend', 'documents.approve', 'documents.reject',
-    'documents.return', 'documents.release', 'documents.archive', 'documents.track',
+    'documents.view', 'documents.edit', 'documents.route',
+    'documents.approve', 'documents.reject', 'documents.return',
+    'documents.release', 'documents.archive', 'documents.track',
     'users.view', 'users.create', 'users.edit',
     'offices.view', 'offices.edit',
     'document_types.view', 'document_types.create', 'document_types.edit',
@@ -68,15 +71,13 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
   document_encoder: [
     'dashboard.view',
-    'documents.view', 'documents.create', 'documents.register', 'documents.track',
+    'documents.view', 'documents.create', 'documents.edit', 'documents.register', 'documents.track',
     'notifications.view',
   ],
   document_officer: [
     'dashboard.view',
-    'documents.view', 'documents.receive', 'documents.route',
-    'documents.review', 'documents.recommend',
-    'documents.approve', 'documents.reject', 'documents.return', 'documents.release',
-    'documents.track', 'documents.archive',
+    'documents.view', 'documents.receive', 'documents.review', 'documents.recommend',
+    'documents.track',
     'notifications.view',
   ],
 };
@@ -85,6 +86,7 @@ export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   registered: 'Registered',
   received: 'Received',
   routed: 'In Routing',
+  assigned: 'Assigned',
   under_review: 'Under Review',
   recommended: 'Recommended',
   approved: 'Approved',
@@ -98,6 +100,7 @@ export const DOCUMENT_STATUS_COLORS: Record<DocumentStatus, string> = {
   registered: 'bg-slate-100 text-slate-700 border-slate-200',
   received: 'bg-blue-50 text-blue-700 border-blue-200',
   routed: 'bg-amber-50 text-amber-700 border-amber-200',
+  assigned: 'bg-yellow-50 text-yellow-700 border-yellow-200',
   under_review: 'bg-purple-50 text-purple-700 border-purple-200',
   recommended: 'bg-indigo-50 text-indigo-700 border-indigo-200',
   approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -150,6 +153,7 @@ export const DOCUMENT_WORKFLOW: DocumentStatus[] = [
   'registered',
   'received',
   'routed',
+  'assigned',
   'under_review',
   'recommended',
   'approved',
@@ -161,6 +165,7 @@ export const ALL_DOCUMENT_STATUSES: DocumentStatus[] = [
   'registered',
   'received',
   'routed',
+  'assigned',
   'under_review',
   'recommended',
   'approved',

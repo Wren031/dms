@@ -37,14 +37,10 @@ export function useDocumentRouting(documentId: string | undefined): UseDocumentR
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!documentId) {
-      setSteps([]);
-      setError(null);
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
+      // No documentId => load all routing steps (used by the Routing page).
       const data = (await routingService.listSteps(documentId)) as RoutingStep[];
       setSteps([...data].sort((a, b) => a.sequence - b.sequence));
     } catch (err) {

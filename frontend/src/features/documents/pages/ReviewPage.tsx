@@ -49,7 +49,10 @@ export function ReviewPage() {
   } | null>(null);
   const [remarks, setRemarks] = useState('');
 
-  const forReview = useMemo(() => documents.filter(d => d.status === 'under_review'), [documents]);
+  const forReview = useMemo(
+    () => documents.filter(d => d.status === 'assigned' || d.status === 'under_review'),
+    [documents],
+  );
   const recommended = useMemo(() => documents.filter(d => d.status === 'recommended'), [documents]);
   const returned = useMemo(() => documents.filter(d => d.status === 'returned'), [documents]);
   const completed = useMemo(() => documents.filter(d => d.status === 'approved' || d.status === 'rejected'), [documents]);
@@ -72,6 +75,18 @@ export function ReviewPage() {
   const handleAction = (docId: string, action: 'recommend' | 'approve' | 'reject' | 'return') => {
     setActionModal({ docId, action });
     setRemarks('');
+  };
+
+  const startReview = async (docId: string) => {
+    const updated = await transition.transition(docId, {
+      toStatus: 'under_review',
+      remarks: 'Review started',
+    });
+    if (updated) {
+      toast.success('Review started', 'Document is now under review.');
+    } else if (transition.error) {
+      toast.error('Action failed', transition.error);
+    }
   };
 
   const submitAction = async () => {
@@ -226,6 +241,15 @@ export function ReviewPage() {
               align: 'right',
               cell: d => (
                 <div className="flex items-center justify-end gap-1">
+                  {d.status === 'assigned' && (
+                    <Button
+                      size="sm"
+                      onClick={() => startReview(d.id)}
+                      leftIcon={<ClipboardCheck className="w-3 h-3" />}
+                    >
+                      Start Review
+                    </Button>
+                  )}
                   {(d.status === 'under_review' || d.status === 'recommended') && (
                     <>
                       {d.status === 'under_review' && (

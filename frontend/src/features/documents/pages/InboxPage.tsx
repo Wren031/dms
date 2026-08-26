@@ -54,7 +54,7 @@ export function InboxPage() {
 
   const counts = useMemo(() => {
     return {
-      pending: myInbox.filter(d => ['received', 'routed'].includes(d.status)).length,
+      pending: myInbox.filter(d => ['received', 'routed', 'assigned'].includes(d.status)).length,
       reviewing: myInbox.filter(d => ['under_review', 'recommended'].includes(d.status)).length,
       completed: myInbox.filter(d => ['approved', 'released', 'archived'].includes(d.status)).length,
       all: myInbox.length,
@@ -64,7 +64,7 @@ export function InboxPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return myInbox.filter(d => {
-      if (tab === 'pending' && !['received', 'routed'].includes(d.status)) return false;
+      if (tab === 'pending' && !['received', 'routed', 'assigned'].includes(d.status)) return false;
       if (tab === 'reviewing' && !['under_review', 'recommended'].includes(d.status)) return false;
       if (tab === 'completed' && !['approved', 'released', 'archived'].includes(d.status)) return false;
       if (priorityFilter !== 'all' && d.priority !== priorityFilter) return false;

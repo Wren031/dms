@@ -81,6 +81,7 @@ export type DocumentStatus =
   | 'registered'
   | 'received'
   | 'routed'
+  | 'assigned'
   | 'under_review'
   | 'recommended'
   | 'approved'

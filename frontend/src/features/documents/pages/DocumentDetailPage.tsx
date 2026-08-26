@@ -44,12 +44,12 @@ import {
   canTransition,
 } from '@/constants';
 import { formatDate, formatRelative, cn } from '@/lib/utils';
-import { attachmentsService } from '@/features/documents/services/documents.service';
+import { attachmentsService, documentsService } from '@/features/documents/services/documents.service';
 import { useDocumentHistory } from '@/features/documents/hooks/useDocumentHistory';
 import { useDocumentTimeline } from '@/features/documents/hooks/useDocumentTimeline';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
 import { useDocumentDetail } from '@/features/documents/hooks/useDocumentDetail';
-import type { DocumentStatus } from '@/types';
+import type { DocumentStatus, Permission } from '@/types';
 import { DocumentJourneyView } from '@/features/documents/components/DocumentJourneyView';
 import type { DocumentDetail } from '@/features/documents/types/document';
 
@@ -65,7 +65,7 @@ const ACTION_STATUS_MAP: Record<ActionType, DocumentStatus> = {
   archive: 'archived',
 };
 
-const ACTION_PERMISSION: Record<ActionType, string> = {
+const ACTION_PERMISSION: Record<ActionType, Permission> = {
   receive: 'documents.receive',
   recommend: 'documents.recommend',
   approve: 'documents.approve',
@@ -147,6 +147,10 @@ export function DocumentDetailPage() {
   const [routeUser, setRouteUser] = useState('');
   const [routeInstructions, setRouteInstructions] = useState('');
   const [routeModal, setRouteModal] = useState(false);
+  const [assignModal, setAssignModal] = useState(false);
+  const [assignUserId, setAssignUserId] = useState('');
+  const [assignNotes, setAssignNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   if (documentLoading || officesLoading) {
     return <div className="py-20 text-center text-sm text-slate-500">Loading document…</div>;
@@ -191,8 +195,10 @@ export function DocumentDetailPage() {
       ? (['receive'] as ActionType[])
       : []),
     ...(doc.status === 'under_review' || doc.status === 'recommended'
-      ? (['recommend', 'approve', 'return', 'reject'] as ActionType[]).filter(action =>
-          canTransition(doc.status, ACTION_STATUS_MAP[action]),
+      ? (['recommend', 'approve', 'return', 'reject'] as ActionType[]).filter(
+          action =>
+            hasPermission(ACTION_PERMISSION[action]) &&
+            canTransition(doc.status, ACTION_STATUS_MAP[action]),
         )
       : []),
   ];
@@ -213,6 +219,11 @@ export function DocumentDetailPage() {
   }
   const canRoute =
     hasPermission('documents.route') && canTransition(doc.status, 'routed');
+  const canAssign =
+    doc.status === 'routed' && hasPermission('documents.route');
+  const canStartReview =
+    (doc.status === 'assigned' || doc.status === 'returned') &&
+    hasPermission('documents.review');
   const canDownload = doc.attachments.length > 0;
   const legacyDocument = doc as unknown as import('@/types').Document;
   const legacyRouting = doc.routingSteps.map(step => ({
@@ -319,6 +330,51 @@ export function DocumentDetailPage() {
     ? routingUsers.filter(u => u.officeId === routeOffice)
     : [];
 
+  const currentOfficeUsers = routingUsers.filter(u => u.officeId === doc.currentOfficeId);
+
+  const startReview = async () => {
+    setSubmitting(true);
+    const updated = await transition.transition(doc.id, {
+      toStatus: 'under_review',
+      remarks: 'Review started',
+    });
+    setSubmitting(false);
+    if (!updated) {
+      toast.error('Action failed', transition.error ?? 'Please retry.');
+      return;
+    }
+    await refresh();
+    toast.success('Review started', 'Document is now under review.');
+  };
+
+  const submitAssign = async () => {
+    if (!assignUserId) {
+      toast.error('Select a holder', 'Please choose the person to assign this document to.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await documentsService.assignHolder(doc.id, {
+        holderId: assignUserId,
+        officeId: doc.currentOfficeId ?? undefined,
+        notes: assignNotes.trim() || 'Document assigned to holder',
+      });
+      window.dispatchEvent(new Event('documents:invalidate'));
+      await refresh();
+      toast.success(
+        'Document assigned',
+        `Assigned to ${routingUsers.find(u => u.id === assignUserId)?.fullName ?? 'holder'}.`,
+      );
+      setAssignModal(false);
+      setAssignUserId('');
+      setAssignNotes('');
+    } catch (err) {
+      toast.error('Assignment failed', err instanceof Error ? err.message : 'Please retry.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Link
@@ -353,8 +409,12 @@ export function DocumentDetailPage() {
             decisionActions={decisionActions}
             terminalActions={terminalActions}
             canRoute={canRoute}
+            canAssign={canAssign}
+            canStartReview={canStartReview}
             onAction={openAction}
             onRoute={() => setRouteModal(true)}
+            onAssign={() => setAssignModal(true)}
+            onStartReview={startReview}
           />
           <DocumentInfoSidebar
             document={doc}
@@ -482,6 +542,51 @@ export function DocumentDetailPage() {
             value={routeInstructions}
             onChange={e => setRouteInstructions(e.target.value)}
             placeholder="Provide instructions for the receiving office…"
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        open={assignModal}
+        onClose={() => setAssignModal(false)}
+        title="Assign Document"
+        description="Assign this document to a holder in your office"
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setAssignModal(false)}>
+              Cancel
+            </Button>
+            <Button leftIcon={<Inbox className="w-4 h-4" />} onClick={submitAssign} disabled={submitting}>
+              {submitting ? 'Assigning…' : 'Assign Document'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
+            <p className="text-xs text-slate-500">Document</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {doc.trackingNumber} · {doc.title}
+            </p>
+          </div>
+          <Select
+            label="Assign To"
+            required
+            placeholder="Choose holder…"
+            value={assignUserId}
+            onChange={e => setAssignUserId(e.target.value)}
+            options={currentOfficeUsers.map(u => ({
+              value: u.id,
+              label: u.position ? `${u.fullName} (${u.position})` : u.fullName,
+            }))}
+          />
+          <Textarea
+            label="Assignment Notes"
+            rows={3}
+            value={assignNotes}
+            onChange={e => setAssignNotes(e.target.value)}
+            placeholder="Optional instructions for the assigned holder…"
           />
         </div>
       </Modal>
@@ -648,19 +753,28 @@ interface DocumentActionsProps {
   decisionActions: ActionType[];
   terminalActions: ActionType[];
   canRoute: boolean;
+  canAssign: boolean;
+  canStartReview: boolean;
   onAction: (action: ActionType) => void;
   onRoute: () => void;
+  onAssign: () => void;
+  onStartReview: () => void;
 }
 
 function DocumentActions({
   decisionActions,
   terminalActions,
   canRoute,
+  canAssign,
+  canStartReview,
   onAction,
   onRoute,
+  onAssign,
+  onStartReview,
 }: DocumentActionsProps) {
   const [open, setOpen] = useState(true);
-  const hasAny = decisionActions.length > 0 || terminalActions.length > 0 || canRoute;
+  const hasAny =
+    decisionActions.length > 0 || terminalActions.length > 0 || canRoute || canAssign || canStartReview;
   if (!hasAny) {
     return (
       <Card>
@@ -716,20 +830,46 @@ function DocumentActions({
               </div>
             </div>
           )}
-          {canRoute && (
+          {(canRoute || canAssign || canStartReview) && (
             <div>
               <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
                 Workflow
               </p>
-              <Button
-                variant="outline"
-                size="sm"
-                leftIcon={<Send className="w-3.5 h-3.5" />}
-                onClick={onRoute}
-                fullWidth
-              >
-                Route to another office
-              </Button>
+              <div className="space-y-2">
+                {canAssign && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<Inbox className="w-3.5 h-3.5" />}
+                    onClick={onAssign}
+                    fullWidth
+                  >
+                    Assign to holder
+                  </Button>
+                )}
+                {canStartReview && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<Eye className="w-3.5 h-3.5" />}
+                    onClick={onStartReview}
+                    fullWidth
+                  >
+                    Start review
+                  </Button>
+                )}
+                {canRoute && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<Send className="w-3.5 h-3.5" />}
+                    onClick={onRoute}
+                    fullWidth
+                  >
+                    Route to another office
+                  </Button>
+                )}
+              </div>
             </div>
           )}
           {terminalActions.length > 0 && (

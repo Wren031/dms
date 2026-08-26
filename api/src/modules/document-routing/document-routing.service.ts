@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateRoutingPlanDto } from './dto/create-routing-plan.dto';
 import { UpdateRoutingStepDto, AdvanceRoutingStepDto } from './dto/update-routing-step.dto';
@@ -8,9 +8,36 @@ import { FilterRoutingStepsDto } from './dto/filter-routing-steps.dto';
 export class DocumentRoutingService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createPlan(documentId: string, dto: CreateRoutingPlanDto): Promise<unknown> {
+  /**
+   * OFFICE_ADMIN may only route documents currently held by their own office.
+   * SYSTEM_ADMIN is a superuser and bypasses this check.
+   */
+  private async assertOfficeOwnership(actorId: string, documentId: string): Promise<void> {
+    const [actor, doc] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: actorId },
+        select: { role: true, employee: { select: { officeId: true } } },
+      }),
+      this.prisma.document.findUnique({
+        where: { id: documentId },
+        select: { currentOfficeId: true },
+      }),
+    ]);
+    if (!actor) throw new NotFoundException('Actor not found');
+    if (actor.role === 'OFFICE_ADMIN') {
+      const officeId = actor.employee?.officeId;
+      if (!officeId || !doc || doc.currentOfficeId !== officeId) {
+        throw new ForbiddenException(
+          'You can only route documents assigned to your own office',
+        );
+      }
+    }
+  }
+
+  async createPlan(documentId: string, dto: CreateRoutingPlanDto, actorId: string): Promise<unknown> {
     const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
     if (!doc) throw new NotFoundException('Document not found');
+    await this.assertOfficeOwnership(actorId, documentId);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.documentRoutingStep.deleteMany({ where: { documentId } });
@@ -41,13 +68,17 @@ export class DocumentRoutingService {
     return this.prisma.documentRoutingStep.findUniqueOrThrow({ where: { id } });
   }
 
-  update(id: string, dto: UpdateRoutingStepDto): Promise<unknown> {
+  async update(id: string, dto: UpdateRoutingStepDto, actorId: string): Promise<unknown> {
+    const step = await this.prisma.documentRoutingStep.findUnique({ where: { id } });
+    if (!step) throw new NotFoundException('Routing step not found');
+    await this.assertOfficeOwnership(actorId, step.documentId);
     return this.prisma.documentRoutingStep.update({ where: { id }, data: dto });
   }
 
   async advance(id: string, dto: AdvanceRoutingStepDto, actorId: string): Promise<unknown> {
     const step = await this.prisma.documentRoutingStep.findUnique({ where: { id } });
     if (!step) throw new NotFoundException('Routing step not found');
+    await this.assertOfficeOwnership(actorId, step.documentId);
 
     const now = new Date();
     const data: Record<string, unknown> = {
@@ -76,6 +107,10 @@ export class DocumentRoutingService {
       });
       // If completing the last pending step, advance document status to 'routed'
       if (dto.status === 'completed') {
+        const current = await tx.document.findUnique({
+          where: { id: step.documentId },
+          select: { status: true },
+        });
         await tx.document.update({
           where: { id: step.documentId },
           data: { status: 'routed', currentOfficeId: step.toOfficeId, currentHolderId: step.toUserId ?? null },
@@ -83,7 +118,7 @@ export class DocumentRoutingService {
         await tx.documentHistory.create({
           data: {
             documentId: step.documentId,
-            fromStatus: 'received',
+            fromStatus: current?.status ?? null,
             toStatus: 'routed',
             actorId,
             remarks: `Routing step ${step.sequence} completed`,
@@ -94,7 +129,10 @@ export class DocumentRoutingService {
     });
   }
 
-  remove(id: string): Promise<unknown> {
+  async remove(id: string, actorId: string): Promise<unknown> {
+    const step = await this.prisma.documentRoutingStep.findUnique({ where: { id } });
+    if (!step) throw new NotFoundException('Routing step not found');
+    await this.assertOfficeOwnership(actorId, step.documentId);
     return this.prisma.documentRoutingStep.delete({ where: { id } });
   }
 }

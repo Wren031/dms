@@ -66,7 +66,7 @@ export const navigation: NavItem[] = [
     to: '/routing',
     icon: 'Send',
     section: 'workspace',
-    roles: ['system_admin', 'office_admin', 'document_officer'],
+    roles: ['system_admin', 'office_admin'],
   },
   {
     id: 'review',

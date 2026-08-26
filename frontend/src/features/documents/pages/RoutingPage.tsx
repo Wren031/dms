@@ -25,7 +25,8 @@ import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
-import { useDocumentRouting } from '@/features/documents/hooks/useDocumentRouting';
+import { useDocumentRouting, type RoutingStep } from '@/features/documents/hooks/useDocumentRouting';
+import { documentsService } from '@/features/documents/services/documents.service';
 import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
 import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
@@ -34,8 +35,9 @@ import { formatDate, formatRelative } from '@/lib/utils';
 
 export function RoutingPage() {
   const toast = useToast();
-  const { items: documents } = useDocuments({ status: 'routed', pageSize: 100 });
-  const { steps: routingSteps, loading: routingLoading } = useDocumentRouting(undefined);
+  const { items: documents, refresh: refreshDocuments } = useDocuments({ status: 'received', pageSize: 100 });
+  const { items: routedDocs } = useDocuments({ status: 'routed', pageSize: 100 });
+  const { steps: routingSteps, loading: routingLoading, refresh: refreshSteps } = useDocumentRouting(undefined);
   const { offices } = useOffices();
   const { users: routingUsers } = useRoutingOptions();
   const officeById = useOfficeLookup();
@@ -45,6 +47,7 @@ export function RoutingPage() {
   const [targetOffice, setTargetOffice] = useState('');
   const [targetUser, setTargetUser] = useState('');
   const [instructions, setInstructions] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const pendingRoutes = useMemo(() => {
     return routingSteps.filter(r => r.status === 'pending' || r.status === 'in_progress');
@@ -54,32 +57,49 @@ export function RoutingPage() {
   }, [routingSteps]);
 
   const counts = {
-    pending: pendingRoutes.length,
+    pending: documents.length,
     completed: completedRoutes.length,
   };
 
-  const list = tab === 'pending' ? pendingRoutes : completedRoutes;
+  const list = tab === 'pending' ? documents : completedRoutes;
 
   const pagination = usePagination({ totalItems: list.length, initialPageSize: 10 });
   const paged = list.slice(pagination.start, pagination.end);
 
-  const handleRoute = (stepId: string) => {
-    setRouteModal(stepId);
+  const handleRoute = (docId: string) => {
+    setRouteModal(docId);
     setTargetOffice('');
     setTargetUser('');
     setInstructions('');
   };
 
-  const submitRoute = () => {
+  const submitRoute = async () => {
+    if (!routeModal) return;
     if (!targetOffice) {
       toast.error('Select target office', 'Please choose an office to route this document to.');
       return;
     }
-    toast.success(
-      'Routing queued',
-      `Document will be forwarded to ${officeById(targetOffice)?.code ?? targetOffice}. Use POST /document-routing/document/:id/plan to persist.`,
-    );
-    setRouteModal(null);
+    setSubmitting(true);
+    try {
+      await documentsService.transition(routeModal, {
+        toStatus: 'routed',
+        currentOfficeId: targetOffice,
+        currentHolderId: targetUser || undefined,
+        remarks: instructions.trim() || 'Forwarded for action',
+      });
+      window.dispatchEvent(new Event('documents:invalidate'));
+      await Promise.all([refreshDocuments(), refreshSteps()]);
+      toast.success(
+        'Document routed',
+        `Forwarded to ${officeById(targetOffice)?.code ?? targetOffice}.`,
+      );
+      setRouteModal(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Please retry.';
+      toast.error('Routing failed', message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const targetUsers = routingUsers.filter(u => u.officeId === targetOffice);
@@ -145,119 +165,167 @@ export function RoutingPage() {
           />
         </div>
 
-        <Table
-          data={paged}
-          keyExtractor={r => r.id}
-          emptyState={
-            <EmptyState
-              icon={<Send className="w-7 h-7" />}
-              title="No routing tasks"
-              description="All documents are properly routed."
-            />
-          }
-          columns={[
-            {
-              key: 'document',
-              header: 'Document',
-              cell: r => {
-                const doc = documents.find(d => d.id === r.documentId);
-                if (!doc) return <span>—</span>;
-                return (
+        {tab === 'pending' ? (
+          <Table
+            data={paged as typeof documents}
+            keyExtractor={d => d.id}
+            emptyState={
+              <EmptyState
+                icon={<Send className="w-7 h-7" />}
+                title="No documents to route"
+                description="Received documents will appear here for routing."
+              />
+            }
+            columns={[
+              {
+                key: 'document',
+                header: 'Document',
+                cell: d => (
                   <div>
-                    <Link to={`/documents/${doc.id}`} className="font-medium text-slate-900 hover:text-brand-700">
-                      {doc.title}
+                    <Link to={`/documents/${d.id}`} className="font-medium text-slate-900 hover:text-brand-700">
+                      {d.title}
                     </Link>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="font-mono text-[11px] text-slate-500">{doc.trackingNumber}</span>
-                      <Badge variant="slate" size="sm">{DOCUMENT_TYPE_LABELS[doc.type]}</Badge>
+                      <span className="font-mono text-[11px] text-slate-500">{d.trackingNumber}</span>
+                      <Badge variant="slate" size="sm">{DOCUMENT_TYPE_LABELS[d.type]}</Badge>
                     </div>
                   </div>
-                );
+                ),
               },
-            },
-            {
-              key: 'route',
-              header: 'Route',
-              cell: r => {
-                const from = officeById(r.fromOfficeId);
-                const to = officeById(r.toOfficeId);
-                return (
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="font-mono text-slate-700">{from?.code}</span>
-                    <ArrowRight className="w-3 h-3 text-slate-400" />
-                    <span className="font-mono text-slate-900 font-semibold">{to?.code}</span>
-                  </div>
-                );
+              {
+                key: 'status',
+                header: 'Status',
+                width: '140px',
+                cell: d => <Tag variant="blue">{DOCUMENT_STATUS_LABELS[d.status]}</Tag>,
               },
-            },
-            {
-              key: 'sequence',
-              header: 'Step',
-              width: '70px',
-              cell: r => (
-                <div className="flex items-center gap-1.5">
-                  <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-xs font-semibold">
-                    {r.sequence}
-                  </div>
-                </div>
-              ),
-            },
-            {
-              key: 'instructions',
-              header: 'Instructions',
-              cell: r => (
-                <p className="text-xs text-slate-600 max-w-xs truncate">{r.instructions}</p>
-              ),
-            },
-            {
-              key: 'assignee',
-              header: 'Assigned To',
-              width: '180px',
-              cell: r => {
-                const u = r.toUserId ? userById(r.toUserId) : null;
-                if (!u) return <span className="text-xs text-slate-400">Unassigned</span>;
-                return (
-                  <div className="flex items-center gap-1.5">
-                    <Avatar name={u.fullName} color={u.avatarColor} size="sm" />
-                    <span className="text-xs text-slate-700 truncate">{u.fullName}</span>
-                  </div>
-                );
+              {
+                key: 'createdAt',
+                header: 'Received',
+                width: '160px',
+                cell: d => <span className="text-xs text-slate-600">{formatDate(d.createdAt)}</span>,
               },
-            },
-            {
-              key: 'status',
-              header: 'Status',
-              width: '130px',
-              cell: r => (
-                <Tag variant={
-                  r.status === 'completed' ? 'emerald' :
-                  r.status === 'in_progress' ? 'amber' :
-                  r.status === 'returned' ? 'rose' :
-                  'slate'
-                }>
-                  {r.status.replace('_', ' ')}
-                </Tag>
-              ),
-            },
-            {
-              key: 'actions',
-              header: '',
-              width: '120px',
-              align: 'right',
-              cell: r => (
-                r.status === 'pending' || r.status === 'in_progress' ? (
-                  <Button size="sm" variant="outline" onClick={() => handleRoute(r.id)} leftIcon={<Send className="w-3.5 h-3.5" />}>
+              {
+                key: 'actions',
+                header: '',
+                width: '120px',
+                align: 'right',
+                cell: d => (
+                  <Button size="sm" variant="outline" onClick={() => handleRoute(d.id)} leftIcon={<Send className="w-3.5 h-3.5" />}>
                     Route
                   </Button>
-                ) : (
+                ),
+              },
+            ]}
+          />
+        ) : (
+          <Table
+            data={paged as unknown as RoutingStep[]}
+            keyExtractor={r => r.id}
+            emptyState={
+              <EmptyState
+                icon={<CheckCircle2 className="w-7 h-7" />}
+                title="No routing history"
+                description="Completed routing steps will appear here."
+              />
+            }
+            columns={[
+              {
+                key: 'document',
+                header: 'Document',
+                cell: r => {
+                  const doc = routedDocs.find(d => d.id === r.documentId);
+                  if (!doc) return <span>—</span>;
+                  return (
+                    <div>
+                      <Link to={`/documents/${doc.id}`} className="font-medium text-slate-900 hover:text-brand-700">
+                        {doc.title}
+                      </Link>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="font-mono text-[11px] text-slate-500">{doc.trackingNumber}</span>
+                        <Badge variant="slate" size="sm">{DOCUMENT_TYPE_LABELS[doc.type]}</Badge>
+                      </div>
+                    </div>
+                  );
+                },
+              },
+              {
+                key: 'route',
+                header: 'Route',
+                cell: r => {
+                  const from = officeById(r.fromOfficeId);
+                  const to = officeById(r.toOfficeId);
+                  return (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-mono text-slate-700">{from?.code}</span>
+                      <ArrowRight className="w-3 h-3 text-slate-400" />
+                      <span className="font-mono text-slate-900 font-semibold">{to?.code}</span>
+                    </div>
+                  );
+                },
+              },
+              {
+                key: 'sequence',
+                header: 'Step',
+                width: '70px',
+                cell: r => (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-xs font-semibold">
+                      {r.sequence}
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'instructions',
+                header: 'Instructions',
+                cell: r => (
+                  <p className="text-xs text-slate-600 max-w-xs truncate">{r.instructions}</p>
+                ),
+              },
+              {
+                key: 'assignee',
+                header: 'Assigned To',
+                width: '180px',
+                cell: r => {
+                  const u = r.toUserId ? userById(r.toUserId) : null;
+                  if (!u) return <span className="text-xs text-slate-400">Unassigned</span>;
+                  return (
+                    <div className="flex items-center gap-1.5">
+                      <Avatar name={u.fullName} color={u.avatarColor} size="sm" />
+                      <span className="text-xs text-slate-700 truncate">{u.fullName}</span>
+                    </div>
+                  );
+                },
+              },
+              {
+                key: 'status',
+                header: 'Status',
+                width: '130px',
+                cell: r => (
+                  <Tag variant={
+                    r.status === 'completed' ? 'emerald' :
+                    r.status === 'in_progress' ? 'amber' :
+                    r.status === 'returned' ? 'rose' :
+                    'slate'
+                  }>
+                    {r.status.replace('_', ' ')}
+                  </Tag>
+                ),
+              },
+              {
+                key: 'actions',
+                header: '',
+                width: '120px',
+                align: 'right',
+                cell: r => (
                   <Link to={`/documents/${r.documentId}`}>
                     <Button size="sm" variant="ghost">View</Button>
                   </Link>
-                )
-              ),
-            },
-          ]}
-        />
+                ),
+              },
+            ]}
+          />
+        )}
 
         <div className="px-4 py-3 border-t border-slate-200">
           <Pagination
@@ -282,23 +350,22 @@ export function RoutingPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setRouteModal(null)}>Cancel</Button>
-            <Button leftIcon={<Send className="w-4 h-4" />} onClick={submitRoute}>
-              Send Route
+            <Button leftIcon={<Send className="w-4 h-4" />} onClick={submitRoute} disabled={submitting}>
+              {submitting ? 'Sending…' : 'Send Route'}
             </Button>
           </>
         }
       >
         <div className="space-y-3">
           {routeModal && (() => {
-            const step = routingSteps.find(r => r.id === routeModal);
-            if (!step) return null;
-            const doc = documents.find(d => d.id === step.documentId);
-            return doc ? (
+            const doc = documents.find(d => d.id === routeModal);
+            if (!doc) return null;
+            return (
               <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
                 <p className="text-xs text-slate-500">Document</p>
                 <p className="text-sm font-semibold text-slate-900">{doc.trackingNumber} · {doc.title}</p>
               </div>
-            ) : null;
+            );
           })()}
           <Select
             label="Target Office"

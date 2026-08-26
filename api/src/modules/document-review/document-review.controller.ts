@@ -28,7 +28,7 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-
 export class DocumentReviewController {
   constructor(private readonly reviewService: DocumentReviewService) {}
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.DOCUMENT_OFFICER)
   @Audit('review.create', 'review', 'DocumentReview')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -46,7 +46,7 @@ export class DocumentReviewController {
     return this.reviewService.findOne(id);
   }
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.DOCUMENT_OFFICER)
   @Patch(':id')
   @Audit('review.update', 'review', 'DocumentReview')
   update(

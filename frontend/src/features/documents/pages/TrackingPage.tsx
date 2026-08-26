@@ -32,6 +32,7 @@ import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import {
   ALL_DOCUMENT_STATUSES,
   DOCUMENT_STATUS_LABELS,
+  DOCUMENT_WORKFLOW,
 } from '@/constants';
 import { formatRelative, cn } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
@@ -71,11 +72,11 @@ export function TrackingPage() {
         if (p !== 0) return p;
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-  }, [search, statusFilter]);
+  }, [documents, search, statusFilter]);
 
   const stats = useMemo(() => {
     const active = documents.filter(d =>
-      ['registered', 'received', 'routed', 'under_review', 'recommended'].includes(d.status)
+      ['registered', 'received', 'routed', 'assigned', 'under_review', 'recommended'].includes(d.status)
     ).length;
     const completed = documents.filter(d => d.status === 'released' || d.status === 'archived').length;
     const overdue = documents.filter(d => {
@@ -85,7 +86,7 @@ export function TrackingPage() {
     }).length;
     const inMyQueue = documents.filter(d => d.currentHolderId).length;
     return { active, completed, overdue, inMyQueue };
-  }, []);
+  }, [documents]);
 
   const hasActiveFilters =
     search !== DEFAULT_FILTERS.search || statusFilter !== DEFAULT_FILTERS.status;
@@ -197,8 +198,9 @@ function StatTile({ label, value, icon }: { label: string; value: number; icon: 
 }
 
 function DocumentTracker({ doc }: { doc: DocumentListItem }) {
+  const officeById = useOfficeLookup();
+  const userById = useUserLookup();
   const { steps } = useDocumentRouting(doc.id);
-
   const office = officeById(doc.currentOfficeId);
   const holder = doc.currentHolderId ? userById(doc.currentHolderId) : null;
   const completedSteps = steps.filter(s => s.status === 'completed').length;
@@ -245,7 +247,7 @@ function DocumentTracker({ doc }: { doc: DocumentListItem }) {
               icon={<UserIcon className="w-3.5 h-3.5" />}
               label="Holder"
               value={holder?.fullName}
-              sub={holder?.position}
+              sub={holder?.position ?? undefined}
               avatar={holder ? { name: holder.fullName, color: holder.avatarColor } : undefined}
             />
             <Field
@@ -351,7 +353,40 @@ function DocumentTracker({ doc }: { doc: DocumentListItem }) {
               </ol>
             </>
           ) : (
-            <div className="text-xs text-slate-500 italic">No routing steps recorded yet.</div>
+            (() => {
+              // Fallback: show workflow-stage progress for documents that
+              // have not travelled between offices yet.
+              const idx = DOCUMENT_WORKFLOW.indexOf(doc.status);
+              if (idx < 0) {
+                return <div className="text-xs text-slate-500 italic">No routing steps recorded yet.</div>;
+              }
+              const progress = Math.round(((idx + 1) / DOCUMENT_WORKFLOW.length) * 100);
+              return (
+                <>
+                  <div className="flex items-center justify-between text-[11px] mb-2">
+                    <span className="font-semibold uppercase tracking-wider text-slate-500">
+                      Workflow Progress
+                    </span>
+                    <span className="tabular-nums">
+                      <span className="font-semibold text-slate-900">{idx + 1}</span>
+                      <span className="text-slate-400"> / {DOCUMENT_WORKFLOW.length}</span>
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-4">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all',
+                        doc.status === 'archived' ? 'bg-emerald-500' : 'bg-brand-500'
+                      )}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 italic">
+                    Currently at stage: {DOCUMENT_STATUS_LABELS[doc.status]}
+                  </p>
+                </>
+              );
+            })()
           )}
         </div>
       </div>

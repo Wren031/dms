@@ -231,8 +231,9 @@ export const documentsService = {
 };
 
 export const routingService = {
-  listSteps(documentId: string): Promise<unknown[]> {
-    return request<unknown[]>(`/document-routing?documentId=${documentId}`);
+  listSteps(documentId?: string): Promise<unknown[]> {
+    const query = documentId ? `?documentId=${documentId}` : '';
+    return request<unknown[]>(`/document-routing${query}`);
   },
 };
 

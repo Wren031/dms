@@ -287,6 +287,7 @@ export function DocumentRegistrationPage() {
       originatingOfficeId: form.originatingOfficeId,
       currentOfficeId: user.officeId,
       currentHolderId: form.assignedUserId || user.id,
+      receivedById: user.id,
       dateReceived: form.dateReceived || undefined,
       dueDate: form.dueDate || undefined,
       tags,

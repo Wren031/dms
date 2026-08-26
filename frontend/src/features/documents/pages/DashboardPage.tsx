@@ -17,7 +17,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { StatusBadge, PriorityBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
-import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
+import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useToast } from '@/hooks/useToast';
 import { useOfficeLookup } from '@/hooks/useLookups';
@@ -30,10 +30,11 @@ import type { DocumentStatus } from '@/types';
 
 const PENDING_STATUSES = new Set<DocumentStatus>([
   'registered',
-  'received',
-  'routed',
-  'under_review',
-  'recommended',
+    'received',
+    'routed',
+    'assigned',
+    'under_review',
+    'recommended',
   'approved',
   'released',
   'returned',
@@ -44,6 +45,7 @@ function getActionForStatus(status: DocumentStatus): string | null {
     case 'registered': return 'Receive & log';
     case 'received': return 'Classify & assign';
     case 'routed': return 'Route to office';
+    case 'assigned': return 'Begin review';
     case 'under_review': return 'Review & recommend';
     case 'recommended': return 'Approve / Reject / Return';
     case 'approved': return 'Release';
@@ -60,6 +62,7 @@ function getActionToneForStatus(status: DocumentStatus): 'slate' | 'amber' {
 
 export function DashboardPage() {
   const user = useCurrentUser();
+  const { hasPermission } = useAuth();
   const toast = useToast();
   const { items: documents, loading, error } = useDocuments({ pageSize: 100 });
   const officeById = useOfficeLookup();
@@ -71,7 +74,7 @@ export function DashboardPage() {
   const stats = useMemo(() => {
     const total = documents.length;
     const inProgress = documents.filter(d =>
-      ['registered', 'received', 'routed', 'under_review', 'recommended'].includes(d.status)
+      ['registered', 'received', 'routed', 'assigned', 'under_review', 'recommended'].includes(d.status)
     ).length;
     const completed = documents.filter(d => d.status === 'released' || d.status === 'archived').length;
     const overdue = documents.filter(d => {
@@ -106,7 +109,7 @@ export function DashboardPage() {
 
   const statusDistribution = useMemo(() => {
     const counts: Record<DocumentStatus, number> = {
-      registered: 0, received: 0, routed: 0, under_review: 0, recommended: 0,
+      registered: 0, received: 0, routed: 0, assigned: 0, under_review: 0, recommended: 0,
       approved: 0, rejected: 0, returned: 0, released: 0, archived: 0,
     };
     documents.forEach(d => { counts[d.status as DocumentStatus]++; });
@@ -115,7 +118,12 @@ export function DashboardPage() {
 
   const activeStatuses = useMemo(() => {
     const active: DocumentStatus[] = [
-'registered', 'received', 'routed', 'under_review', 'recommended', 'approved',
+'registered',
+    'received',
+    'routed',
+    'assigned',
+    'under_review',
+    'recommended', 'approved',
     ];
     return active.map(s => ({ status: s, count: statusDistribution[s] }));
   }, [statusDistribution]);
@@ -128,7 +136,12 @@ export function DashboardPage() {
   const completionRate = stats.total === 0 ? 0 : Math.round((completedCount / stats.total) * 100);
 
   const workflowSteps = [
-    'registered', 'received', 'routed', 'under_review', 'recommended', 'approved', 'released', 'archived',
+    'registered',
+    'received',
+    'routed',
+    'assigned',
+    'under_review',
+    'recommended', 'approved', 'released', 'archived',
   ] as const;
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -145,7 +158,7 @@ export function DashboardPage() {
                 View All Documents
               </Button>
             </Link>
-            {user.role !== 'document_officer' && (
+            {hasPermission('documents.create') && (
               <Link to="/documents/register">
                 <Button variant="primary" leftIcon={<FilePlus className="w-4 h-4" />}>
                   Register Document

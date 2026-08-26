@@ -28,7 +28,7 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-
 export class DocumentReleaseController {
   constructor(private readonly releaseService: DocumentReleaseService) {}
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
   @Audit('release.create', 'release', 'DocumentRelease')
   @Post()
   @HttpCode(HttpStatus.CREATED)

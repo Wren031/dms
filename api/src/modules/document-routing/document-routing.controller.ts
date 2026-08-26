@@ -31,15 +31,17 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-
 export class DocumentRoutingController {
   constructor(private readonly routingService: DocumentRoutingService) {}
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
   @Audit('routing.create-plan', 'routing', 'DocumentRoutingStep')
   @Post('document/:documentId/plan')
   @HttpCode(HttpStatus.CREATED)
+
   createPlan(
     @Param('documentId', new ParseUUIDPipe()) documentId: string,
     @Body() dto: CreateRoutingPlanDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.routingService.createPlan(documentId, dto);
+    return this.routingService.createPlan(documentId, dto, user.id);
   }
 
   @Get()
@@ -52,13 +54,15 @@ export class DocumentRoutingController {
     return this.routingService.findOne(id);
   }
 
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
   @Patch(':id')
   @Audit('routing.update', 'routing', 'DocumentRoutingStep')
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateRoutingStepDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.routingService.update(id, dto);
+    return this.routingService.update(id, dto, user.id);
   }
 
   @Post(':id/advance')
@@ -76,7 +80,10 @@ export class DocumentRoutingController {
   @Audit('routing.delete', 'routing', 'DocumentRoutingStep')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.routingService.remove(id);
+  remove(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.routingService.remove(id, user.id);
   }
 }

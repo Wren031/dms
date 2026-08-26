@@ -63,7 +63,7 @@ export function App() {
                 <Route
                   path="/routing"
                   element={
-                    <ProtectedRoute roles={['system_admin', 'office_admin', 'document_officer']}>
+                    <ProtectedRoute roles={['system_admin', 'office_admin']}>
                       <RoutingPage />
                     </ProtectedRoute>
                   }
