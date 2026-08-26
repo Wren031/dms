@@ -51,7 +51,7 @@ export const navigation: NavItem[] = [
     to: '/inbox',
     icon: 'Inbox',
     section: 'workspace',
-    roles: ['system_admin', 'office_admin', 'receiving_officer'],
+    roles: ['system_admin', 'office_admin', 'document_officer'],
   },
   {
     id: 'outbox',
@@ -66,7 +66,7 @@ export const navigation: NavItem[] = [
     to: '/routing',
     icon: 'Send',
     section: 'workspace',
-    roles: ['system_admin', 'office_admin', 'receiving_officer'],
+    roles: ['system_admin', 'office_admin', 'document_officer'],
   },
   {
     id: 'review',
@@ -74,7 +74,7 @@ export const navigation: NavItem[] = [
     to: '/review',
     icon: 'ClipboardCheck',
     section: 'workspace',
-    roles: ['system_admin', 'office_admin', 'reviewing_officer'],
+    roles: ['system_admin', 'office_admin', 'document_officer'],
   },
   {
     id: 'release',
@@ -82,7 +82,7 @@ export const navigation: NavItem[] = [
     to: '/release',
     icon: 'PackageOpen',
     section: 'workspace',
-    roles: ['system_admin', 'office_admin', 'reviewing_officer'],
+    roles: ['system_admin', 'office_admin', 'document_officer'],
   },
   {
     id: 'tracking',

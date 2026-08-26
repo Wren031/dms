@@ -4,8 +4,7 @@ export type UserRoleApi =
   | 'SYSTEM_ADMIN'
   | 'OFFICE_ADMIN'
   | 'DOCUMENT_ENCODER'
-  | 'RECEIVING_OFFICER'
-  | 'REVIEWING_OFFICER';
+  | 'DOCUMENT_OFFICER';
 
 export type UserStatusApi = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 
@@ -111,8 +110,7 @@ export const USER_ROLE_API: UserRoleApi[] = [
   'SYSTEM_ADMIN',
   'OFFICE_ADMIN',
   'DOCUMENT_ENCODER',
-  'RECEIVING_OFFICER',
-  'REVIEWING_OFFICER',
+  'DOCUMENT_OFFICER',
 ];
 
 export const USER_STATUS_API: UserStatusApi[] = ['ACTIVE', 'INACTIVE', 'SUSPENDED'];
@@ -121,8 +119,7 @@ export const USER_ROLE_LABELS: Record<UserRoleApi, string> = {
   SYSTEM_ADMIN: 'System Administrator',
   OFFICE_ADMIN: 'Office Administrator',
   DOCUMENT_ENCODER: 'Document Encoder',
-  RECEIVING_OFFICER: 'Receiving Officer',
-  REVIEWING_OFFICER: 'Reviewing Officer',
+  DOCUMENT_OFFICER: 'Document Officer',
 };
 
 export const USER_STATUS_LABELS: Record<UserStatusApi, string> = {
@@ -135,16 +132,14 @@ export const ROLE_TO_API: Record<UserRole, UserRoleApi> = {
   system_admin: 'SYSTEM_ADMIN',
   office_admin: 'OFFICE_ADMIN',
   document_encoder: 'DOCUMENT_ENCODER',
-  receiving_officer: 'RECEIVING_OFFICER',
-  reviewing_officer: 'REVIEWING_OFFICER',
+  document_officer: 'DOCUMENT_OFFICER',
 };
 
 export const ROLE_FROM_API: Record<UserRoleApi, UserRole> = {
   SYSTEM_ADMIN: 'system_admin',
   OFFICE_ADMIN: 'office_admin',
   DOCUMENT_ENCODER: 'document_encoder',
-  RECEIVING_OFFICER: 'receiving_officer',
-  REVIEWING_OFFICER: 'reviewing_officer',
+  DOCUMENT_OFFICER: 'document_officer',
 };
 
 export type UserStatusUi = 'active' | 'inactive' | 'suspended';

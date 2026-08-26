@@ -145,7 +145,7 @@ export function DashboardPage() {
                 View All Documents
               </Button>
             </Link>
-            {user.role !== 'reviewing_officer' && user.role !== 'receiving_officer' && (
+            {user.role !== 'document_officer' && (
               <Link to="/documents/register">
                 <Button variant="primary" leftIcon={<FilePlus className="w-4 h-4" />}>
                   Register Document

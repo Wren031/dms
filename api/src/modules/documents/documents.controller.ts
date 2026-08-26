@@ -31,7 +31,7 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.RECEIVING_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.DOCUMENT_OFFICER)
   @Audit('document.register', 'documents', 'Document')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -46,7 +46,7 @@ export class DocumentsController {
   }
 
   @SkipThrottle()
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.RECEIVING_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.DOCUMENT_OFFICER)
   @Get('document-number-suggestion/:officeId')
   suggestDocumentNumber(
     @Param('officeId', new ParseUUIDPipe()) officeId: string,

@@ -2,8 +2,7 @@ export type UserRole =
   | 'system_admin'
   | 'office_admin'
   | 'document_encoder'
-  | 'receiving_officer'
-  | 'reviewing_officer';
+  | 'document_officer';
 
 export interface User {
   id: string;

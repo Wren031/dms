@@ -154,8 +154,7 @@ export function UsersPage() {
       SYSTEM_ADMIN: 0,
       OFFICE_ADMIN: 0,
       DOCUMENT_ENCODER: 0,
-      RECEIVING_OFFICER: 0,
-      REVIEWING_OFFICER: 0,
+      DOCUMENT_OFFICER: 0,
     };
     let active = 0;
     let inactive = 0;

@@ -31,7 +31,7 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-
 export class DocumentRoutingController {
   constructor(private readonly routingService: DocumentRoutingService) {}
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.RECEIVING_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_OFFICER)
   @Audit('routing.create-plan', 'routing', 'DocumentRoutingStep')
   @Post('document/:documentId/plan')
   @HttpCode(HttpStatus.CREATED)

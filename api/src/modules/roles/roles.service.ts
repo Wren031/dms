@@ -72,21 +72,14 @@ const ROLE_DEFINITIONS: Record<Role, { name: string; description: string; permis
       'notifications.view',
     ],
   },
-  RECEIVING_OFFICER: {
-    name: 'Receiving Officer',
-    description: 'Receives, logs, and routes incoming documents to appropriate offices.',
+  DOCUMENT_OFFICER: {
+    name: 'Document Officer',
+    description:
+      'Receives, verifies, and reviews documents. Adds actions/comments/remarks and makes recommendations.',
     permissions: [
       'dashboard.view',
-      'documents.view', 'documents.receive', 'documents.route', 'documents.track',
-      'notifications.view',
-    ],
-  },
-  REVIEWING_OFFICER: {
-    name: 'Reviewing Officer',
-    description: 'Reviews, recommends, approves, rejects, or returns documents.',
-    permissions: [
-      'dashboard.view',
-      'documents.view', 'documents.review', 'documents.recommend',
+      'documents.view', 'documents.receive', 'documents.route',
+      'documents.review', 'documents.recommend',
       'documents.approve', 'documents.reject', 'documents.return', 'documents.release',
       'documents.track', 'documents.archive',
       'notifications.view',

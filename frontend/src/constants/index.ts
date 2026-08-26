@@ -22,24 +22,22 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   system_admin: 'System Administrator',
   office_admin: 'Office Administrator',
   document_encoder: 'Document Encoder',
-  receiving_officer: 'Receiving Officer',
-  reviewing_officer: 'Reviewing Officer',
+  document_officer: 'Document Officer',
 };
 
 export const ROLE_SHORT_LABELS: Record<UserRole, string> = {
   system_admin: 'System Admin',
   office_admin: 'Office Admin',
   document_encoder: 'Encoder',
-  receiving_officer: 'Receiving',
-  reviewing_officer: 'Reviewer',
+  document_officer: 'Officer',
 };
 
 export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   system_admin: 'Full system access. Manages users, offices, roles, and system configuration.',
   office_admin: 'Manages office operations, users within an office, and document workflows.',
   document_encoder: 'Encodes and registers incoming/outgoing documents into the system.',
-  receiving_officer: 'Receives, logs, and routes incoming documents to appropriate offices.',
-  reviewing_officer: 'Reviews, recommends, approves, rejects, or returns documents.',
+  document_officer:
+    'Receives, verifies, and reviews documents. Adds actions/comments/remarks and makes recommendations.',
 };
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -73,14 +71,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'documents.view', 'documents.create', 'documents.register', 'documents.track',
     'notifications.view',
   ],
-  receiving_officer: [
+  document_officer: [
     'dashboard.view',
-    'documents.view', 'documents.receive', 'documents.route', 'documents.track',
-    'notifications.view',
-  ],
-  reviewing_officer: [
-    'dashboard.view',
-    'documents.view', 'documents.review', 'documents.recommend',
+    'documents.view', 'documents.receive', 'documents.route',
+    'documents.review', 'documents.recommend',
     'documents.approve', 'documents.reject', 'documents.return', 'documents.release',
     'documents.track', 'documents.archive',
     'notifications.view',
@@ -180,8 +174,7 @@ export const ALL_ROLES: UserRole[] = [
   'system_admin',
   'office_admin',
   'document_encoder',
-  'receiving_officer',
-  'reviewing_officer',
+  'document_officer',
 ];
 
 export const ALL_DOCUMENT_TYPES: DocumentType[] = [

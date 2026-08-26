@@ -28,7 +28,7 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-
 export class DocumentAttachmentsController {
   constructor(private readonly attachmentsService: DocumentAttachmentsService) {}
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.RECEIVING_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.DOCUMENT_OFFICER)
   @Post('document/:documentId/upload-url')
   @HttpCode(HttpStatus.OK)
   createUploadUrl(
@@ -39,7 +39,7 @@ export class DocumentAttachmentsController {
     return this.attachmentsService.createUpload(documentId, dto, user.id);
   }
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.RECEIVING_OFFICER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER, ROLES.DOCUMENT_OFFICER)
   @Audit('attachment.confirm', 'attachments', 'DocumentAttachment')
   @Post('document/:documentId/confirm')
   @HttpCode(HttpStatus.CREATED)

@@ -54,7 +54,7 @@ export function App() {
                 <Route
                   path="/inbox"
                   element={
-                    <ProtectedRoute roles={['system_admin', 'office_admin', 'receiving_officer']}>
+                    <ProtectedRoute roles={['system_admin', 'office_admin', 'document_officer']}>
                       <InboxPage />
                     </ProtectedRoute>
                   }
@@ -63,7 +63,7 @@ export function App() {
                 <Route
                   path="/routing"
                   element={
-                    <ProtectedRoute roles={['system_admin', 'office_admin', 'receiving_officer']}>
+                    <ProtectedRoute roles={['system_admin', 'office_admin', 'document_officer']}>
                       <RoutingPage />
                     </ProtectedRoute>
                   }
@@ -71,7 +71,7 @@ export function App() {
                 <Route
                   path="/review"
                   element={
-                    <ProtectedRoute roles={['system_admin', 'office_admin', 'reviewing_officer']}>
+                    <ProtectedRoute roles={['system_admin', 'office_admin', 'document_officer']}>
                       <ReviewPage />
                     </ProtectedRoute>
                   }
@@ -79,7 +79,7 @@ export function App() {
                 <Route
                   path="/release"
                   element={
-                    <ProtectedRoute roles={['system_admin', 'office_admin', 'reviewing_officer']}>
+                    <ProtectedRoute roles={['system_admin', 'office_admin', 'document_officer']}>
                       <ReleasePage />
                     </ProtectedRoute>
                   }
