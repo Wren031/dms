@@ -22,8 +22,7 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
-import { getOfficeById } from '@/mocks/offices';
-import { getUserById } from '@/mocks/users';
+import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import {
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_LABELS,
@@ -42,6 +41,8 @@ export function InboxPage() {
   const [tab, setTab] = useState('pending');
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
+  const officeById = useOfficeLookup();
+  const userById = useUserLookup();
 
   const myInbox = useMemo(() => {
     return documents.filter(d =>
@@ -183,7 +184,7 @@ export function InboxPage() {
               header: 'From',
               width: '180px',
               cell: d => {
-                const fromOffice = getOfficeById(d.originatingOfficeId);
+                const fromOffice = officeById(d.originatingOfficeId);
                 return (
                   <div className="flex items-center gap-1.5 text-xs">
                     <Building2 className="w-3.5 h-3.5 text-slate-400" />

@@ -25,8 +25,7 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
-import { getOfficeById } from '@/mocks/offices';
-import { getUserById } from '@/mocks/users';
+import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import {
   ALL_DOCUMENT_STATUSES,
   ALL_DOCUMENT_TYPES,
@@ -51,6 +50,8 @@ export function OutboxPage() {
   const user = useCurrentUser();
   const toast = useToast();
   const { items: documents } = useDocuments({ pageSize: 100 });
+  const officeById = useOfficeLookup();
+  const userById = useUserLookup();
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);
   const [typeFilter, setTypeFilter] = useState(DEFAULT_FILTERS.type);
@@ -300,11 +301,11 @@ export function OutboxPage() {
               key: 'route',
               header: 'Route',
               cell: d => {
-                const from = getOfficeById(d.originatingOfficeId);
+                const from = officeById(d.originatingOfficeId);
                 const to = d.receivingOfficeId
-                  ? getOfficeById(d.receivingOfficeId)
+                  ? officeById(d.receivingOfficeId)
                   : d.destinationOfficeId
-                  ? getOfficeById(d.destinationOfficeId)
+                  ? officeById(d.destinationOfficeId)
                   : null;
                 return (
                   <div className="flex items-center gap-1.5 text-xs">
@@ -323,7 +324,7 @@ export function OutboxPage() {
               header: 'Destination',
               cell: d => {
                 const dest = d.destinationOfficeId
-                  ? getOfficeById(d.destinationOfficeId)
+                  ? officeById(d.destinationOfficeId)
                   : null;
                 if (!dest) return <span className="text-xs text-slate-400">Not assigned</span>;
                 return (
@@ -339,7 +340,7 @@ export function OutboxPage() {
               header: 'Encoded By',
               width: '160px',
               cell: d => {
-                const encoder = getUserById(d.encodedById);
+                const encoder = userById(d.encodedById);
                 if (!encoder) return <span className="text-xs text-slate-400">—</span>;
                 return (
                   <div className="flex items-center gap-1.5">

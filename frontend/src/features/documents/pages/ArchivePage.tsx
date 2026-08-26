@@ -23,7 +23,7 @@ import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
-import { getOfficeById } from '@/mocks/offices';
+import { useOfficeLookup } from '@/hooks/useLookups';
 import {
   ALL_DOCUMENT_STATUSES,
   ALL_DOCUMENT_TYPES,
@@ -47,6 +47,7 @@ const DEFAULT_FILTERS = {
 export function ArchivePage() {
   const toast = useToast();
   const { items: documents } = useDocuments({ pageSize: 100 });
+  const officeById = useOfficeLookup();
 
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);
@@ -64,7 +65,7 @@ export function ArchivePage() {
   const officeOptions = useMemo(
     () => Array.from(new Set(archivedDocs.map(d => d.currentOfficeId))).map(id => ({
       value: id,
-      label: getOfficeById(id)?.name ?? id,
+      label: officeById(id)?.name ?? id,
     })),
     [archivedDocs]
   );
@@ -123,7 +124,7 @@ export function ArchivePage() {
       status: DOCUMENT_STATUS_LABELS[d.status],
       priority: d.priority,
       source: d.source,
-      currentOffice: getOfficeById(d.currentOfficeId)?.name ?? '',
+      currentOffice: officeById(d.currentOfficeId)?.name ?? '',
       dateReceived: d.dateReceived ? formatDate(d.dateReceived) : '',
       dueDate: d.dueDate ? formatDate(d.dueDate) : '',
       archivedAt: formatDate(d.updatedAt),
@@ -337,7 +338,7 @@ export function ArchivePage() {
               header: 'Office',
               width: '170px',
               cell: d => {
-                const office = getOfficeById(d.currentOfficeId);
+                const office = officeById(d.currentOfficeId);
                 return (
                   <div className="flex items-center gap-1.5 text-xs">
                     <Building2 className="w-3.5 h-3.5 text-slate-400" />

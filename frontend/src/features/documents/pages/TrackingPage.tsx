@@ -28,8 +28,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { StatusBadge, PriorityBadge } from '@/components/ui/StatusBadge';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useDocumentRouting } from '@/features/documents/hooks/useDocumentRouting';
-import { getOfficeById } from '@/mocks/offices';
-import { getUserById } from '@/mocks/users';
+import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import {
   ALL_DOCUMENT_STATUSES,
   DOCUMENT_STATUS_LABELS,
@@ -51,6 +50,8 @@ export function TrackingPage() {
   const toast = useToast();
   const { items: documents } = useDocuments({ pageSize: 100 });
   const { steps: routingSteps } = useDocumentRouting(undefined);
+  const officeById = useOfficeLookup();
+  const userById = useUserLookup();
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTERS.status);
 
@@ -198,8 +199,8 @@ function StatTile({ label, value, icon }: { label: string; value: number; icon: 
 function DocumentTracker({ doc }: { doc: DocumentListItem }) {
   const { steps } = useDocumentRouting(doc.id);
 
-  const office = getOfficeById(doc.currentOfficeId);
-  const holder = doc.currentHolderId ? getUserById(doc.currentHolderId) : null;
+  const office = officeById(doc.currentOfficeId);
+  const holder = doc.currentHolderId ? userById(doc.currentHolderId) : null;
   const completedSteps = steps.filter(s => s.status === 'completed').length;
   const totalSteps = steps.length;
   const progress = totalSteps === 0 ? 0 : Math.round((completedSteps / totalSteps) * 100);
@@ -290,9 +291,9 @@ function DocumentTracker({ doc }: { doc: DocumentListItem }) {
 
               <ol className="relative">
                 {steps.map((step, idx) => {
-                  const fromOffice = getOfficeById(step.fromOfficeId);
-                  const toOffice = getOfficeById(step.toOfficeId);
-                  const toUser = step.toUserId ? getUserById(step.toUserId) : null;
+                  const fromOffice = officeById(step.fromOfficeId);
+                  const toOffice = officeById(step.toOfficeId);
+                  const toUser = step.toUserId ? userById(step.toUserId) : null;
                   const completed = step.status === 'completed';
                   const inProgress = step.status === 'in_progress';
                   const returned = step.status === 'returned';

@@ -27,7 +27,7 @@ import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth
 import { useToast } from '@/hooks/useToast';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useOfficeDirectory } from '@/features/system-admin/offices/hooks/useOffices';
-import { getUserById } from '@/mocks/users';
+import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
 import {
   ALL_DOCUMENT_STATUSES,
   ALL_DOCUMENT_TYPES,
@@ -62,6 +62,11 @@ export function DocumentsListPage() {
     : DEFAULT_FILTERS.status;
   const { items: allDocs, total, loading, error, setFilters } = useDocuments({ fetchAll: true });
   const { offices: officeDirectory } = useOfficeDirectory();
+  const { users: routingUsers } = useRoutingOptions();
+  const holderNameById = useMemo(
+    () => new Map(routingUsers.map(u => [u.id, u.fullName])),
+    [routingUsers],
+  );
 
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -176,7 +181,7 @@ export function DocumentsListPage() {
        currentOffice: officeDirectory.find(o => o.id === d.currentOfficeId)?.name
          ?? (d.currentOfficeId === user.officeId ? user.officeName : undefined)
          ?? d.currentOfficeId,
-      currentHolder: d.currentHolderId ? getUserById(d.currentHolderId)?.fullName ?? '' : '',
+      currentHolder: d.currentHolderId ? holderNameById.get(d.currentHolderId) ?? '' : '',
       dateReceived: d.dateReceived ? formatDate(d.dateReceived) : '',
       dueDate: d.dueDate ? formatDate(d.dueDate) : '',
       tags: d.tags.join('; '),
@@ -433,12 +438,12 @@ export function DocumentsListPage() {
               header: 'Current Holder',
               width: '180px',
               cell: d => {
-                const holder = d.currentHolderId ? getUserById(d.currentHolderId) : null;
-                if (!holder) return <span className="text-xs text-slate-400">Unassigned</span>;
+                const holderName = d.currentHolderId ? holderNameById.get(d.currentHolderId) : null;
+                if (!holderName) return <span className="text-xs text-slate-400">Unassigned</span>;
                 return (
                   <div className="flex items-center gap-1.5">
                     <UserIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="text-xs text-slate-700 truncate">{holder.fullName}</span>
+                    <span className="text-xs text-slate-700 truncate">{holderName}</span>
                   </div>
                 );
               },

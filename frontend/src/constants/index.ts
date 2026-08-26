@@ -1,5 +1,23 @@
 import type { DocumentStatus, DocumentType, DocumentClassification, UserRole, Permission } from '@/types';
 
+export const ALLOWED_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
+  registered: ['received', 'archived'],
+  received: ['routed', 'registered', 'archived'],
+  routed: ['under_review', 'returned', 'archived'],
+  under_review: ['recommended', 'approved', 'rejected', 'returned'],
+  recommended: ['approved', 'rejected', 'returned'],
+  approved: ['released', 'returned'],
+  rejected: ['archived'],
+  returned: ['received', 'routed', 'under_review', 'archived'],
+  released: ['archived'],
+  archived: [],
+};
+
+export const canTransition = (
+  from: DocumentStatus,
+  to: DocumentStatus,
+): boolean => (ALLOWED_TRANSITIONS[from] ?? []).includes(to);
+
 export const ROLE_LABELS: Record<UserRole, string> = {
   system_admin: 'System Administrator',
   office_admin: 'Office Administrator',

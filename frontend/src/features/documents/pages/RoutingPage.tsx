@@ -26,9 +26,9 @@ import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useDocumentRouting } from '@/features/documents/hooks/useDocumentRouting';
-import { offices } from '@/mocks/offices';
-import { getOfficeById } from '@/mocks/offices';
-import { getUserById, users } from '@/mocks/users';
+import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
+import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
+import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_LABELS } from '@/constants';
 import { formatDate, formatRelative } from '@/lib/utils';
 
@@ -36,6 +36,10 @@ export function RoutingPage() {
   const toast = useToast();
   const { items: documents } = useDocuments({ status: 'routed', pageSize: 100 });
   const { steps: routingSteps, loading: routingLoading } = useDocumentRouting(undefined);
+  const { offices } = useOffices();
+  const { users: routingUsers } = useRoutingOptions();
+  const officeById = useOfficeLookup();
+  const userById = useUserLookup();
   const [tab, setTab] = useState('pending');
   const [routeModal, setRouteModal] = useState<string | null>(null);
   const [targetOffice, setTargetOffice] = useState('');
@@ -73,12 +77,12 @@ export function RoutingPage() {
     }
     toast.success(
       'Routing queued',
-      `Document will be forwarded to ${getOfficeById(targetOffice)?.code ?? targetOffice}. Use POST /document-routing/document/:id/plan to persist.`,
+      `Document will be forwarded to ${officeById(targetOffice)?.code ?? targetOffice}. Use POST /document-routing/document/:id/plan to persist.`,
     );
     setRouteModal(null);
   };
 
-  const targetUsers = users.filter(u => u.officeId === targetOffice && u.status === 'active');
+  const targetUsers = routingUsers.filter(u => u.officeId === targetOffice);
 
   return (
     <div className="space-y-6">
@@ -175,8 +179,8 @@ export function RoutingPage() {
               key: 'route',
               header: 'Route',
               cell: r => {
-                const from = getOfficeById(r.fromOfficeId);
-                const to = getOfficeById(r.toOfficeId);
+                const from = officeById(r.fromOfficeId);
+                const to = officeById(r.toOfficeId);
                 return (
                   <div className="flex items-center gap-2 text-xs">
                     <span className="font-mono text-slate-700">{from?.code}</span>
@@ -210,7 +214,7 @@ export function RoutingPage() {
               header: 'Assigned To',
               width: '180px',
               cell: r => {
-                const u = r.toUserId ? getUserById(r.toUserId) : null;
+                const u = r.toUserId ? userById(r.toUserId) : null;
                 if (!u) return <span className="text-xs text-slate-400">Unassigned</span>;
                 return (
                   <div className="flex items-center gap-1.5">
@@ -309,7 +313,7 @@ export function RoutingPage() {
             placeholder={targetOffice ? 'Choose officer…' : 'Select office first'}
             value={targetUser}
             onChange={e => setTargetUser(e.target.value)}
-            options={targetUsers.map(u => ({ value: u.id, label: `${u.fullName} (${u.position})` }))}
+            options={targetUsers.map(u => ({ value: u.id, label: u.position ? `${u.fullName} (${u.position})` : u.fullName }))}
             disabled={!targetOffice}
           />
           <Textarea

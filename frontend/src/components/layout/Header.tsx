@@ -5,7 +5,7 @@ import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth
 import { Avatar } from '@/components/ui/Avatar';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { ROLE_LABELS, ALL_ROLES, ROLE_SHORT_LABELS } from '@/constants';
-import { getOfficeById } from '@/mocks/offices';
+import { useOfficeLookup } from '@/hooks/useLookups';
 import { useRecentNotifications } from '@/features/notifications/hooks/useRecentNotifications';
 import { useUnreadNotifications } from '@/features/notifications/hooks/useUnreadNotifications';
 import { formatRelative, cn } from '@/lib/utils';
@@ -18,6 +18,7 @@ interface HeaderProps {
 export function Header({ onMenuClick }: HeaderProps) {
   const user = useCurrentUser();
   const { logout, switchRole, switchUser, allSwitchableUsers } = useAuth();
+  const officeById = useOfficeLookup();
   const navigate = useNavigate();
   const [, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -262,7 +263,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                       <Avatar name={u.fullName} color={u.avatarColor} size="sm" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 truncate">{u.fullName}</p>
-                        <p className="text-[11px] text-slate-500 truncate">{ROLE_LABELS[u.role]} · {getOfficeById(u.officeId)?.code}</p>
+                        <p className="text-[11px] text-slate-500 truncate">{ROLE_LABELS[u.role]} · {officeById(u.officeId)?.code}</p>
                       </div>
                       {active && <span className="text-[10px] font-semibold text-brand-700">ACTIVE</span>}
                     </button>

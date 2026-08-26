@@ -27,8 +27,8 @@ import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
-import { getOfficeById } from '@/mocks/offices';
-import { getUserById, users } from '@/mocks/users';
+import { useOfficeLookup } from '@/hooks/useLookups';
+import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
 import { DOCUMENT_TYPE_LABELS } from '@/constants';
 import { formatDate, formatRelative } from '@/lib/utils';
 
@@ -36,6 +36,8 @@ export function ReleasePage() {
   const toast = useToast();
   const { items: documents } = useDocuments({ pageSize: 100 });
   const transition = useDocumentTransition();
+  const { users: routingUsers } = useRoutingOptions();
+  const officeById = useOfficeLookup();
   const [tab, setTab] = useState('ready');
   const [releaseModal, setReleaseModal] = useState<string | null>(null);
   const [recipient, setRecipient] = useState('');
@@ -81,7 +83,7 @@ export function ReleasePage() {
     });
   };
 
-  const recipientOptions = users.filter(u => u.status === 'active');
+  const recipientOptions = routingUsers;
 
   return (
     <div className="space-y-6">
@@ -199,7 +201,7 @@ export function ReleasePage() {
               header: 'Office',
               width: '170px',
               cell: d => {
-                const office = getOfficeById(d.currentOfficeId);
+                const office = officeById(d.currentOfficeId);
                 return (
                   <div className="flex items-center gap-1.5 text-xs">
                     <Building2 className="w-3.5 h-3.5 text-slate-400" />
@@ -301,7 +303,7 @@ export function ReleasePage() {
                 placeholder={recipientType === 'user' ? 'Choose user…' : 'Enter organization name…'}
                 value={recipient}
                 onChange={e => setRecipient(e.target.value)}
-                options={recipientType === 'user' ? recipientOptions.map(u => ({ value: u.id, label: `${u.fullName} (${u.position})` })) : []}
+                options={recipientType === 'user' ? recipientOptions.map(u => ({ value: u.id, label: u.position ? `${u.fullName} (${u.position})` : u.fullName })) : []}
               />
               <Textarea
                 label="Release Remarks"

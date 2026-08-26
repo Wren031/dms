@@ -3,9 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Paperclip,
-  Calendar,
   Building2,
-  User as UserIcon,
   Tag as TagIcon,
   Send,
   PackageOpen,
@@ -17,13 +15,13 @@ import {
   RotateCcw,
   ThumbsUp,
   AlertCircle,
-  FileText,
   History as HistoryIcon,
   Hash,
   Route as RouteIcon,
   ChevronDown,
   ChevronUp,
   Clock,
+  Inbox,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -33,9 +31,9 @@ import { Tabs } from '@/components/ui/Tabs';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Input';
-import { getOfficeById } from '@/mocks/offices';
-import { useOfficeDirectory } from '@/features/system-admin/offices/hooks/useOffices';
-import { getUserById } from '@/mocks/users';
+import { useOfficeLookup } from '@/hooks/useLookups';
+import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
+import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
 import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
@@ -43,6 +41,7 @@ import {
   DOCUMENT_TYPE_LABELS,
   DOCUMENT_CLASSIFICATION_LABELS,
   ROLE_LABELS,
+  canTransition,
 } from '@/constants';
 import { formatDate, formatRelative, cn } from '@/lib/utils';
 import { attachmentsService } from '@/features/documents/services/documents.service';
@@ -50,15 +49,14 @@ import { useDocumentHistory } from '@/features/documents/hooks/useDocumentHistor
 import { useDocumentTimeline } from '@/features/documents/hooks/useDocumentTimeline';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
 import { useDocumentDetail } from '@/features/documents/hooks/useDocumentDetail';
-import { offices } from '@/mocks/offices';
-import { users } from '@/mocks/users';
 import type { DocumentStatus } from '@/types';
 import { DocumentJourneyView } from '@/features/documents/components/DocumentJourneyView';
 import type { DocumentDetail } from '@/features/documents/types/document';
 
-type ActionType = 'recommend' | 'approve' | 'reject' | 'return' | 'release' | 'archive';
+type ActionType = 'receive' | 'recommend' | 'approve' | 'reject' | 'return' | 'release' | 'archive';
 
 const ACTION_STATUS_MAP: Record<ActionType, DocumentStatus> = {
+  receive: 'received',
   recommend: 'recommended',
   approve: 'approved',
   reject: 'rejected',
@@ -67,19 +65,26 @@ const ACTION_STATUS_MAP: Record<ActionType, DocumentStatus> = {
   archive: 'archived',
 };
 
-const ACTION_AUDIT_MAP: Record<ActionType, 'APPROVE' | 'REJECT' | 'RETURN' | 'RECOMMEND' | 'RELEASE' | 'ARCHIVE'> = {
-  recommend: 'RECOMMEND',
-  approve: 'APPROVE',
-  reject: 'REJECT',
-  return: 'RETURN',
-  release: 'RELEASE',
-  archive: 'ARCHIVE',
+const ACTION_PERMISSION: Record<ActionType, string> = {
+  receive: 'documents.receive',
+  recommend: 'documents.recommend',
+  approve: 'documents.approve',
+  reject: 'documents.reject',
+  return: 'documents.return',
+  release: 'documents.release',
+  archive: 'documents.archive',
 };
 
 const ACTION_META: Record<
   ActionType,
   { label: string; description: string; icon: React.ReactNode; tone: 'primary' | 'outline' | 'danger' }
 > = {
+  receive: {
+    label: 'Receive',
+    description: 'Receive this document into your office to begin processing.',
+    icon: <Inbox className="w-3.5 h-3.5" />,
+    tone: 'primary',
+  },
   recommend: {
     label: 'Recommend',
     description: 'Add a recommendation for the final approver.',
@@ -126,11 +131,14 @@ export function DocumentDetailPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  const { document: doc, loading: documentLoading, error: documentError, refresh } = useDocumentDetail(id);
-  const { offices: officeDirectory } = useOfficeDirectory();
+  // Load custom hooks at the top level
+  const { offices = [], loading: officesLoading } = useOffices();
+  const { document: doc, loading: documentLoading, refresh } = useDocumentDetail(id);
   const { history } = useDocumentHistory(id);
   const { timeline } = useDocumentTimeline(id);
   const transition = useDocumentTransition();
+  const { users: routingUsers } = useRoutingOptions();
+  const officeById = useOfficeLookup();
 
   const [tab, setTab] = useState<'routing' | 'audit'>('routing');
   const [actionModal, setActionModal] = useState<ActionType | null>(null);
@@ -140,7 +148,7 @@ export function DocumentDetailPage() {
   const [routeInstructions, setRouteInstructions] = useState('');
   const [routeModal, setRouteModal] = useState(false);
 
-  if (documentLoading) {
+  if (documentLoading || officesLoading) {
     return <div className="py-20 text-center text-sm text-slate-500">Loading document…</div>;
   }
 
@@ -155,12 +163,21 @@ export function DocumentDetailPage() {
     );
   }
 
-  const office = officeDirectory.find(item => item.id === doc.currentOfficeId)
-    ?? (doc.currentOfficeId === user.officeId
+  // Derive target office dynamically from offices
+  const officeFromDirectory = offices.find(item => item.id === doc.currentOfficeId);
+  const officeUser = routingUsers.find(u => u.officeId === doc.currentOfficeId);
+  const office = officeFromDirectory
+    ?? (doc.currentOfficeId === user?.officeId
       ? { id: user.officeId, name: user.officeName ?? 'Current office', code: user.officeCode ?? user.officeId, type: 'unit' as const }
+      : null)
+    ?? (officeUser?.officeName
+      ? { id: doc.currentOfficeId, name: officeUser.officeName, code: '', type: 'unit' as const }
       : null);
-  const holder = doc.currentHolder ? { ...doc.currentHolder, avatarColor: 'bg-brand-600' } as unknown as import('@/types').User : null;
-  const originator = getOfficeById(doc.originatingOfficeId);
+
+  const holderPerson = doc.currentHolder
+    ?? (doc.currentHolderId ? routingUsers.find(u => u.id === doc.currentHolderId) ?? null : null);
+  const holder = holderPerson ? { ...holderPerson, avatarColor: 'bg-brand-600' } as unknown as import('@/types').User : null;
+  const originator = officeById(doc.originatingOfficeId);
   const encoder = doc.encodedBy ? { ...doc.encodedBy, avatarColor: 'bg-brand-600' } as unknown as import('@/types').User : null;
   const receiver = doc.receivedBy ? { ...doc.receivedBy, avatarColor: 'bg-emerald-600' } as unknown as import('@/types').User : null;
 
@@ -169,21 +186,33 @@ export function DocumentDetailPage() {
     new Date(doc.dueDate).getTime() < Date.now() &&
     !['released', 'archived', 'rejected'].includes(doc.status);
 
-  const decisionActions: ActionType[] =
-    doc.status === 'under_review' || doc.status === 'recommended'
-      ? ['recommend', 'approve', 'return', 'reject']
-      : [];
+  const decisionActions: ActionType[] = [
+    ...(hasPermission('documents.receive') && canTransition(doc.status, 'received')
+      ? (['receive'] as ActionType[])
+      : []),
+    ...(doc.status === 'under_review' || doc.status === 'recommended'
+      ? (['recommend', 'approve', 'return', 'reject'] as ActionType[]).filter(action =>
+          canTransition(doc.status, ACTION_STATUS_MAP[action]),
+        )
+      : []),
+  ];
   const terminalActions: ActionType[] = [];
-  if (doc.status === 'approved' && hasPermission('documents.release')) {
+  if (
+    doc.status === 'approved' &&
+    hasPermission('documents.release') &&
+    canTransition(doc.status, 'released')
+  ) {
     terminalActions.push('release');
   }
-  if (doc.status === 'released' && hasPermission('documents.archive')) {
+  if (
+    doc.status === 'released' &&
+    hasPermission('documents.archive') &&
+    canTransition(doc.status, 'archived')
+  ) {
     terminalActions.push('archive');
   }
   const canRoute =
-    hasPermission('documents.route') &&
-    doc.status !== 'archived' &&
-    doc.status !== 'released';
+    hasPermission('documents.route') && canTransition(doc.status, 'routed');
   const canDownload = doc.attachments.length > 0;
   const legacyDocument = doc as unknown as import('@/types').Document;
   const legacyRouting = doc.routingSteps.map(step => ({
@@ -207,14 +236,22 @@ export function DocumentDetailPage() {
     createdAt: entry.occurredAt,
   })) as import('@/types').AuditLog[];
 
+  const statusAction: ActionType | null =
+    doc.status === 'registered'
+      ? 'receive'
+      : doc.status === 'under_review' || doc.status === 'recommended'
+        ? 'approve'
+        : doc.status === 'approved'
+          ? 'release'
+          : doc.status === 'released'
+            ? 'archive'
+            : null;
   const primaryAction: ActionType | null =
-    doc.status === 'under_review' || doc.status === 'recommended'
-      ? 'approve'
-      : doc.status === 'approved'
-        ? 'release'
-        : doc.status === 'released'
-          ? 'archive'
-          : null;
+    statusAction &&
+    hasPermission(ACTION_PERMISSION[statusAction]) &&
+    canTransition(doc.status, ACTION_STATUS_MAP[statusAction])
+      ? statusAction
+      : null;
 
   const openAction = (action: ActionType) => {
     if (action === 'reject' || action === 'archive') {
@@ -270,7 +307,7 @@ export function DocumentDetailPage() {
       return;
     }
     await refresh();
-    toast.success('Document routed', `Forwarded to ${getOfficeById(routeOffice)?.code}.`);
+    toast.success('Document routed', `Forwarded to ${officeById(routeOffice)?.code}.`);
     setRouteModal(false);
     setRouteOffice('');
     setRouteUser('');
@@ -279,7 +316,7 @@ export function DocumentDetailPage() {
   };
 
   const officeUsers = routeOffice
-    ? users.filter(u => u.officeId === routeOffice && u.status === 'active')
+    ? routingUsers.filter(u => u.officeId === routeOffice)
     : [];
 
   return (
@@ -435,7 +472,7 @@ export function DocumentDetailPage() {
             onChange={e => setRouteUser(e.target.value)}
             options={officeUsers.map(u => ({
               value: u.id,
-              label: `${u.fullName} (${u.position})`,
+              label: u.position ? `${u.fullName} (${u.position})` : u.fullName,
             }))}
             disabled={!routeOffice}
           />
@@ -555,7 +592,7 @@ function DocumentHero({
                     {holder.fullName}
                   </p>
                   <p className="text-[11px] text-slate-500 truncate">
-                    {ROLE_LABELS[holder.role]}
+                    {ROLE_LABELS[holder.role] ?? (holder as unknown as { position?: string | null }).position ?? ''}
                   </p>
                 </div>
               </div>
@@ -747,7 +784,7 @@ function DocumentInfoSidebar({
       const { url } = await attachmentsService.downloadUrl(attachmentId);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch {
-      // Keep the existing detail view usable if a signed URL cannot be created.
+      // Keep detail view usable if download link fails
     }
   };
   return (
@@ -806,10 +843,10 @@ function DocumentInfoSidebar({
                   <Paperclip className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                   <p className="text-sm font-medium text-slate-900 truncate">{att.fileName}</p>
-                   <p className="text-[11px] text-slate-500">
-                     {(att.sizeBytes / 1024).toFixed(1)} KB ·{' '}
-                     {att.mimeType.split('/').pop()?.toUpperCase() ?? 'FILE'}
+                  <p className="text-sm font-medium text-slate-900 truncate">{att.fileName}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {(att.sizeBytes / 1024).toFixed(1)} KB ·{' '}
+                    {att.mimeType.split('/').pop()?.toUpperCase() ?? 'FILE'}
                   </p>
                 </div>
                 <button
@@ -921,148 +958,6 @@ function HistoryTabs({ tab, onTabChange, routing, logs }: HistoryTabsProps) {
           ]}
         />
       </div>
-      <div className="p-5">
-        {tab === 'routing' && <RoutingList routing={routing} />}
-        {tab === 'audit' && <AuditList logs={logs} />}
-      </div>
     </Card>
-  );
-}
-
-function RoutingList({ routing }: { routing: import('@/types').RoutingStep[] }) {
-  if (routing.length === 0) {
-    return <p className="text-sm text-slate-500 text-center py-6">No routing history yet.</p>;
-  }
-  return (
-    <ol className="relative space-y-4">
-      <span
-        aria-hidden
-        className="absolute left-[15px] top-2 bottom-2 w-px bg-slate-200"
-      />
-      {routing.map(step => {
-        const fromOffice = getOfficeById(step.fromOfficeId);
-        const toOffice = getOfficeById(step.toOfficeId);
-        const toUser = step.toUserId ? getUserById(step.toUserId) : null;
-        const fromUser = step.fromUserId ? getUserById(step.fromUserId) : null;
-        return (
-          <li key={step.id} className="relative pl-12">
-            <span
-              className={cn(
-                'absolute left-0 top-0.5 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold border bg-white',
-                step.status === 'completed' &&
-                  'border-slate-300 text-slate-700',
-                step.status === 'in_progress' &&
-                  'border-slate-900 text-slate-900',
-                step.status === 'returned' &&
-                  'border-rose-300 text-rose-700',
-                step.status === 'pending' &&
-                  'border-slate-200 text-slate-400 border-dashed',
-              )}
-            >
-              {step.status === 'completed' ? (
-                <CheckCircle2 className="w-4 h-4" />
-              ) : step.status === 'in_progress' ? (
-                step.sequence
-              ) : step.status === 'returned' ? (
-                <RotateCcw className="w-4 h-4" />
-              ) : (
-                step.sequence
-              )}
-            </span>
-            <div className="rounded-md border border-slate-200 p-3.5 bg-white">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm font-semibold text-slate-900">
-                  Step {step.sequence}
-                </p>
-                <span className="text-xs text-slate-500">
-                  {fromOffice?.code} → {toOffice?.code}
-                </span>
-                <Tag
-                  variant={
-                    step.status === 'completed'
-                      ? 'emerald'
-                      : step.status === 'in_progress'
-                        ? 'amber'
-                        : step.status === 'returned'
-                          ? 'rose'
-                          : 'slate'
-                  }
-                >
-                  {step.status.replace('_', ' ')}
-                </Tag>
-              </div>
-              <p className="text-sm text-slate-700 mt-2">{step.instructions}</p>
-              {(toUser || fromUser) && (
-                <p className="text-xs text-slate-500 mt-1.5">
-                  {fromUser && <>Routed by {fromUser.fullName}</>}
-                  {fromUser && toUser && <> · </>}
-                  {toUser && <>To {toUser.fullName}</>}
-                </p>
-              )}
-              {step.remarks && (
-                <div className="mt-2 p-2 rounded-md bg-slate-50 border border-slate-200 text-xs text-slate-700">
-                  {step.remarks}
-                </div>
-              )}
-              <div className="mt-2 text-[11px] text-slate-500">
-                {step.receivedAt && <span>Received {formatDate(step.receivedAt, true)}</span>}
-                {step.completedAt && (
-                  <span> · Completed {formatDate(step.completedAt, true)}</span>
-                )}
-              </div>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function AuditList({ logs }: { logs: import('@/types').AuditLog[] }) {
-  if (logs.length === 0) {
-    return <p className="text-sm text-slate-500 text-center py-6">No audit entries yet.</p>;
-  }
-  return (
-    <ul className="divide-y divide-slate-100 border border-slate-200 rounded-md bg-white">
-      {logs.map(log => {
-        const actor = getUserById(log.actorId);
-        return (
-          <li key={log.id} className="px-4 py-3 flex items-start gap-3">
-            <Avatar
-              name={log.actorName}
-              color={actor?.avatarColor ?? 'bg-slate-600'}
-              size="sm"
-            />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm font-semibold text-slate-900">{log.actorName}</p>
-                <Tag
-                  variant={
-                    log.action === 'APPROVE'
-                      ? 'emerald'
-                      : log.action === 'REJECT'
-                        ? 'rose'
-                        : log.action === 'RETURN'
-                          ? 'orange'
-                          : log.action === 'REVIEW' || log.action === 'RECOMMEND'
-                            ? 'indigo'
-                            : log.action === 'RECEIVE'
-                              ? 'blue'
-                              : 'slate'
-                  }
-                >
-                  {log.action}
-                </Tag>
-                <span className="text-xs text-slate-500">{log.module}</span>
-              </div>
-              <p className="text-sm text-slate-700 mt-1">{log.description}</p>
-              <p className="text-[11px] text-slate-400 mt-1">
-                {formatDate(log.createdAt, true)} · IP: {log.ipAddress}
-              </p>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
   );
 }

@@ -31,8 +31,7 @@ import { usePagination } from '@/hooks/usePagination';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
-import { getOfficeById } from '@/mocks/offices';
-import { getUserById } from '@/mocks/users';
+import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import { DOCUMENT_TYPE_LABELS } from '@/constants';
 import { formatDate, formatRelative } from '@/lib/utils';
 
@@ -40,6 +39,8 @@ export function ReviewPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { items: documents } = useDocuments({ pageSize: 100 });
+  const officeById = useOfficeLookup();
+  const userById = useUserLookup();
   const transition = useDocumentTransition();
   const [tab, setTab] = useState('for_review');
   const [actionModal, setActionModal] = useState<{
@@ -174,7 +175,7 @@ export function ReviewPage() {
               header: 'From',
               width: '170px',
               cell: d => {
-                const office = getOfficeById(d.originatingOfficeId);
+                const office = officeById(d.originatingOfficeId);
                 return (
                   <div className="flex items-center gap-1.5 text-xs">
                     <Building2 className="w-3.5 h-3.5 text-slate-400" />
@@ -191,7 +192,7 @@ export function ReviewPage() {
               header: 'Submitted By',
               width: '170px',
               cell: d => {
-                const u = d.currentHolderId ? getUserById(d.currentHolderId) : null;
+                const u = d.currentHolderId ? userById(d.currentHolderId) : null;
                 if (!u) return <span className="text-xs text-slate-400">—</span>;
                 return (
                   <div className="flex items-center gap-1.5">

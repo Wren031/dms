@@ -34,11 +34,11 @@ import {
   isTerminalStage,
 } from '@/features/documents/journey';
 import type { JourneyEvent, JourneyStage } from '@/features/documents/journey';
-import { offices } from '@/mocks/offices';
-import { users, getUserById } from '@/mocks/users';
-import { DOCUMENT_TYPE_LABELS } from '@/constants';
+import { useOfficeDirectory } from '@/features/system-admin/offices/hooks/useOffices';
+import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
+import { DOCUMENT_TYPE_LABELS, AVATAR_COLORS } from '@/constants';
 import { formatDate, cn } from '@/lib/utils';
-import type { AuditLog, Document, RoutingStep } from '@/types';
+import type { AuditLog, Document, Office, RoutingStep, User } from '@/types';
 
 interface DocumentJourneyViewProps {
   document: Document;
@@ -46,6 +46,12 @@ interface DocumentJourneyViewProps {
   auditLogs: AuditLog[];
   loading?: boolean;
   error?: string | null;
+}
+
+function colorForId(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
 const stageIcon = (stage: JourneyStage): React.ReactNode => {
@@ -147,21 +153,36 @@ export function DocumentJourneyView({
   loading = false,
   error = null,
 }: DocumentJourneyViewProps) {
+  const { offices } = useOfficeDirectory();
+  const { users: routingUsers } = useRoutingOptions();
+  const users = useMemo(
+    () =>
+      routingUsers.map(u => ({ ...u, avatarColor: colorForId(u.id) })) as unknown as User[],
+    [routingUsers]
+  );
+
   const journeyEvents = useMemo(
-    () => buildDocumentJourney({ document, routingSteps, auditLogs, users, offices }),
-    [document, routingSteps, auditLogs]
+    () =>
+      buildDocumentJourney({
+        document,
+        routingSteps,
+        auditLogs,
+        users,
+        offices: offices as unknown as Office[],
+      }),
+    [document, routingSteps, auditLogs, users, offices]
   );
 
   const progress = useMemo(() => getJourneyProgress(journeyEvents), [journeyEvents]);
 
   const currentHolder = useMemo(
-    () => (document.currentHolderId ? getUserById(document.currentHolderId) : null),
-    [document.currentHolderId]
+    () => (document.currentHolderId ? users.find(u => u.id === document.currentHolderId) ?? null : null),
+    [users, document.currentHolderId]
   );
 
   const currentOffice = useMemo(
     () => offices.find(o => o.id === document.currentOfficeId) ?? null,
-    [document.currentOfficeId]
+    [offices, document.currentOfficeId]
   );
 
   if (loading) {

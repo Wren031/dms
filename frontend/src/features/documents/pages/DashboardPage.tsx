@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useToast } from '@/hooks/useToast';
-import { getOfficeById } from '@/mocks/offices';
+import { useOfficeLookup } from '@/hooks/useLookups';
 import {
   DOCUMENT_STATUS_LABELS,
   ROLE_LABELS,
@@ -62,6 +62,7 @@ export function DashboardPage() {
   const user = useCurrentUser();
   const toast = useToast();
   const { items: documents, loading, error } = useDocuments({ pageSize: 100 });
+  const officeById = useOfficeLookup();
 
   useEffect(() => {
     if (error) toast.error('Failed to load dashboard data', error);
@@ -341,7 +342,7 @@ export function DashboardPage() {
         ) : (
           <div className="divide-y divide-slate-100">
             {pendingForUser.map(doc => {
-              const office = getOfficeById(doc.currentOfficeId);
+              const office = officeById(doc.currentOfficeId);
               const action = getActionForStatus(doc.status as DocumentStatus);
               const isOverdue =
                 !!doc.dueDate &&

@@ -1,4 +1,24 @@
+System Administrator
 {
-    "emailOrUsername": "jdelacruz",
+    "emailOrUsername": "admin",
+    "password": "Admin@123"
+}
+
+Document Encoder
+{
+    "emailOrUsername": "encoder.example",
+    "password": "Password123"
+}
+
+Office Administrator 
+
+{
+    "emailOrUsername": "encoder.example",
+    "password": "Password123"
+}
+
+Receiving Officer 
+{
+    "emailOrUsername": "receiving.receiving",
     "password": "Password123"
 }

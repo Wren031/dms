@@ -126,18 +126,6 @@ export function SettingsPage() {
     else toast.error('Revoke failed', sessions.errorMessage ?? 'Please retry.');
   };
 
-  const resetSystem = async () => {
-    const ok = await confirm({
-      title: 'Reset system data',
-      description: 'This will reset all mock data to its default state. This is a development action.',
-      confirmText: 'Reset Data',
-      variant: 'danger',
-    });
-    if (ok) {
-      toast.info('System reset', 'This is a placeholder. Mock data is not actually reset.');
-    }
-  };
-
   const navItems: SettingsNavItem[] = [
     {
       id: 'profile',
@@ -544,9 +532,9 @@ export function SettingsPage() {
               tone="danger"
             >
               <DangerItem
-                label="Reset mock data"
-                description="Restore all mock data to default state. Useful for development."
-                onClick={resetSystem}
+                label="Delete all sessions"
+                description="Revoke every active session including this one. All users will be signed out."
+                onClick={handleRevokeAllSessions}
                 icon={<Database className="h-4 w-4" />}
               />
             </SettingsSection>
