@@ -236,10 +236,24 @@ export function DocumentDetailPage() {
   const legacyLogs = timeline.map(entry => ({
     id: entry.id,
     actorId: entry.actorId ?? '',
-    actorName: entry.actorId ?? 'System',
-    action: entry.event,
+    actorName:
+      (entry.actorId ? routingUsers.find(u => u.id === entry.actorId)?.fullName : null) ??
+      'System',
+    action:
+      typeof entry.event === 'string'
+        ? entry.event
+            .split('.')
+            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ')
+        : 'Status transition',
     module: 'Documents',
-    description: entry.event,
+    description:
+      (entry.payload && typeof entry.payload === 'object' && 'to' in entry.payload
+        ? `Document moved to ${String((entry.payload as { to?: string }).to ?? '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`
+        : 'Status update recorded') +
+      (typeof entry.event === 'string' && entry.event === 'status.transition'
+        ? ' — status transition'
+        : ''),
     targetId: doc.id,
     targetType: 'document',
     ipAddress: '',
@@ -432,6 +446,9 @@ export function DocumentDetailPage() {
         onTabChange={setTab}
         routing={legacyRouting}
         logs={legacyLogs}
+        offices={offices}
+        users={routingUsers}
+        officeById={officeById}
       />
 
       <Modal
@@ -904,7 +921,7 @@ function DocumentActions({
 
 interface DocumentInfoSidebarProps {
   document: DocumentDetail;
-  originator: import('@/types').Office | null | undefined;
+  originator: { code: string; name: string } | null | undefined;
   encoder: import('@/types').User | null | undefined;
   receiver: import('@/types').User | null | undefined;
   holder: import('@/types').User | null | undefined;
@@ -1073,9 +1090,52 @@ interface HistoryTabsProps {
   onTabChange: (t: 'routing' | 'audit') => void;
   routing: import('@/types').RoutingStep[];
   logs: import('@/types').AuditLog[];
+  offices: import('@/features/system-admin/offices/types/office').Office[];
+  users: import('@/features/system-admin/users/types/user').RoutingUserOption[];
+  officeById: (id: string | null | undefined) =>
+    | import('@/features/system-admin/offices/types/office').Office
+    | undefined;
 }
 
-function HistoryTabs({ tab, onTabChange, routing, logs }: HistoryTabsProps) {
+const ROUTING_STEP_STYLES = {
+  pending: 'bg-slate-100 text-slate-700',
+  received: 'bg-sky-100 text-sky-700',
+  in_progress: 'bg-amber-100 text-amber-700',
+  completed: 'bg-emerald-100 text-emerald-700',
+  returned: 'bg-rose-100 text-rose-700',
+} as const;
+
+function RoutingStepStatus({ status }: { status: import('@/types').RoutingStep['status'] }) {
+  const label = status.replace(/_/g, ' ');
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+        ROUTING_STEP_STYLES[status]
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+function HistoryTabs({ tab, onTabChange, routing, logs, offices, users, officeById }: HistoryTabsProps) {
+  const officeName = (id?: string | null) => {
+    if (!id) return '—';
+    const office = offices.find(o => o.id === id) ?? officeById(id);
+    return office ? `${office.code} ${office.name}` : id.slice(0, 8);
+  };
+  const userName = (id?: string | null) => {
+    if (!id) return null;
+    const user = users.find(u => u.id === id);
+    return user ? user.fullName : null;
+  };
+
+  const sortedRouting = [...routing].sort((a, b) => a.sequence - b.sequence);
+  const sortedLogs = [...logs].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+
   return (
     <Card padded={false}>
       <div className="px-5 pt-4">
@@ -1087,16 +1147,93 @@ function HistoryTabs({ tab, onTabChange, routing, logs }: HistoryTabsProps) {
               id: 'routing',
               label: 'Routing History',
               icon: <RouteIcon className="w-4 h-4" />,
-              count: routing.length,
+              count: sortedRouting.length,
             },
             {
               id: 'audit',
               label: 'Audit History',
               icon: <HistoryIcon className="w-4 h-4" />,
-              count: logs.length,
+              count: sortedLogs.length,
             },
           ]}
         />
+      </div>
+
+      <div className="p-5">
+        {tab === 'routing' && (
+          <div className="space-y-3">
+            {sortedRouting.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-6">No routing history yet.</p>
+            ) : (
+              sortedRouting.map((step, index) => (
+                <div
+                  key={step.id}
+                  className="flex items-start gap-3 rounded-md border border-slate-200 p-3.5"
+                >
+                  <div className="flex flex-col items-center shrink-0">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[11px] font-semibold text-brand-700">
+                      {step.sequence}
+                    </span>
+                    {index < sortedRouting.length - 1 && (
+                      <span className="mt-1 w-px flex-1 bg-slate-200" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-slate-900">
+                        {officeName(step.fromOfficeId)}
+                        <span className="mx-1.5 text-slate-400">→</span>
+                        {officeName(step.toOfficeId)}
+                      </span>
+                      <RoutingStepStatus status={step.status} />
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                      <span>
+                        {formatDate(step.completedAt ?? step.receivedAt ?? undefined, true)}
+                      </span>
+                      {userName(step.toUserId) && <span>Assigned to {userName(step.toUserId)}</span>}
+                      {userName(step.fromUserId) && <span>By {userName(step.fromUserId)}</span>}
+                    </div>
+                    {(step.instructions || step.remarks) && (
+                      <p className="mt-1.5 text-sm text-slate-600">
+                        {step.instructions || step.remarks}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === 'audit' && (
+          <div className="space-y-3">
+            {sortedLogs.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-6">No audit history yet.</p>
+            ) : (
+              sortedLogs.map(log => (
+                <div
+                  key={log.id}
+                  className="flex items-start gap-3 rounded-md border border-slate-200 p-3.5"
+                >
+                  <Avatar name={log.actorName} color="bg-slate-400" size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-slate-900">
+                        {log.action || 'Event'}
+                      </span>
+                      <span className="text-xs text-slate-500">{formatDate(log.createdAt, true)}</span>
+                    </div>
+                    <p className="text-sm text-slate-600">{log.description}</p>
+                    {log.actorName && (
+                      <p className="mt-0.5 text-xs text-slate-500">By {log.actorName}</p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
     </Card>
   );

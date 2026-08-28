@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, LogOut, RefreshCw, User as UserIcon, Settings as SettingsIcon } from 'lucide-react';
+import { Search, Bell, LogOut, RefreshCw, User as UserIcon, Settings as SettingsIcon } from 'lucide-react';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { Avatar } from '@/components/ui/Avatar';
 import { Dropdown } from '@/components/ui/Dropdown';
@@ -12,7 +13,7 @@ import { formatRelative, cn } from '@/lib/utils';
 import type { UserRole } from '@/types';
 
 interface HeaderProps {
-  onMenuClick: () => void;
+  onMenuClick?: () => void;
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
@@ -41,14 +42,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-20 bg-white border-b border-slate-200 h-16 px-3 sm:px-6 flex items-center gap-2 sm:gap-3 w-full justify-between">
-      <button
-        type="button"
-        onClick={onMenuClick}
-        className="lg:hidden p-2 -ml-1 text-slate-600 hover:text-slate-900 shrink-0"
-        aria-label="Open menu"
-      >
-        <Menu className="w-5 h-5" />
-      </button>
+      <SidebarTrigger className="lg:hidden h-9 w-9 -ml-1 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" aria-label="Open menu" />
 
       {/* Search Bar Container */}
       <div className="hidden md:flex flex-1 min-w-0 max-w-xl">
@@ -66,15 +60,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       {/* Far Right Action Icons (ml-auto pushes everything to the extreme right) */}
       <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto">
-        <button
-          type="button"
-          onClick={() => setSwitcherOpen(s => !s)}
-          className="hidden xl:inline-flex items-center gap-1.5 h-9 px-3 text-xs font-medium text-slate-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md"
-          aria-label="Switch user role"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-amber-700" />
-          <span className="text-amber-900">Dev: {ROLE_SHORT_LABELS[user.role]}</span>
-        </button>
+
 
         <button
           type="button"
