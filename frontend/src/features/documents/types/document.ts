@@ -234,23 +234,3 @@ export interface DocumentAssignHolderInput {
 export interface DocumentNumberSuggestion {
   suggestion: string;
 }
-
-export interface AttachmentUploadRequest {
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-}
-
-export interface AttachmentUploadUrl {
-  uploadUrl: string;
-  storageKey: string;
-  expiresIn: number;
-  method: 'PUT';
-  headers: Record<string, string>;
-}
-
-export interface AttachmentDownloadUrl {
-  url: string;
-  expiresIn: number;
-  fileName: string;
-}

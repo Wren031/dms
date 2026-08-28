@@ -11,9 +11,6 @@ import type {
   DocumentTimelineEntry,
   DocumentTransitionInput,
   DocumentUpdateInput,
-  AttachmentUploadRequest,
-  AttachmentUploadUrl,
-  AttachmentDownloadUrl,
   DocumentAttachment,
 } from '@/features/documents/types/document';
 import type { DocumentType } from '@/types';
@@ -243,30 +240,38 @@ export const attachmentsService = {
   },
 
   async upload(documentId: string, file: File): Promise<DocumentAttachment> {
-    const metadata: AttachmentUploadRequest = {
-      fileName: file.name,
-      mimeType: file.type || 'application/octet-stream',
-      sizeBytes: file.size,
-    };
-    const presigned = await request<AttachmentUploadUrl>(
-      `/document-attachments/document/${documentId}/upload-url`,
-      { method: 'POST', body: JSON.stringify(metadata) },
-    );
-    const uploaded = await fetch(presigned.uploadUrl, {
-      method: presigned.method,
-      headers: presigned.headers,
-      body: file,
-    });
-    if (!uploaded.ok) {
-      throw new DocumentsApiError(uploaded.status, `Failed to upload ${file.name}`);
-    }
-    return request<DocumentAttachment>(`/document-attachments/document/${documentId}/confirm`, {
+    const formData = new FormData();
+    formData.append('file', file);
+    const headers = new Headers();
+    const csrfToken = readCookie('dms_csrf');
+    if (csrfToken) headers.set('x-xsrf-token', csrfToken);
+
+    const response = await fetch(`${API_BASE_URL}/document-attachments/document/${documentId}`, {
       method: 'POST',
-      body: JSON.stringify({ ...metadata, storageKey: presigned.storageKey }),
+      headers,
+      credentials: 'include',
+      body: formData,
     });
+    if (!response.ok) {
+      let message = `Failed to upload ${file.name}`;
+      try {
+        const body = (await response.json()) as { message?: string | string[] };
+        if (Array.isArray(body.message)) message = body.message.join(', ');
+        else if (body.message) message = body.message;
+      } catch {
+        // ignore parse errors, keep fallback message
+      }
+      throw new DocumentsApiError(response.status, message);
+    }
+    const payload = await response.json();
+    return (
+      payload && typeof payload === 'object' && 'data' in payload
+        ? (payload as { data: DocumentAttachment }).data
+        : payload
+    ) as DocumentAttachment;
   },
 
-  downloadUrl(id: string): Promise<AttachmentDownloadUrl> {
-    return request<AttachmentDownloadUrl>(`/document-attachments/${id}/download`);
+  downloadUrl(id: string): string {
+    return `${API_BASE_URL}/document-attachments/${id}/download`;
   },
 };

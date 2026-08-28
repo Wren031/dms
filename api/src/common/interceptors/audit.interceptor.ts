@@ -182,8 +182,8 @@ export class AuditInterceptor implements NestInterceptor {
         return `Routing plan created`;
       case 'routing.advance':
         return `Routing step advanced to ${String(body.status ?? '?')}`;
-      case 'attachment.confirm':
-        return `Attachment uploaded: ${String(body.fileName ?? '?')}`;
+      case 'attachment.upload':
+        return `Attachment uploaded: ${String((request as { file?: { originalname?: string } }).file?.originalname ?? '?')}`;
       case 'attachment.delete':
         return `Attachment deleted`;
       case 'user.create':

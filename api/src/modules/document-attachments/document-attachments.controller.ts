@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -10,10 +11,15 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { Response } from 'express';
 import { DocumentAttachmentsService } from './document-attachments.service';
-import { UploadAttachmentDto } from './dto/upload-attachment.dto';
 import { UpdateAttachmentDto } from './dto/update-attachment.dto';
 import { FilterAttachmentsDto } from './dto/filter-attachments.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -29,26 +35,22 @@ export class DocumentAttachmentsController {
   constructor(private readonly attachmentsService: DocumentAttachmentsService) {}
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
-  @Post('document/:documentId/upload-url')
-  @HttpCode(HttpStatus.OK)
-  createUploadUrl(
-    @Param('documentId', new ParseUUIDPipe()) documentId: string,
-    @Body() dto: UploadAttachmentDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.attachmentsService.createUpload(documentId, dto, user.id);
-  }
-
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
-  @Audit('attachment.confirm', 'attachments', 'DocumentAttachment')
-  @Post('document/:documentId/confirm')
+  @Post('document/:documentId')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 25 * 1024 * 1024 },
+    }),
+  )
+  @Audit('attachment.upload', 'attachments', 'DocumentAttachment')
   @HttpCode(HttpStatus.CREATED)
-  confirm(
+  upload(
     @Param('documentId', new ParseUUIDPipe()) documentId: string,
-    @Body() dto: UploadAttachmentDto & { storageKey: string },
     @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.attachmentsService.confirm(documentId, dto, user.id);
+    if (!file) throw new BadRequestException('No file uploaded');
+    return this.attachmentsService.upload(documentId, file, user.id);
   }
 
   @Get('document/:documentId')
@@ -58,13 +60,28 @@ export class DocumentAttachmentsController {
 
   @Get()
   findByQuery(@Query() filter: FilterAttachmentsDto) {
-    if (!filter.documentId) return [];
-    return this.attachmentsService.findAll(filter.documentId);
+    return this.attachmentsService.findByDocumentFilter(filter.documentId);
   }
 
   @Get(':id/download')
-  getDownloadUrl(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.attachmentsService.getDownloadUrl(id);
+  async download(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Res() res: Response,
+  ) {
+    const info = await this.attachmentsService.getDownloadInfo(id);
+    res.setHeader('Content-Type', info.mimeType);
+    res.setHeader('Content-Length', String(info.sizeBytes));
+    res.download(
+      info.absolutePath,
+      info.fileName,
+      (err: Error | undefined) => {
+        if (err && !res.headersSent) {
+          // eslint-disable-next-line no-console
+          console.error('Attachment download failed', err);
+          res.status(500).end();
+        }
+      },
+    );
   }
 
   @Patch(':id')

@@ -172,8 +172,8 @@ export function RoutingPage() {
             emptyState={
               <EmptyState
                 icon={<Send className="w-7 h-7" />}
-                title="No documents to route"
-                description="Received documents will appear here for routing."
+                title="No documents awaiting routing"
+                description="No documents awaiting routing. Documents appear here after a Document Officer receives them."
               />
             }
             columns={[
@@ -224,8 +224,8 @@ export function RoutingPage() {
             emptyState={
               <EmptyState
                 icon={<CheckCircle2 className="w-7 h-7" />}
-                title="No routing history"
-                description="Completed routing steps will appear here."
+                title="No routing history yet"
+                description="No routing history yet. Routing activity appears here as documents are forwarded between offices."
               />
             }
             columns={[

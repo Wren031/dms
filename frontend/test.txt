@@ -6,19 +6,19 @@ System Administrator
 
 Document Encoder
 {
-    "emailOrUsername": "encoder.example",
+    "emailOrUsername": "exampledata.exampledata",
     "password": "Password123"
 }
 
 Office Administrator 
 
 {
-    "emailOrUsername": "encoder.example",
+    "emailOrUsername": "office.administrator",
     "password": "Password123"
 }
 
-Receiving Officer 
+Document Officer 
 {
-    "emailOrUsername": "receiving.receiving",
+    "emailOrUsername": "documentofficer.officer",
     "password": "Password123"
 }

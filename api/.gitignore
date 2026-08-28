@@ -32,5 +32,8 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Uploaded files (local disk storage)
+uploads/
+
 # Prisma
 src/prisma/migrations/dev.db*

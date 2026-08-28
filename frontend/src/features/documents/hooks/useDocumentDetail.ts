@@ -56,7 +56,7 @@ export function useDocumentDetail(id: string | undefined): UseDocumentDetailRetu
 
   const downloadAttachment = useCallback(async (attachmentId: string) => {
     try {
-      const { url } = await attachmentsService.downloadUrl(attachmentId);
+      const url = attachmentsService.downloadUrl(attachmentId);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       setError(toMessage(err, 'Could not download attachment.'));

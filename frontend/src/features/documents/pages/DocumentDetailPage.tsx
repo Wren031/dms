@@ -921,7 +921,7 @@ function DocumentInfoSidebar({
 }: DocumentInfoSidebarProps) {
   const downloadAttachment = async (attachmentId: string) => {
     try {
-      const { url } = await attachmentsService.downloadUrl(attachmentId);
+      const url = attachmentsService.downloadUrl(attachmentId);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch {
       // Keep detail view usable if download link fails

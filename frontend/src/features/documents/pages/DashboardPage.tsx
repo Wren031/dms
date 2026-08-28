@@ -19,6 +19,7 @@ import { StatusBadge, PriorityBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
+import { useRecentNotifications } from '@/features/notifications/hooks/useRecentNotifications';
 import { useToast } from '@/hooks/useToast';
 import { useOfficeLookup } from '@/hooks/useLookups';
 import {
@@ -64,8 +65,13 @@ export function DashboardPage() {
   const user = useCurrentUser();
   const { hasPermission } = useAuth();
   const toast = useToast();
-  const { items: documents, loading, error } = useDocuments({ pageSize: 100 });
+  const { items: documents, error } = useDocuments({ pageSize: 100 });
   const officeById = useOfficeLookup();
+  const {
+    items: recentNotifications,
+    loading: notificationsLoading,
+    markRead: markReadNotification,
+  } = useRecentNotifications(true, 6);
 
   useEffect(() => {
     if (error) toast.error('Failed to load dashboard data', error);
@@ -254,6 +260,13 @@ export function DashboardPage() {
           <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <h3 className="text-base font-semibold text-slate-900">Notifications</h3>
+              {recentNotifications.some(n => !n.read) && (
+                <span
+                  className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums bg-brand-500 text-white"
+                >
+                  {recentNotifications.filter(n => !n.read).length}
+                </span>
+              )}
             </div>
             <Link to="/notifications">
               <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
@@ -261,13 +274,49 @@ export function DashboardPage() {
               </Button>
             </Link>
           </div>
-          <div className="px-5 pb-5 space-y-1">
-            <div className="py-8 text-center">
-              <Bell className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-              <p className="text-sm text-slate-500">
-                {loading ? 'Loading notifications…' : 'Visit Notifications to see your latest alerts'}
-              </p>
-            </div>
+          <div className="px-5 pb-5 space-y-1 max-h-[280px] overflow-y-auto scrollbar-thin">
+            {notificationsLoading ? (
+              <div className="py-8 text-center">
+                <Bell className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm text-slate-500">Loading notifications…</p>
+              </div>
+            ) : recentNotifications.length === 0 ? (
+              <div className="py-8 text-center">
+                <Bell className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm text-slate-500">No notifications yet</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 -mx-5 px-5">
+                {recentNotifications.map(n => (
+                  <Link
+                    key={n.id}
+                    to={n.link || '/notifications'}
+                    onClick={() => {
+                      if (!n.read) markReadNotification(n.id);
+                    }}
+                    className="flex items-start gap-3 py-3 group"
+                  >
+                    <span
+                      className={cn(
+                        'w-2 h-2 mt-1.5 rounded-full shrink-0',
+                        n.read ? 'bg-slate-300' : 'bg-brand-500',
+                      )}
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-medium text-slate-900 truncate group-hover:text-brand-700">
+                        {n.title}
+                      </span>
+                      <span className="block text-xs text-slate-600 mt-0.5 line-clamp-2">
+                        {n.message}
+                      </span>
+                      <span className="block text-[11px] text-slate-400 mt-1">
+                        {formatRelative(n.createdAt)}
+                      </span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </Card>
       </div>

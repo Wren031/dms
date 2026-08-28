@@ -43,7 +43,7 @@ export class DocumentRoutingService {
       await tx.documentRoutingStep.deleteMany({ where: { documentId } });
       const created = await tx.documentRoutingStep.createMany({
         data: dto.steps.map((s) => ({ ...s, documentId })),
-      });
+      })
       return tx.documentRoutingStep.findMany({
         where: { documentId },
         orderBy: { sequence: 'asc' },

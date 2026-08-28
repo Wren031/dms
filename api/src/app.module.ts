@@ -13,7 +13,7 @@ import appConfig from './config/app.config';
 import authConfig from './config/auth.config';
 import corsConfig from './config/cors.config';
 import throttlerConfig from './config/throttler.config';
-import s3Config from './config/s3.config';
+import storageConfig from './config/storage.config';
 
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -37,7 +37,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      load: [appConfig, authConfig, corsConfig, throttlerConfig, s3Config],
+      load: [appConfig, authConfig, corsConfig, throttlerConfig, storageConfig],
     }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
