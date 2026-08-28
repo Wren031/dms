@@ -6,6 +6,8 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 
 import { LoginPage } from '@/features/authentication/pages/LoginPage';
+import { ForgotPasswordPage } from '@/features/authentication/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/features/authentication/pages/ResetPasswordPage';
 import { DashboardPage } from '@/features/documents/pages/DashboardPage';
 import { DocumentsListPage } from '@/features/documents/pages/DocumentsListPage';
 import { DocumentDetailPage } from '@/features/documents/pages/DocumentDetailPage';
@@ -37,6 +39,8 @@ export function App() {
           <ConfirmDialogProvider>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
 
               <Route
                 element={

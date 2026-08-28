@@ -2,8 +2,11 @@ import { authApi } from '@/features/authentication/api/authApi';
 import type {
   AuthUser,
   ChangePasswordRequest,
+  ForgotPasswordRequest,
+  ForgotPasswordResponse,
   LoginRequest,
   RegisterRequest,
+  ResetPasswordRequest,
   UpdateMyProfileRequest,
 } from '@/features/authentication/api/authApi';
 
@@ -37,4 +40,7 @@ export const authService = {
   listSessions: () => authApi.sessions(),
   revokeSession: (sessionId: string) => authApi.revokeSession(sessionId),
   revokeAllSessions: () => authApi.revokeAllSessions(),
+  forgotPassword: (payload: ForgotPasswordRequest): Promise<ForgotPasswordResponse> =>
+    authApi.forgotPassword(payload),
+  resetPassword: (payload: ResetPasswordRequest) => authApi.resetPassword(payload),
 };

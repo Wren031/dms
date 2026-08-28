@@ -71,6 +71,7 @@ export interface UserListFilters {
   status?: UserStatusApi;
   officeId?: string;
   order?: 'asc' | 'desc';
+  fetchAll?: boolean;
 }
 
 export interface CreateEmployeePayload {

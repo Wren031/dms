@@ -102,6 +102,29 @@ function buildQuery(filters?: UserListFilters): string {
   return qs ? `?${qs}` : '';
 }
 
+async function listAll(filters?: UserListFilters): Promise<UserListResponse> {
+  const pageSize = 200;
+  const first = await request<UserListResponse>(
+    `/users${buildQuery({ ...filters, fetchAll: undefined, page: 1, pageSize })}`,
+  );
+  if (first.items.length >= first.total) return first;
+
+  const totalPages = Math.ceil(first.total / pageSize);
+  const remaining = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      request<UserListResponse>(
+        `/users${buildQuery({ ...filters, fetchAll: undefined, page: index + 2, pageSize })}`,
+      ),
+    ),
+  );
+  return {
+    ...first,
+    items: [first, ...remaining].flatMap(response => response.items),
+    page: 1,
+    pageSize: first.total,
+  };
+}
+
 export interface EmployeeListFilters {
   page?: number;
   pageSize?: number;
@@ -139,6 +162,7 @@ function buildEmployeeQuery(filters?: EmployeeListFilters): string {
 
 export const userService = {
   list(filters?: UserListFilters): Promise<UserListResponse> {
+    if (filters?.fetchAll) return listAll(filters);
     return request<UserListResponse>(`/users${buildQuery(filters)}`);
   },
 

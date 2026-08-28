@@ -18,6 +18,8 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import {
   AuthResponseDto,
   AuthenticatedUserDto,
@@ -82,6 +84,8 @@ function parseTtlMs(ttl: string): number {
   }
 }
 
+const RESET_TOKEN_TTL = '30m';
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -130,6 +134,77 @@ export class AuthService {
     this.setAuthCookies(res, accessToken, refreshRaw, this.refreshTtlMs, csrfRaw);
 
     return { user: this.toUserDto(user) };
+  }
+
+  async forgotPassword(
+    dto: ForgotPasswordDto,
+    req: Request,
+  ): Promise<{ resetToken: string; resetUrl: string }> {
+    const identifier = dto.emailOrUsername.trim().toLowerCase();
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ email: identifier }, { username: identifier }],
+      },
+      select: { id: true, status: true },
+    });
+
+    // Never reveal whether an account exists.
+    if (!user || user.status !== 'ACTIVE') {
+      throw new BadRequestException(
+        'If an account exists, a password reset link has been generated.',
+      );
+    }
+
+    const resetToken = this.jwtService.sign(
+      { sub: user.id, type: 'password-reset' },
+      {
+        secret: this.configService.getOrThrow<AuthConfig>('auth').refresh.secret,
+        expiresIn: RESET_TOKEN_TTL,
+      },
+    );
+
+    const origin = this.resolveFrontendOrigin(req);
+    const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(resetToken)}`;
+
+    this.logger.log(`Password reset link requested for user ${user.id}`);
+    return { resetToken, resetUrl };
+  }
+
+  async resetPassword(dto: ResetPasswordDto): Promise<void> {
+    let subject: string;
+    try {
+      const payload = this.jwtService.verify<{ sub: string; type: string }>(dto.token, {
+        secret: this.configService.getOrThrow<AuthConfig>('auth').refresh.secret,
+      });
+      if (payload.type !== 'password-reset' || !payload.sub) {
+        throw new Error('Invalid reset token type');
+      }
+      subject = payload.sub;
+    } catch {
+      throw new BadRequestException('This password reset link is invalid or has expired.');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: subject },
+      select: { id: true, status: true },
+    });
+    if (!user || user.status !== 'ACTIVE') {
+      throw new BadRequestException('This password reset link is invalid or has expired.');
+    }
+
+    const passwordHash = await hashPassword(dto.newPassword);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        authSessions: {
+          updateMany: { where: { revokedAt: null }, data: { revokedAt: new Date() } },
+        },
+      },
+    });
+
+    this.logger.log(`Password reset completed for user ${user.id}`);
   }
 
   async register(dto: RegisterDto, req: Request, res: Response): Promise<AuthResponseDto> {
@@ -442,6 +517,23 @@ export class AuthService {
   private logFailedAttempt(req: Request, identifier: string): void {
     const ip = normalizeClientIp(req, this.trustProxy) ?? 'unknown';
     this.logger.warn(`Login failed for "${identifier}" from ${ip}`);
+  }
+
+  private resolveFrontendOrigin(req: Request): string {
+    const fallback = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+    const origin = req.headers.origin;
+    if (origin && /^https?:\/\/.+/.test(origin)) {
+      return origin.replace(/\/+$/, '');
+    }
+    const referer = req.headers.referer;
+    if (referer) {
+      try {
+        return new URL(referer).origin;
+      } catch {
+        // fall through
+      }
+    }
+    return fallback.replace(/\/+$/, '');
   }
 
   private toUserDto(user: AuthUserWithEmployee): AuthenticatedUserDto {

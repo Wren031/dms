@@ -114,7 +114,7 @@ export function UsersPage() {
     resetPassword,
     deleting,
     resettingPassword,
-  } = useUsers({ pageSize: 20 });
+  } = useUsers({ fetchAll: true });
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');

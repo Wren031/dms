@@ -21,6 +21,8 @@ import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AuthResponseDto, AuthenticatedUserDto, SessionDto } from './dto/authenticated-user.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { Audit } from '../../common/decorators/audit.decorator';
@@ -41,6 +43,28 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponseDto> {
     return this.authService.login(dto, req, res);
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 900_000 } })
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+    @Req() req: Request,
+  ): Promise<{ resetToken: string; resetUrl: string }> {
+    return this.authService.forgotPassword(dto, req);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 900_000 } })
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+  ): Promise<{ success: true }> {
+    await this.authService.resetPassword(dto);
+    return { success: true };
   }
 
   @Public()

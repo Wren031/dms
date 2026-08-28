@@ -48,6 +48,20 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+export interface ForgotPasswordRequest {
+  emailOrUsername: string;
+}
+
+export interface ForgotPasswordResponse {
+  resetToken: string;
+  resetUrl: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  newPassword: string;
+}
+
 export interface UpdateMyProfileRequest {
   firstName: string;
   middleName?: string;
@@ -123,6 +137,18 @@ export const authApi = {
 
   changePassword: (payload: ChangePasswordRequest) =>
     request<{ success: true }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  forgotPassword: (payload: ForgotPasswordRequest) =>
+    request<ForgotPasswordResponse>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  resetPassword: (payload: ResetPasswordRequest) =>
+    request<{ success: true }>('/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
