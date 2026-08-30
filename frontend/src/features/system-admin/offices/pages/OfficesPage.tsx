@@ -200,55 +200,70 @@ export function OfficesPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         <Card className="lg:col-span-2" padded={false}>
-          <div className="p-4 border-b border-slate-200 space-y-3">
+          <div className="px-4 sm:px-6 py-4 border-b border-border bg-muted/40">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-md bg-background border border-border text-muted-foreground flex items-center justify-center shrink-0">
+                  <FilterIcon className="w-3.5 h-3.5" />
+                </div>
+                <h3 className="text-sm font-semibold text-foreground">Filters</h3>
+                {hasActiveFilters && (
+                  <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 border border-brand-200 px-1.5 py-0.5 rounded">
+                    ACTIVE
+                  </span>
+                )}
+              </div>
+              <span className="text-sm text-muted-foreground shrink-0">
+                <span className="font-semibold text-foreground tabular-nums">{filtered.length}</span>{' '}
+                {filtered.length === 1 ? 'office' : 'offices'}
+              </span>
+            </div>
+
             <div className="flex flex-col lg:flex-row gap-3">
               <SearchInput
                 value={search}
                 onChange={setSearch}
                 placeholder="Search by name, code, or head…"
-                className="flex-1"
+                className="flex-1 min-w-0"
                 aria-label="Search offices"
               />
-              <Select
-                aria-label="Filter by office type"
-                value={typeFilter}
-                onChange={e => setTypeFilter(e.target.value as OfficeType | 'all')}
-                options={TYPE_OPTIONS}
-                className="lg:!w-44"
-              />
+              <div className="flex items-center gap-2">
+                <Select
+                  aria-label="Filter by office type"
+                  value={typeFilter}
+                  onChange={e => setTypeFilter(e.target.value as OfficeType | 'all')}
+                  options={TYPE_OPTIONS}
+                  className="w-full lg:w-44"
+                />
+                {hasActiveFilters && (
+                  <Button
+                    variant="outline"
+                    onClick={clearFilters}
+                    leftIcon={<XIcon className="w-3.5 h-3.5" />}
+                    className="h-10 shrink-0"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
             </div>
 
             {hasActiveFilters && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                  <FilterIcon className="w-3 h-3" />
-                  Showing <span className="font-semibold text-slate-700">{filtered.length}</span>
-                  {' '}of <span className="font-semibold text-slate-700">{offices.length}</span>
-                </span>
-
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {debouncedSearch && (
-                    <FilterChip
-                      label={`"${debouncedSearch}"`}
-                      onClear={() => setSearch('')}
-                      ariaLabel="Clear search filter"
-                    />
-                  )}
-                  {typeFilter !== 'all' && (
-                    <FilterChip
-                      label={`Type: ${TYPE_LABELS[typeFilter]}`}
-                      onClear={() => setTypeFilter('all')}
-                      ariaLabel="Clear type filter"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={clearFilters}
-                    className="ml-1 text-xs font-medium text-brand-700 hover:text-brand-800 hover:underline"
-                  >
-                    Clear all
-                  </button>
-                </div>
+              <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-border">
+                {debouncedSearch && (
+                  <FilterChip
+                    label={`"${debouncedSearch}"`}
+                    onClear={() => setSearch('')}
+                    ariaLabel="Clear search filter"
+                  />
+                )}
+                {typeFilter !== 'all' && (
+                  <FilterChip
+                    label={`Type: ${TYPE_LABELS[typeFilter]}`}
+                    onClear={() => setTypeFilter('all')}
+                    ariaLabel="Clear type filter"
+                  />
+                )}
               </div>
             )}
           </div>

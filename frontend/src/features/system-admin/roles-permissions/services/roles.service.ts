@@ -87,4 +87,11 @@ export const rolesService = {
   getRoleUsers(id: string): Promise<RoleUser[]> {
     return request<RoleUser[]>(`/roles/${id}/users`);
   },
+
+  setPermissions(id: string, permissions: string[]): Promise<string[]> {
+    return request<{ permissions: string[] }>(`/roles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ permissions }),
+    }).then(res => res.permissions);
+  },
 };

@@ -27,6 +27,7 @@ export interface UseRolesReturn {
   usersLoading: boolean;
   usersError: string | null;
   refreshUsers: () => Promise<void>;
+  updatePermissions: (permissions: string[]) => Promise<string[]>;
 }
 
 export function useRoles(): UseRolesReturn {
@@ -91,6 +92,16 @@ export function useRoles(): UseRolesReturn {
     }
   }, [selectedRole]);
 
+  const updatePermissions = useCallback(
+    async (permissions: string[]): Promise<string[]> => {
+      if (!selectedRole) throw new Error('No role selected.');
+      const updated = await rolesService.setPermissions(selectedRole.id, permissions);
+      await selectRole(selectedRole.id);
+      return updated;
+    },
+    [selectedRole, selectRole],
+  );
+
   return {
     roles,
     loading,
@@ -104,5 +115,6 @@ export function useRoles(): UseRolesReturn {
     usersLoading,
     usersError,
     refreshUsers,
+    updatePermissions,
   };
 }

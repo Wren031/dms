@@ -21,32 +21,33 @@ interface PermissionGroupProps {
   granted: Permission[];
   onToggle: (permission: Permission) => void;
   canEdit: boolean;
+  disabled?: boolean;
 }
 
-export function PermissionGroup({ group, granted, onToggle, canEdit }: PermissionGroupProps) {
+export function PermissionGroup({ group, granted, onToggle, canEdit, disabled }: PermissionGroupProps) {
   const Icon = ICON_MAP[group.iconName] ?? ShieldCheck;
   const grantedCount = group.permissions.filter(p => granted.includes(p.key)).length;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2.5">
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-50 text-brand-700">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-brand-700">
             <Icon className="h-3.5 w-3.5" />
           </span>
-          <h4 className="text-sm font-semibold text-slate-900">{group.label}</h4>
+          <h4 className="text-sm font-semibold text-foreground">{group.label}</h4>
         </div>
-        <span className="text-xs font-medium text-slate-500 tabular-nums">
+        <span className="text-xs font-medium text-muted-foreground tabular-nums">
           {grantedCount} of {group.permissions.length}
         </span>
       </div>
-      <ul className="divide-y divide-slate-100">
+      <ul className="divide-y divide-border">
         {group.permissions.map(perm => {
           const isGranted = granted.includes(perm.key);
           return (
             <li
               key={perm.key}
-              className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-slate-50/60"
+              className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/50"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <span
@@ -54,22 +55,24 @@ export function PermissionGroup({ group, granted, onToggle, canEdit }: Permissio
                     'flex h-5 w-5 shrink-0 items-center justify-center rounded border',
                     isGranted
                       ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                      : 'border-slate-200 bg-slate-50 text-slate-300',
+                      : 'border-border bg-muted text-muted-foreground/40',
                   )}
                 >
                   {isGranted && <Check className="h-3 w-3" />}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-900 truncate">{perm.label}</p>
-                  <p className="text-[11px] text-slate-500 font-mono truncate">{perm.key}</p>
+                  <p className="text-sm font-medium text-foreground truncate">{perm.label}</p>
+                  <p className="text-[11px] text-muted-foreground font-mono truncate">{perm.key}</p>
                 </div>
               </div>
               {canEdit && (
                 <button
                   type="button"
                   onClick={() => onToggle(perm.key)}
+                  disabled={disabled}
                   className={cn(
                     'shrink-0 text-xs font-semibold px-2.5 py-1 rounded-md border transition-colors',
+                    disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
                     isGranted
                       ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
                       : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',

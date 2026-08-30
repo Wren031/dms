@@ -11,6 +11,15 @@ export interface ProfileForm {
   phone: string;
 }
 
+interface ProfileSource {
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  email: string | null;
+  position: string | null;
+  phone?: string | null;
+}
+
 export interface PasswordForm {
   current: string;
   next: string;
@@ -33,7 +42,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   soundEnabled: true,
 };
 
-export function profileFormFromUser(user: AuthUser): ProfileForm {
+export function profileFormFromUser(user: ProfileSource): ProfileForm {
   return {
     firstName: user.firstName ?? '',
     middleName: user.middleName ?? '',

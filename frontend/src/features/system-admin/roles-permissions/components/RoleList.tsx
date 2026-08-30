@@ -12,10 +12,10 @@ interface RoleListProps {
 
 export function RoleList({ roles, selectedId, onSelect, loading }: RoleListProps) {
   if (loading) {
-    return <p className="text-sm text-slate-500 px-3 py-6 text-center">Loading roles…</p>;
+    return <p className="text-sm text-muted-foreground px-3 py-6 text-center">Loading roles…</p>;
   }
   if (roles.length === 0) {
-    return <p className="text-sm text-slate-500 px-3 py-6 text-center">No roles defined.</p>;
+    return <p className="text-sm text-muted-foreground px-3 py-6 text-center">No roles defined.</p>;
   }
   return (
     <div className="space-y-1.5">
@@ -30,14 +30,14 @@ export function RoleList({ roles, selectedId, onSelect, loading }: RoleListProps
               'w-full rounded-xl border p-3 text-left transition-all',
               isActive
                 ? 'border-brand-300 bg-brand-50/60 shadow-sm ring-1 ring-brand-200'
-                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
+                : 'border-border bg-card hover:border-slate-300 hover:bg-muted',
             )}
           >
             <div className="flex items-center justify-between gap-2">
               <p
                 className={cn(
                   'text-sm font-semibold',
-                  isActive ? 'text-brand-900' : 'text-slate-900',
+                  isActive ? 'text-brand-900' : 'text-foreground',
                 )}
               >
                 {r.name}
@@ -47,7 +47,7 @@ export function RoleList({ roles, selectedId, onSelect, loading }: RoleListProps
                 {r.userCount}
               </Badge>
             </div>
-            <p className="mt-1 text-xs text-slate-500 line-clamp-2">{r.description}</p>
+            <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{r.description}</p>
           </button>
         );
       })}

@@ -115,7 +115,7 @@ export function AuditLogsPage() {
       </div>
 
       <Card padded={false}>
-        <div className="p-4 border-b border-slate-200">
+        <div className="px-4 sm:px-6 py-4 border-b border-border bg-muted/40">
           <AuditFilters
             search={search}
             onSearchChange={setSearch}
@@ -125,6 +125,7 @@ export function AuditLogsPage() {
             onModuleChange={setModuleFilter}
             actions={actions}
             modules={modules}
+            resultCount={filtered.length}
             hasActiveFilters={hasActiveFilters}
             onClear={clearFilters}
           />

@@ -14,6 +14,7 @@ export interface User {
   phone?: string;
   username: string;
   role: UserRole;
+  permissions?: Permission[];
   officeId: string;
   officeName?: string;
   officeCode?: string;

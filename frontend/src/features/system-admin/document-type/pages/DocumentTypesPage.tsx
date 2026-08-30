@@ -97,6 +97,9 @@ export function DocumentTypesPage() {
     if (error) toast.error('Failed to load document types', error);
   }, [error, toast]);
 
+  const hasActiveFilters =
+    search.trim().length > 0 || codeFilter !== 'all' || statusFilter !== 'all';
+
   const existingCodes = useMemo(
     () => new Set(items.map(i => i.code)),
     [items],
@@ -284,28 +287,63 @@ export function DocumentTypesPage() {
       )}
 
       <Card padded={false}>
-        <div className="p-4 border-b border-slate-200 flex flex-col lg:flex-row gap-3">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search by name, code, or description…"
-            className="flex-1"
-            aria-label="Search document types"
-          />
-          <Select
-            value={codeFilter}
-            onChange={e => setCodeFilter(e.target.value as CodeFilter)}
-            options={CODE_FILTER_OPTIONS}
-            className="lg:!w-56"
-            aria-label="Filter by code"
-          />
-          <Select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value as StatusFilter)}
-            options={STATUS_FILTER_OPTIONS}
-            className="lg:!w-40"
-            aria-label="Filter by status"
-          />
+        <div className="px-4 sm:px-6 py-4 border-b border-border bg-muted/40">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-md bg-background border border-border text-muted-foreground flex items-center justify-center shrink-0">
+                <Search className="w-3.5 h-3.5" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Filters</h3>
+              {hasActiveFilters && (
+                <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 border border-brand-200 px-1.5 py-0.5 rounded">
+                  ACTIVE
+                </span>
+              )}
+            </div>
+            <span className="text-sm text-muted-foreground shrink-0">
+              <span className="font-semibold text-foreground tabular-nums">{filtered.length}</span>{' '}
+              {filtered.length === 1 ? 'document type' : 'document types'}
+            </span>
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-3">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search by name, code, or description…"
+              className="flex-1 min-w-0"
+              aria-label="Search document types"
+            />
+            <div className="flex items-center gap-2">
+              <Select
+                value={codeFilter}
+                onChange={e => setCodeFilter(e.target.value as CodeFilter)}
+                options={CODE_FILTER_OPTIONS}
+                className="w-full lg:w-56"
+                aria-label="Filter by code"
+              />
+              <Select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value as StatusFilter)}
+                options={STATUS_FILTER_OPTIONS}
+                className="w-full sm:w-40"
+                aria-label="Filter by status"
+              />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSearch('');
+                  setCodeFilter('all');
+                  setStatusFilter('all');
+                }}
+                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                disabled={!hasActiveFilters}
+                className="h-10 shrink-0"
+              >
+                Reset
+              </Button>
+            </div>
+          </div>
         </div>
 
         <Table

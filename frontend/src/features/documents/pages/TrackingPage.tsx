@@ -1,22 +1,19 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Calendar,
   Building2,
-  User as UserIcon,
-  Eye,
   CheckCircle2,
   Clock,
   AlertCircle,
   ArrowRight,
+  ArrowUpRight,
   RotateCcw,
   SlidersHorizontal,
   FileText,
   Activity,
-  TrendingUp,
-  AlertTriangle,
-  ChevronRight,
   Inbox,
+  CircleDot,
+  MapPin,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
@@ -25,6 +22,7 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
+import { Separator } from '@/components/ui/separator';
 import { StatusBadge, PriorityBadge } from '@/components/ui/StatusBadge';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useDocumentRouting } from '@/features/documents/hooks/useDocumentRouting';
@@ -34,7 +32,7 @@ import {
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_WORKFLOW,
 } from '@/constants';
-import { formatRelative, cn } from '@/lib/utils';
+import { formatRelative, cn, formatDate } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
 import type { DocumentListItem } from '@/features/documents/types/document';
 
@@ -98,83 +96,95 @@ export function TrackingPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Document Tracking"
-        description="Real-time tracking of all documents across the workflow"
+        description="Real-time overview of every document across your workflow"
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatTile label="In Transit" value={stats.active} icon={<Activity className="w-4 h-4" />} />
-        <StatTile label="Awaiting Action" value={stats.inMyQueue} icon={<Inbox className="w-4 h-4" />} />
-        <StatTile label="Completed" value={stats.completed} icon={<CheckCircle2 className="w-4 h-4" />} />
-        <StatTile label="Overdue" value={stats.overdue} icon={<AlertTriangle className="w-4 h-4" />} />
+        <StatCard label="In Transit" value={stats.active} icon={<Activity className="w-4 h-4" />} />
+        <StatCard label="Awaiting Action" value={stats.inMyQueue} icon={<Inbox className="w-4 h-4" />} />
+        <StatCard label="Completed" value={stats.completed} icon={<CheckCircle2 className="w-4 h-4" />} tone="success" />
+        <StatCard
+          label="Overdue"
+          value={stats.overdue}
+          icon={<AlertCircle className="w-4 h-4" />}
+          tone="danger"
+          hint={stats.overdue > 0 ? 'Needs attention' : undefined}
+        />
       </div>
 
-      <Card padded={false}>
-        <div className="px-4 sm:px-5 py-4 border-b border-slate-200">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-md bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center">
-              <SlidersHorizontal className="w-3.5 h-3.5" />
+      <Card padded={false} className="overflow-hidden">
+        <div className="px-4 sm:px-6 py-4 border-b border-border bg-muted/40">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-md bg-background border border-border text-muted-foreground flex items-center justify-center shrink-0">
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Filters</h3>
+              {hasActiveFilters && (
+                <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 border border-brand-200 px-1.5 py-0.5 rounded">
+                  ACTIVE
+                </span>
+              )}
             </div>
-            <h3 className="text-sm font-semibold text-slate-900">Filters</h3>
-            {hasActiveFilters && (
-              <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 border border-brand-200 px-1.5 py-0.5 rounded">
-                ACTIVE
-              </span>
-            )}
-            <span className="ml-auto text-xs text-slate-500">
-              <span className="font-semibold text-slate-900">{filtered.length}</span>{' '}
-              {filtered.length === 1 ? 'document' : 'documents'} tracked
+            <span className="text-sm text-muted-foreground shrink-0">
+              <span className="font-semibold text-foreground tabular-nums">{filtered.length}</span>{' '}
+              {filtered.length === 1 ? 'result' : 'results'}
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_240px_auto] gap-3">
+          <div className="flex flex-col lg:flex-row gap-3">
             <SearchInput
               value={search}
               onChange={setSearch}
               placeholder="Search by tracking #, title, sender, or tags…"
-              className="h-11"
-              inputClassName="h-11 text-base"
+              className="flex-1 min-w-0"
             />
-            <Select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              options={[
-                { value: 'all', label: 'All Status' },
-                ...ALL_DOCUMENT_STATUSES.map(s => ({ value: s, label: DOCUMENT_STATUS_LABELS[s] })),
-              ]}
-              className="h-11"
-            />
-            <Button
-              variant="outline"
-              onClick={resetFilters}
-              leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
-              disabled={!hasActiveFilters}
-              className="h-11"
-            >
-              Reset
-            </Button>
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 lg:w-auto">
+              <Select
+                aria-label="Filter by status"
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="h-10 w-full sm:w-44"
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  ...ALL_DOCUMENT_STATUSES.map(s => ({ value: s, label: DOCUMENT_STATUS_LABELS[s] })),
+                ]}
+              />
+              <Button
+                variant="outline"
+                onClick={resetFilters}
+                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                disabled={!hasActiveFilters}
+                className="h-10"
+              >
+                Reset
+              </Button>
+            </div>
           </div>
         </div>
 
         {filtered.length === 0 ? (
-          <EmptyState
-            icon={<FileText className="w-7 h-7" />}
-            title="No documents to track"
-            description="Adjust your filters or check back later."
-            action={
-              hasActiveFilters ? (
-                <Button variant="outline" onClick={resetFilters}>
-                  Reset Filters
-                </Button>
-              ) : null
-            }
-          />
+          <div className="p-10">
+            <EmptyState
+              icon={<FileText className="w-7 h-7" />}
+              title="No documents to track"
+              description="Adjust your filters or check back later."
+              action={
+                hasActiveFilters ? (
+                  <Button variant="outline" onClick={resetFilters}>
+                    Reset Filters
+                  </Button>
+                ) : null
+              }
+            />
+          </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="p-3 sm:p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
             {filtered.map(doc => (
-              <DocumentTracker key={doc.id} doc={doc} />
+              <DocumentCard key={doc.id} doc={doc} />
             ))}
           </div>
         )}
@@ -183,21 +193,41 @@ export function TrackingPage() {
   );
 }
 
-function StatTile({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  tone = 'default',
+  hint,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  tone?: 'default' | 'success' | 'danger';
+  hint?: string;
+}) {
+  const iconTone =
+    tone === 'success'
+      ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+      : tone === 'danger'
+        ? 'bg-rose-50 text-rose-600 border-rose-200'
+        : 'bg-brand-50 text-brand-600 border-brand-200';
+
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-4 flex items-center gap-3 hover:border-slate-300 transition-colors">
-      <div className="w-8 h-8 rounded-md border border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center shrink-0">
+    <div className="group relative rounded-xl border border-border bg-card p-4 flex items-center gap-3 transition-shadow hover:shadow-sm focus-within:ring-2 focus-within:ring-ring">
+      <div className={cn('w-9 h-9 rounded-lg border flex items-center justify-center shrink-0', iconTone)}>
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="text-xl font-semibold text-slate-900 tabular-nums leading-none">{value}</p>
-        <p className="text-xs text-slate-500 mt-1">{label}</p>
+        <p className="text-2xl font-semibold text-foreground tabular-nums leading-none">{value}</p>
+        <p className="text-xs text-muted-foreground mt-1 truncate">{label}</p>
+        {hint && <p className="text-[10px] font-medium text-rose-600 mt-0.5">{hint}</p>}
       </div>
     </div>
   );
 }
 
-function DocumentTracker({ doc }: { doc: DocumentListItem }) {
+function DocumentCard({ doc }: { doc: DocumentListItem }) {
   const officeById = useOfficeLookup();
   const userById = useUserLookup();
   const { steps } = useDocumentRouting(doc.id);
@@ -210,212 +240,167 @@ function DocumentTracker({ doc }: { doc: DocumentListItem }) {
   const isOverdue = doc.dueDate &&
     doc.status !== 'released' && doc.status !== 'archived' && doc.status !== 'rejected' &&
     new Date(doc.dueDate).getTime() < new Date().getTime();
+  const currentStop = inProgressStep ? officeById(inProgressStep.toOfficeId) : office;
+  const nextStop = inProgressStep
+    ? officeById(inProgressStep.toOfficeId)
+    : steps.filter(s => s.status === 'pending')[0]
+      ? officeById(steps.filter(s => s.status === 'pending')[0].toOfficeId)
+      : null;
 
   return (
-    <div className="px-4 sm:px-5 py-4 hover:bg-slate-50/50 transition-colors">
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_2fr] gap-4 xl:gap-6">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-            <Link
-              to={`/documents/${doc.id}`}
-              className="font-mono text-[11px] font-semibold text-brand-700 hover:underline"
-            >
-              {doc.trackingNumber}
-            </Link>
-            <StatusBadge status={doc.status} />
-            <PriorityBadge priority={doc.priority} />
-            {isOverdue && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                <AlertTriangle className="w-3 h-3" />
-                Overdue
-              </span>
-            )}
-          </div>
-          <Link
-            to={`/documents/${doc.id}`}
-            className="block text-sm font-semibold text-slate-900 hover:text-brand-700 line-clamp-2 leading-snug"
-          >
-            {doc.title}
-          </Link>
-          <p className="text-[11px] text-slate-500 mt-1">
-            Updated {formatRelative(doc.updatedAt)}
-          </p>
-
-          <div className="mt-3 space-y-1.5 text-xs">
-            <Field icon={<Building2 className="w-3.5 h-3.5" />} label="Office" value={office?.name} sub={office?.code} />
-            <Field
-              icon={<UserIcon className="w-3.5 h-3.5" />}
-              label="Holder"
-              value={holder?.fullName}
-              sub={holder?.position ?? undefined}
-              avatar={holder ? { name: holder.fullName, color: holder.avatarColor } : undefined}
-            />
-            <Field
-              icon={<Calendar className="w-3.5 h-3.5" />}
-              label="Due"
-              value={doc.dueDate ? new Date(doc.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No deadline'}
-              valueClassName={isOverdue ? 'text-rose-600 font-semibold' : undefined}
-            />
-          </div>
-
-          <div className="mt-3 flex items-center justify-between">
-            <Link
-              to={`/documents/${doc.id}`}
-              className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700"
-            >
-              View details
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
+    <Link
+      to={`/documents/${doc.id}`}
+      className="group relative flex flex-col rounded-xl border border-border bg-card p-4 sm:p-5 transition-all hover:border-brand-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <span className="font-mono text-[11px] font-semibold text-brand-700 bg-brand-50 border border-brand-200 rounded px-1.5 py-0.5">
+            {doc.trackingNumber}
+          </span>
+          <StatusBadge status={doc.status} />
         </div>
-
-        <div className="min-w-0">
-          {totalSteps > 0 ? (
-            <>
-              <div className="flex items-center justify-between text-[11px] mb-2">
-                <span className="font-semibold uppercase tracking-wider text-slate-500">
-                  Routing Progress
-                </span>
-                <span className="tabular-nums">
-                  <span className="font-semibold text-slate-900">{completedSteps}</span>
-                  <span className="text-slate-400"> / {totalSteps}</span>
-                </span>
-              </div>
-              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-4">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all',
-                    progress === 100 ? 'bg-emerald-500' : 'bg-brand-500'
-                  )}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-
-              <ol className="relative">
-                {steps.map((step, idx) => {
-                  const fromOffice = officeById(step.fromOfficeId);
-                  const toOffice = officeById(step.toOfficeId);
-                  const toUser = step.toUserId ? userById(step.toUserId) : null;
-                  const completed = step.status === 'completed';
-                  const inProgress = step.status === 'in_progress';
-                  const returned = step.status === 'returned';
-                  const isLast = idx === steps.length - 1;
-                  return (
-                    <li key={step.id} className={cn('relative pl-7', !isLast && 'pb-3')}>
-                      {!isLast && (
-                        <span
-                          className={cn(
-                            'absolute left-[7px] top-3.5 bottom-0 w-px',
-                            completed ? 'bg-emerald-300' : 'bg-slate-200'
-                          )}
-                        />
-                      )}
-                      <span
-                        className={cn(
-                          'absolute left-0.5 top-0.5 w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center bg-white',
-                          completed ? 'border-emerald-500' :
-                          inProgress ? 'border-amber-500' :
-                          returned ? 'border-rose-500' :
-                          'border-slate-300'
-                        )}
-                      >
-                        {completed && <span className="w-1 h-1 rounded-full bg-emerald-500" />}
-                        {inProgress && <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />}
-                        {returned && <span className="w-1 h-1 rounded-full bg-rose-500" />}
-                      </span>
-                      <div className="flex items-center justify-between gap-2 min-w-0">
-                        <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
-                          <span className="text-slate-400 font-mono shrink-0">{step.sequence}.</span>
-                          <span className="text-slate-600 font-medium truncate">{fromOffice?.code}</span>
-                          <ArrowRight className="w-3 h-3 text-slate-300 shrink-0" />
-                          <span className="text-slate-900 font-semibold truncate">{toOffice?.code}</span>
-                          {toUser && (
-                            <span className="text-slate-500 truncate hidden sm:inline">· {toUser.fullName}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span
-                            className={cn(
-                              'text-[10px] font-semibold uppercase tracking-wider',
-                              completed ? 'text-emerald-700' :
-                              inProgress ? 'text-amber-700' :
-                              returned ? 'text-rose-700' :
-                              'text-slate-500'
-                            )}
-                          >
-                            {step.status.replace('_', ' ')}
-                          </span>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-            </>
-          ) : (
-            (() => {
-              // Fallback: show workflow-stage progress for documents that
-              // have not travelled between offices yet.
-              const idx = DOCUMENT_WORKFLOW.indexOf(doc.status);
-              if (idx < 0) {
-                return <div className="text-xs text-slate-500 italic">No routing steps recorded yet.</div>;
-              }
-              const progress = Math.round(((idx + 1) / DOCUMENT_WORKFLOW.length) * 100);
-              return (
-                <>
-                  <div className="flex items-center justify-between text-[11px] mb-2">
-                    <span className="font-semibold uppercase tracking-wider text-slate-500">
-                      Workflow Progress
-                    </span>
-                    <span className="tabular-nums">
-                      <span className="font-semibold text-slate-900">{idx + 1}</span>
-                      <span className="text-slate-400"> / {DOCUMENT_WORKFLOW.length}</span>
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-4">
-                    <div
-                      className={cn(
-                        'h-full rounded-full transition-all',
-                        doc.status === 'archived' ? 'bg-emerald-500' : 'bg-brand-500'
-                      )}
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-500 italic">
-                    Currently at stage: {DOCUMENT_STATUS_LABELS[doc.status]}
-                  </p>
-                </>
-              );
-            })()
-          )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <PriorityBadge priority={doc.priority} />
+          <span className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+            <ArrowUpRight className="w-4 h-4" />
+          </span>
         </div>
       </div>
-    </div>
+
+      <h3 className="mt-3 text-sm font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-brand-700 transition-colors">
+        {doc.title}
+      </h3>
+
+      <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <Clock className="w-3 h-3" />
+        <span>Updated {formatRelative(doc.updatedAt)}</span>
+      </div>
+
+      <Separator className="my-4" />
+
+      <div className="space-y-2.5 text-xs">
+        <DetailRow
+          icon={<Building2 className="w-3.5 h-3.5" />}
+          label="Office"
+          value={office?.name}
+          sub={office?.code}
+        />
+        <DetailRow
+          icon={<MapPin className="w-3.5 h-3.5" />}
+          label="Holder"
+          value={holder?.fullName}
+          sub={holder?.position ?? undefined}
+          avatar={holder ? { name: holder.fullName, color: holder.avatarColor } : undefined}
+        />
+        <DetailRow
+          icon={<CircleDot className="w-3.5 h-3.5" />}
+          label="Due"
+          value={doc.dueDate ? formatDate(doc.dueDate) : 'No deadline'}
+          tone={isOverdue ? 'danger' : 'default'}
+          badge={isOverdue ? 'Overdue' : undefined}
+        />
+      </div>
+
+      <div className="mt-auto pt-4">
+        {totalSteps > 0 ? (
+          <>
+            <div className="flex items-center justify-between text-[11px] mb-1.5">
+              <span className="font-semibold uppercase tracking-wider text-muted-foreground">
+                Progress
+              </span>
+              <span className="tabular-nums text-foreground font-medium">{progress}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all',
+                  progress === 100 ? 'bg-emerald-500' : 'bg-brand-500'
+                )}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <ArrowRight className="w-3 h-3 shrink-0" />
+              <span className="truncate">{currentStop?.code ?? '—'}</span>
+              <span className="text-slate-300">to</span>
+              <span className="font-medium text-foreground truncate">
+                {nextStop?.code ?? (progress === 100 ? 'Complete' : '—')}
+              </span>
+            </div>
+          </>
+        ) : (
+          (() => {
+            const idx = DOCUMENT_WORKFLOW.indexOf(doc.status);
+            if (idx < 0) {
+              return <p className="text-xs italic text-muted-foreground">No routing steps recorded yet.</p>;
+            }
+            const p = Math.round(((idx + 1) / DOCUMENT_WORKFLOW.length) * 100);
+            return (
+              <>
+                <div className="flex items-center justify-between text-[11px] mb-1.5">
+                  <span className="font-semibold uppercase tracking-wider text-muted-foreground">
+                    Workflow Progress
+                  </span>
+                  <span className="tabular-nums text-foreground font-medium">{p}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all',
+                      doc.status === 'archived' ? 'bg-emerald-500' : 'bg-brand-500'
+                    )}
+                    style={{ width: `${p}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-[11px] italic text-muted-foreground">
+                  {DOCUMENT_STATUS_LABELS[doc.status]}
+                </p>
+              </>
+            );
+          })()
+        )}
+      </div>
+    </Link>
   );
 }
 
-function Field({
+function DetailRow({
   icon,
   label,
   value,
   sub,
   avatar,
-  valueClassName,
+  tone = 'default',
+  badge,
 }: {
   icon: React.ReactNode;
   label: string;
   value?: string;
   sub?: string;
   avatar?: { name: string; color: string };
-  valueClassName?: string;
+  tone?: 'default' | 'danger';
+  badge?: string;
 }) {
   return (
-    <div className="flex items-center gap-1.5 min-w-0">
-      <span className="text-slate-400 shrink-0">{icon}</span>
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 shrink-0">{label}</span>
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-muted-foreground shrink-0">{icon}</span>
+      <span className="w-11 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
       {avatar && <Avatar name={avatar.name} color={avatar.color} size="xs" />}
-      <span className={cn('truncate font-medium text-slate-900', valueClassName)}>{value ?? '—'}</span>
-      {sub && <span className="text-slate-500 truncate">· {sub}</span>}
+      <span className={cn(
+        'truncate font-medium',
+        tone === 'danger' ? 'text-rose-600' : 'text-slate-900'
+      )}>
+        {value ?? '—'}
+      </span>
+      {sub && <span className="text-muted-foreground truncate">· {sub}</span>}
+      {badge && (
+        <span className="ml-auto shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+          <AlertCircle className="w-3 h-3" />
+          {badge}
+        </span>
+      )}
     </div>
   );
 }

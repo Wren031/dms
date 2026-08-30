@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AuthUser } from '@/features/authentication/api/authApi';
+import type { User } from '@/types';
 import { profileFormFromUser, type ProfileForm } from '@/features/profile/types/profile';
 import { profileService } from '@/features/profile/services/profile.service';
 
@@ -34,7 +35,7 @@ export interface UseProfileFormReturn {
   save: () => Promise<AuthUser | null>;
 }
 
-export function useProfileForm(user: AuthUser): UseProfileFormReturn {
+export function useProfileForm(user: User): UseProfileFormReturn {
   const initial = useMemo(() => profileFormFromUser(user), [user]);
   const [form, setForm] = useState<ProfileForm>(initial);
   const [isSaving, setSaving] = useState(false);

@@ -11,7 +11,7 @@ interface UsersWithRoleProps {
 export function UsersWithRole({ users, roleName }: UsersWithRoleProps) {
   if (users.length === 0) {
     return (
-      <p className="text-sm text-slate-500 py-4 text-center border border-dashed border-slate-200 rounded-xl">
+      <p className="text-sm text-muted-foreground py-6 text-center border border-dashed border-border rounded-xl">
         No users currently hold this role.
       </p>
     );
@@ -21,12 +21,12 @@ export function UsersWithRole({ users, roleName }: UsersWithRoleProps) {
       {users.map(u => (
         <div
           key={u.id}
-          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"
+          className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
         >
           <Avatar name={u.fullName} size="md" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-slate-900 truncate">{u.fullName}</p>
-            <p className="text-xs text-slate-500 truncate">{u.email}</p>
+            <p className="text-sm font-medium text-foreground truncate">{u.fullName}</p>
+            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
             <div className="mt-1 flex items-center gap-1">
               <Badge
                 variant={u.status === 'active' ? 'emerald' : 'slate'}
@@ -35,7 +35,7 @@ export function UsersWithRole({ users, roleName }: UsersWithRoleProps) {
                 {ROLE_LABELS[u.role as keyof typeof ROLE_LABELS] ?? u.role}
               </Badge>
               {u.position && (
-                <span className="text-[10px] text-slate-400 truncate">· {u.position}</span>
+                <span className="text-[10px] text-muted-foreground truncate">· {u.position}</span>
               )}
             </div>
           </div>

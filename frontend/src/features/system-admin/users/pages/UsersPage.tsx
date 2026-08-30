@@ -237,38 +237,60 @@ export function UsersPage() {
       </div>
 
       <Card padded={false}>
-        <div className="p-4 border-b border-slate-200 flex flex-col lg:flex-row gap-3">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search by name, email, username…"
-            className="flex-1"
-            aria-label="Search users"
-          />
-          <Select
-            value={roleFilter}
-            onChange={e => setRoleFilter(e.target.value as RoleFilter)}
-            options={ROLE_FILTER_OPTIONS}
-            className="!w-56"
-            aria-label="Filter by role"
-          />
-          <Select
-            value={officeFilter}
-            onChange={e => setOfficeFilter(e.target.value)}
-            options={[
-              { value: 'all', label: 'All Offices' },
-              ...offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` })),
-            ]}
-            className="!w-64"
-            aria-label="Filter by office"
-          />
-          <Select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value as StatusFilter)}
-            options={STATUS_FILTER_OPTIONS}
-            className="!w-36"
-            aria-label="Filter by status"
-          />
+        <div className="px-4 sm:px-6 py-4 border-b border-border bg-muted/40">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-md bg-background border border-border text-muted-foreground flex items-center justify-center shrink-0">
+                <Search className="w-3.5 h-3.5" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Filters</h3>
+              {(roleFilter !== 'all' || officeFilter !== 'all' || statusFilter !== 'all' || search !== '') && (
+                <span className="text-[10px] font-semibold text-brand-700 bg-brand-50 border border-brand-200 px-1.5 py-0.5 rounded">
+                  ACTIVE
+                </span>
+              )}
+            </div>
+            <span className="text-sm text-muted-foreground shrink-0">
+              <span className="font-semibold text-foreground tabular-nums">{filtered.length}</span>{' '}
+              {filtered.length === 1 ? 'user' : 'users'}
+            </span>
+          </div>
+
+          <div className="flex flex-col xl:flex-row gap-3">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search by name, email, username…"
+              className="flex-1 min-w-0"
+              aria-label="Search users"
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Select
+                value={roleFilter}
+                onChange={e => setRoleFilter(e.target.value as RoleFilter)}
+                options={ROLE_FILTER_OPTIONS}
+                className="w-full sm:w-52"
+                aria-label="Filter by role"
+              />
+              <Select
+                value={officeFilter}
+                onChange={e => setOfficeFilter(e.target.value)}
+                options={[
+                  { value: 'all', label: 'All Offices' },
+                  ...offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` })),
+                ]}
+                className="w-full sm:w-60"
+                aria-label="Filter by office"
+              />
+              <Select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value as StatusFilter)}
+                options={STATUS_FILTER_OPTIONS}
+                className="w-full sm:w-36"
+                aria-label="Filter by status"
+              />
+            </div>
+          </div>
         </div>
 
         <Table

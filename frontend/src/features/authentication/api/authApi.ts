@@ -6,6 +6,7 @@ export interface AuthUser {
   username: string | null;
   role: string;
   status: string;
+  permissions: string[];
   officeId: string | null;
   office?: { id: string; name: string; code: string; type: string } | null;
   position: string | null;

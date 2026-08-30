@@ -40,6 +40,7 @@ function mapUser(user: AuthUser): User {
     phone: user.phone ?? undefined,
     username: user.username ?? user.email ?? '',
     role: user.role.toLowerCase() as UserRole,
+    permissions: user.permissions as Permission[] | undefined,
     officeId: user.officeId ?? '',
     officeName: user.office?.name ?? undefined,
     officeCode: user.office?.code ?? undefined,
@@ -85,8 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(mapUser(next));
   };
 
-  const hasPermission = (permission: Permission) =>
-    !!user && (ROLE_PERMISSIONS[user.role] ?? []).includes(permission);
+  const hasPermission = (permission: Permission) => {
+    if (!user) return false;
+    const perms =
+      user.permissions && user.permissions.length > 0
+        ? user.permissions
+        : (ROLE_PERMISSIONS[user.role] ?? []);
+    return perms.includes(permission);
+  };
 
   const value = useMemo<AuthContextValue>(() => ({
     user,

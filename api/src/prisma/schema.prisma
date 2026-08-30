@@ -123,13 +123,13 @@ model User {
   role         Role          @default(DOCUMENT_ENCODER)
   status       AccountStatus @default(ACTIVE)
 
-  employeeId   String        @unique
-  employee     Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String   @unique
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   authSessions AuthSession[]
 
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([role])
   @@index([status])
@@ -149,6 +149,20 @@ model AuthSession {
   @@index([userId])
   @@index([tokenHash])
   @@index([expiresAt])
+}
+
+// =====================================================
+// Roles & Permissions
+// =====================================================
+
+model RolePermission {
+  id         String   @id @default(uuid())
+  role       Role
+  permission String
+  createdAt  DateTime @default(now())
+
+  @@unique([role, permission])
+  @@index([role])
 }
 
 // =====================================================
@@ -198,27 +212,27 @@ model Employee {
 // =====================================================
 
 model DocumentType {
-  id          String     @id @default(uuid())
+  id          String           @id @default(uuid())
   code        DocumentTypeCode @unique
   name        String
   description String?
-  isActive    Boolean    @default(true)
+  isActive    Boolean          @default(true)
   documents   Document[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 }
 
 model Document {
-  id                  String           @id @default(uuid())
-  trackingNumber      String           @unique
+  id                  String                 @id @default(uuid())
+  trackingNumber      String                 @unique
   documentNumber      String
   title               String
   description         String?
   typeId              String
-  type                DocumentType     @relation(fields: [typeId], references: [id])
+  type                DocumentType           @relation(fields: [typeId], references: [id])
   classification      DocumentClassification
-  status              DocumentStatus   @default(registered)
-  priority            DocumentPriority @default(normal)
+  status              DocumentStatus         @default(registered)
+  priority            DocumentPriority       @default(normal)
   source              DocumentSource
   senderName          String?
   tags                String[]
@@ -229,8 +243,8 @@ model Document {
   receivedById        String?
   dateReceived        DateTime?
   dueDate             DateTime?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
   attachments         DocumentAttachment[]
   routingSteps        DocumentRoutingStep[]
   reviews             DocumentReview[]
@@ -300,16 +314,16 @@ model DocumentReview {
 }
 
 model DocumentRelease {
-  id            String          @id @default(uuid())
+  id            String        @id @default(uuid())
   documentId    String
-  document      Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document      Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
   releasedById  String
   releasedToId  String?
   method        ReleaseMethod
   recipientName String?
   notes         String?
-  releasedAt    DateTime        @default(now())
-  createdAt     DateTime        @default(now())
+  releasedAt    DateTime      @default(now())
+  createdAt     DateTime      @default(now())
 
   @@index([documentId])
 }
@@ -328,26 +342,26 @@ model DocumentTracking {
 }
 
 model DocumentArchive {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   documentId     String
-  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document       Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
   archivedById   String
   location       String?
   retentionUntil DateTime?
-  archivedAt     DateTime @default(now())
+  archivedAt     DateTime  @default(now())
 
   @@index([documentId])
 }
 
 model DocumentHistory {
-  id         String         @id @default(uuid())
+  id         String          @id @default(uuid())
   documentId String
-  document   Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document   Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
   fromStatus DocumentStatus?
   toStatus   DocumentStatus
   actorId    String?
   remarks    String?
-  occurredAt DateTime       @default(now())
+  occurredAt DateTime        @default(now())
 
   @@index([documentId])
 }

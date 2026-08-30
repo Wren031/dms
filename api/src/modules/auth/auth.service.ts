@@ -28,6 +28,7 @@ import {
 import { Request, Response } from 'express';
 import type { CookieOptions } from 'express';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
+import { RolesService } from '../roles/roles.service';
 
 type AuthUserWithEmployee = Prisma.UserGetPayload<{
   include: {
@@ -98,6 +99,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
+    private readonly rolesService: RolesService,
   ) {
     const authCfg = this.configService.getOrThrow<AuthConfig>('auth');
     this.accessTtlMs = parseTtlMs(authCfg.access.ttl);
@@ -133,7 +135,7 @@ export class AuthService {
     const csrfRaw = randomToken(32);
     this.setAuthCookies(res, accessToken, refreshRaw, this.refreshTtlMs, csrfRaw);
 
-    return { user: this.toUserDto(user) };
+    return { user: await this.toUserDto(user) };
   }
 
   async forgotPassword(
@@ -261,7 +263,7 @@ export class AuthService {
     this.setAuthCookies(res, accessToken, refreshRaw, this.refreshTtlMs, csrfRaw);
 
     this.logger.log(`Registered user ${user.id} for employee ${employee.employeeNo}`);
-    return { user: this.toUserDto(user) };
+    return { user: await this.toUserDto(user) };
   }
 
   async refresh(req: Request, res: Response): Promise<AuthResponseDto> {
@@ -299,7 +301,7 @@ export class AuthService {
     const csrfRaw = randomToken(32);
     this.setAuthCookies(res, accessToken, newRefreshRaw, this.refreshTtlMs, csrfRaw);
 
-    return { user: this.toUserDto(user) };
+    return { user: await this.toUserDto(user) };
   }
 
   async logout(req: Request, res: Response, sessionId?: string): Promise<void> {
@@ -536,13 +538,15 @@ export class AuthService {
     return fallback.replace(/\/+$/, '');
   }
 
-  private toUserDto(user: AuthUserWithEmployee): AuthenticatedUserDto {
+  private async toUserDto(user: AuthUserWithEmployee): Promise<AuthenticatedUserDto> {
+    const permissions = await this.rolesService.effectivePermissions(user.role);
     return {
       id: user.id,
       email: user.email,
       username: user.username,
       role: user.role,
       status: user.status,
+      permissions,
       officeId: user.employee?.officeId ?? null,
       office: user.employee?.office
         ? {
