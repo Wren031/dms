@@ -9,37 +9,51 @@ export interface UseRecentNotificationsReturn {
   markRead: (id: string) => Promise<void>;
 }
 
-export function useRecentNotifications(active: boolean, limit = 6): UseRecentNotificationsReturn {
+export function useRecentNotifications(
+  active: boolean,
+  limit = 6,
+  unreadOnly = false,
+): UseRecentNotificationsReturn {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await notificationsService.list({ pageSize: limit });
+      const list = await notificationsService.list({
+        pageSize: limit,
+        ...(unreadOnly ? { read: false } : {}),
+      });
       setItems(list.items);
     } catch {
       // Bell is decorative; swallow.
     } finally {
       setLoading(false);
     }
-  }, [limit]);
+  }, [limit, unreadOnly]);
 
   useEffect(() => {
     if (active) refresh();
   }, [active, refresh]);
 
-  const markRead = useCallback(async (id: string) => {
-    setItems(prev =>
-      prev.map(n => (n.id === id ? { ...n, read: true, readAt: new Date().toISOString() } : n)),
-    );
-    try {
-      await notificationsService.markRead([id]);
-    } catch {
-      // Re-sync from server on failure.
-      refresh();
-    }
-  }, [refresh]);
+  const markRead = useCallback(
+    async (id: string) => {
+      if (unreadOnly) {
+        setItems(prev => prev.filter(n => n.id !== id));
+      } else {
+        setItems(prev =>
+          prev.map(n => (n.id === id ? { ...n, read: true, readAt: new Date().toISOString() } : n)),
+        );
+      }
+      try {
+        await notificationsService.markRead([id]);
+      } catch {
+        // Re-sync from server on failure.
+        refresh();
+      }
+    },
+    [unreadOnly, refresh],
+  );
 
   return { items, loading, refresh, markRead };
 }

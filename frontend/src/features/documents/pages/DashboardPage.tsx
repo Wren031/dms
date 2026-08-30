@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -17,6 +17,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { StatusBadge, PriorityBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useRecentNotifications } from '@/features/notifications/hooks/useRecentNotifications';
@@ -28,6 +29,7 @@ import {
 } from '@/constants';
 import { formatRelative, cn } from '@/lib/utils';
 import type { DocumentStatus } from '@/types';
+import type { NotificationItem } from '@/features/notifications/types/notification';
 
 const PENDING_STATUSES = new Set<DocumentStatus>([
   'registered',
@@ -71,7 +73,9 @@ export function DashboardPage() {
     items: recentNotifications,
     loading: notificationsLoading,
     markRead: markReadNotification,
-  } = useRecentNotifications(true, 6);
+  } = useRecentNotifications(true, 6, true);
+
+  const [selectedNotification, setSelectedNotification] = useState<NotificationItem | null>(null);
 
   useEffect(() => {
     if (error) toast.error('Failed to load dashboard data', error);
@@ -288,20 +292,16 @@ export function DashboardPage() {
             ) : (
               <div className="divide-y divide-slate-100 -mx-5 px-5">
                 {recentNotifications.map(n => (
-                  <Link
+                  <button
                     key={n.id}
-                    to={n.link || '/notifications'}
+                    type="button"
                     onClick={() => {
-                      if (!n.read) markReadNotification(n.id);
+                      setSelectedNotification(n);
+                      markReadNotification(n.id);
                     }}
-                    className="flex items-start gap-3 py-3 group"
+                    className="w-full text-left flex items-start gap-3 py-3 group hover:bg-slate-50 rounded-md -mx-2 px-2 transition-colors"
                   >
-                    <span
-                      className={cn(
-                        'w-2 h-2 mt-1.5 rounded-full shrink-0',
-                        n.read ? 'bg-slate-300' : 'bg-brand-500',
-                      )}
-                    />
+                    <span className="w-2 h-2 mt-1.5 rounded-full shrink-0 bg-brand-500" />
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm font-medium text-slate-900 truncate group-hover:text-brand-700">
                         {n.title}
@@ -313,7 +313,7 @@ export function DashboardPage() {
                         {formatRelative(n.createdAt)}
                       </span>
                     </span>
-                  </Link>
+                  </button>
                 ))}
               </div>
             )}
@@ -476,6 +476,42 @@ export function DashboardPage() {
         )}
         </Card>
       </div>
+
+      <Modal
+        open={!!selectedNotification}
+        onClose={() => setSelectedNotification(null)}
+        title={selectedNotification?.title}
+        description={
+          selectedNotification
+            ? `${selectedNotification.type.charAt(0).toUpperCase()}${selectedNotification.type.slice(1)} notification · ${formatRelative(selectedNotification.createdAt)}`
+            : undefined
+        }
+        footer={
+          selectedNotification && (
+            <>
+              {selectedNotification.link && (
+                <Link
+                  to={selectedNotification.link}
+                  onClick={() => setSelectedNotification(null)}
+                >
+                  <Button size="sm">Open</Button>
+                </Link>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedNotification(null)}
+              >
+                Close
+              </Button>
+            </>
+          )
+        }
+      >
+        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+          {selectedNotification?.message}
+        </p>
+      </Modal>
     </div>
   );
 }
