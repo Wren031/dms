@@ -443,8 +443,7 @@ export function UsersPage() {
                       id: 'edit',
                       label: 'Edit User',
                       icon: <Edit2 className="w-4 h-4" />,
-                      onClick: () =>
-                        toast.info('Edit User', 'Edit page coming soon.'),
+                      onClick: () => navigate(`/users/${u.id}/edit`),
                       disabled: !hasPermission('users.edit'),
                     },
                     { id: 'd-danger', label: '', divider: true },

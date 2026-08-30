@@ -218,9 +218,7 @@ export function UserDetailPage() {
               <Button
                 variant="outline"
                 leftIcon={<Edit2 className="w-4 h-4" />}
-                onClick={() =>
-                  toast.info('Edit User', 'Edit page coming soon.')
-                }
+                onClick={() => navigate(`/users/${user.id}/edit`)}
                 disabled={deleting}
               >
                 Edit User
