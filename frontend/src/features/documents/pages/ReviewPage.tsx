@@ -12,6 +12,8 @@ import {
   User as UserIcon,
   FileText,
   MessageSquare,
+  Inbox,
+  Send,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -31,14 +33,29 @@ import { usePagination } from '@/hooks/usePagination';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
+import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import { DOCUMENT_TYPE_LABELS } from '@/constants';
 import { formatDate, formatRelative } from '@/lib/utils';
+import type { DocumentStatus } from '@/types';
 
 export function ReviewPage() {
   const toast = useToast();
   const confirm = useConfirm();
-  const { items: documents } = useDocuments({ pageSize: 100 });
+  const user = useCurrentUser();
+  const { items: documents } = useDocuments({ fetchAll: true });
+
+  const scopedDocuments = useMemo(
+    () =>
+      user.role === 'system_admin'
+        ? documents
+        : documents.filter(d =>
+            d.currentHolderId === user.id ||
+            d.receivedById === user.id ||
+            d.currentOfficeId === user.officeId
+          ),
+    [documents, user.id, user.officeId, user.role],
+  );
   const officeById = useOfficeLookup();
   const userById = useUserLookup();
   const transition = useDocumentTransition();
@@ -50,12 +67,14 @@ export function ReviewPage() {
   const [remarks, setRemarks] = useState('');
 
   const forReview = useMemo(
-    () => documents.filter(d => d.status === 'assigned' || d.status === 'under_review'),
-    [documents],
+    () => scopedDocuments.filter(d =>
+      ['registered', 'received', 'routed', 'assigned', 'under_review'].includes(d.status)
+    ),
+    [scopedDocuments],
   );
-  const recommended = useMemo(() => documents.filter(d => d.status === 'recommended'), [documents]);
-  const returned = useMemo(() => documents.filter(d => d.status === 'returned'), [documents]);
-  const completed = useMemo(() => documents.filter(d => d.status === 'approved' || d.status === 'rejected'), [documents]);
+  const recommended = useMemo(() => scopedDocuments.filter(d => d.status === 'recommended'), [scopedDocuments]);
+  const returned = useMemo(() => scopedDocuments.filter(d => d.status === 'returned'), [scopedDocuments]);
+  const completed = useMemo(() => scopedDocuments.filter(d => d.status === 'approved' || d.status === 'rejected'), [scopedDocuments]);
 
   const counts = {
     for_review: forReview.length,
@@ -89,6 +108,15 @@ export function ReviewPage() {
     }
   };
 
+  const quickTransition = async (docId: string, toStatus: DocumentStatus, successTitle: string) => {
+    const updated = await transition.transition(docId, { toStatus });
+    if (updated) {
+      toast.success(successTitle, 'Document moved forward in the workflow.');
+    } else if (transition.error) {
+      toast.error('Action failed', transition.error);
+    }
+  };
+
   const submitAction = async () => {
     if (!actionModal) return;
     if (actionModal.action === 'reject' && !remarks.trim()) {
@@ -116,9 +144,9 @@ export function ReviewPage() {
 
   const stats = {
     pending: forReview.length + recommended.length,
-    urgent: documents.filter(d => ['under_review', 'recommended'].includes(d.status) && (d.priority === 'urgent' || d.priority === 'high')).length,
+    urgent: scopedDocuments.filter(d => ['under_review', 'recommended'].includes(d.status) && (d.priority === 'urgent' || d.priority === 'high')).length,
     completed: completed.length,
-    rejected: documents.filter(d => d.status === 'rejected').length,
+    rejected: scopedDocuments.filter(d => d.status === 'rejected').length,
   };
 
   return (
@@ -156,7 +184,7 @@ export function ReviewPage() {
             <EmptyState
               icon={<ClipboardCheck className="w-7 h-7" />}
               title="No documents to review"
-              description="Documents awaiting your action will appear here."
+              description="Documents awaiting action in your office will appear here."
             />
           }
           columns={[
@@ -241,6 +269,36 @@ export function ReviewPage() {
               align: 'right',
               cell: d => (
                 <div className="flex items-center justify-end gap-1">
+                  {d.status === 'registered' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => quickTransition(d.id, 'received', 'Document received')}
+                      leftIcon={<Inbox className="w-3 h-3" />}
+                    >
+                      Receive
+                    </Button>
+                  )}
+                  {d.status === 'received' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => quickTransition(d.id, 'routed', 'Document routed')}
+                      leftIcon={<Send className="w-3 h-3" />}
+                    >
+                      Route to office
+                    </Button>
+                  )}
+                  {d.status === 'routed' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => quickTransition(d.id, 'assigned', 'Document assigned')}
+                      leftIcon={<ClipboardCheck className="w-3 h-3" />}
+                    >
+                      Assign
+                    </Button>
+                  )}
                   {d.status === 'assigned' && (
                     <Button
                       size="sm"
@@ -250,27 +308,16 @@ export function ReviewPage() {
                       Start Review
                     </Button>
                   )}
-                  {(d.status === 'under_review' || d.status === 'recommended') && (
+                  {d.status === 'under_review' && (
                     <>
-                      {d.status === 'under_review' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleAction(d.id, 'recommend')}
-                          leftIcon={<ThumbsUp className="w-3 h-3" />}
-                        >
-                          Recommend
-                        </Button>
-                      )}
-                      {d.status === 'recommended' && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleAction(d.id, 'approve')}
-                          leftIcon={<CheckCircle2 className="w-3 h-3" />}
-                        >
-                          Approve
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleAction(d.id, 'recommend')}
+                        leftIcon={<ThumbsUp className="w-3 h-3" />}
+                      >
+                        Recommend
+                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -288,6 +335,43 @@ export function ReviewPage() {
                         Reject
                       </Button>
                     </>
+                  )}
+                  {d.status === 'recommended' && (
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => handleAction(d.id, 'approve')}
+                        leftIcon={<CheckCircle2 className="w-3 h-3" />}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleAction(d.id, 'return')}
+                        leftIcon={<RotateCcw className="w-3 h-3" />}
+                      >
+                        Return
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleAction(d.id, 'reject')}
+                        leftIcon={<XCircle className="w-3 h-3" />}
+                      >
+                        Reject
+                      </Button>
+                    </>
+                  )}
+                  {d.status === 'returned' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => quickTransition(d.id, 'under_review', 'Document resubmitted')}
+                      leftIcon={<RotateCcw className="w-3 h-3" />}
+                    >
+                      Correct & Resubmit
+                    </Button>
                   )}
                   {(d.status === 'approved' || d.status === 'rejected') && (
                     <Link to={`/documents/${d.id}`}>

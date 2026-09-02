@@ -45,6 +45,16 @@ const PRIORITY_ORDER: Record<string, number> = {
   urgent: 0, high: 1, normal: 2, low: 3,
 };
 
+const TERMINAL_COMPLETE_STATUSES = ['released', 'archived', 'rejected'];
+
+function lifecycleProgress(status: string): number {
+  if (TERMINAL_COMPLETE_STATUSES.includes(status)) return 100;
+  if (status === 'returned') return Math.round((5 / DOCUMENT_WORKFLOW.length) * 100);
+  const idx = DOCUMENT_WORKFLOW.indexOf(status);
+  if (idx < 0) return 0;
+  return Math.min(Math.round(((idx + 1) / DOCUMENT_WORKFLOW.length) * 100), 99);
+}
+
 export function TrackingPage() {
   const toast = useToast();
   const { items: documents } = useDocuments({ pageSize: 100 });
@@ -233,9 +243,8 @@ function DocumentCard({ doc }: { doc: DocumentListItem }) {
   const { steps } = useDocumentRouting(doc.id);
   const office = officeById(doc.currentOfficeId);
   const holder = doc.currentHolderId ? userById(doc.currentHolderId) : null;
-  const completedSteps = steps.filter(s => s.status === 'completed').length;
   const totalSteps = steps.length;
-  const progress = totalSteps === 0 ? 0 : Math.round((completedSteps / totalSteps) * 100);
+  const progress = lifecycleProgress(doc.status);
   const inProgressStep = steps.find(s => s.status === 'in_progress');
   const isOverdue = doc.dueDate &&
     doc.status !== 'released' && doc.status !== 'archived' && doc.status !== 'rejected' &&
@@ -302,62 +311,33 @@ function DocumentCard({ doc }: { doc: DocumentListItem }) {
       </div>
 
       <div className="mt-auto pt-4">
-        {totalSteps > 0 ? (
-          <>
-            <div className="flex items-center justify-between text-[11px] mb-1.5">
-              <span className="font-semibold uppercase tracking-wider text-muted-foreground">
-                Progress
-              </span>
-              <span className="tabular-nums text-foreground font-medium">{progress}%</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className={cn(
-                  'h-full rounded-full transition-all',
-                  progress === 100 ? 'bg-emerald-500' : 'bg-brand-500'
-                )}
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <ArrowRight className="w-3 h-3 shrink-0" />
-              <span className="truncate">{currentStop?.code ?? '—'}</span>
-              <span className="text-slate-300">to</span>
-              <span className="font-medium text-foreground truncate">
-                {nextStop?.code ?? (progress === 100 ? 'Complete' : '—')}
-              </span>
-            </div>
-          </>
-        ) : (
-          (() => {
-            const idx = DOCUMENT_WORKFLOW.indexOf(doc.status);
-            if (idx < 0) {
-              return <p className="text-xs italic text-muted-foreground">No routing steps recorded yet.</p>;
-            }
-            const p = Math.round(((idx + 1) / DOCUMENT_WORKFLOW.length) * 100);
-            return (
-              <>
-                <div className="flex items-center justify-between text-[11px] mb-1.5">
-                  <span className="font-semibold uppercase tracking-wider text-muted-foreground">
-                    Workflow Progress
-                  </span>
-                  <span className="tabular-nums text-foreground font-medium">{p}%</span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={cn(
-                      'h-full rounded-full transition-all',
-                      doc.status === 'archived' ? 'bg-emerald-500' : 'bg-brand-500'
-                    )}
-                    style={{ width: `${p}%` }}
-                  />
-                </div>
-                <p className="mt-2 text-[11px] italic text-muted-foreground">
-                  {DOCUMENT_STATUS_LABELS[doc.status]}
-                </p>
-              </>
-            );
-          })()
+        <div className="flex items-center justify-between text-[11px] mb-1.5">
+          <span className="font-semibold uppercase tracking-wider text-muted-foreground">
+            Progress
+          </span>
+          <span className="tabular-nums text-foreground font-medium">{progress}%</span>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn(
+              'h-full rounded-full transition-all',
+              progress === 100 ? 'bg-emerald-500' : 'bg-brand-500'
+            )}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <ArrowRight className="w-3 h-3 shrink-0" />
+          <span className="truncate">{currentStop?.code ?? '—'}</span>
+          <span className="text-slate-300">to</span>
+          <span className="font-medium text-foreground truncate">
+            {nextStop?.code ?? (progress === 100 ? 'Complete' : '—')}
+          </span>
+        </div>
+        {totalSteps === 0 && (
+          <p className="mt-2 text-[11px] italic text-muted-foreground">
+            {DOCUMENT_STATUS_LABELS[doc.status]} · No routing steps recorded yet.
+          </p>
         )}
       </div>
     </Link>

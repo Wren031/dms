@@ -36,6 +36,7 @@ export const authService = {
 
   logout: () => authApi.logout(),
   changePassword: (payload: ChangePasswordRequest) => authApi.changePassword(payload),
+  
   updateMe: (payload: UpdateMyProfileRequest) => authApi.updateMe(payload),
   listSessions: () => authApi.sessions(),
   revokeSession: (sessionId: string) => authApi.revokeSession(sessionId),

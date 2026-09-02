@@ -67,7 +67,7 @@ export function DashboardPage() {
   const user = useCurrentUser();
   const { hasPermission } = useAuth();
   const toast = useToast();
-  const { items: documents, error } = useDocuments({ pageSize: 100 });
+  const { items: documents, error } = useDocuments({ fetchAll: true });
   const officeById = useOfficeLookup();
   const {
     items: recentNotifications,
@@ -102,7 +102,11 @@ export function DashboardPage() {
 
   const pendingForUser = useMemo(() => {
     return documents
-      .filter(d => d.currentHolderId === user.id)
+      .filter(d =>
+        d.currentHolderId === user.id ||
+        d.receivedById === user.id ||
+        d.currentOfficeId === user.officeId
+      )
       .filter(d => PENDING_STATUSES.has(d.status))
       .sort((a, b) => {
         const overdueA = a.dueDate && new Date(a.dueDate).getTime() < Date.now() ? 0 : 1;
