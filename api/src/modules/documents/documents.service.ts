@@ -49,6 +49,7 @@ export type DocumentTypeMeta = Prisma.DocumentTypeGetPayload<Record<string, neve
 export type DocumentListItem = Prisma.DocumentGetPayload<{
   include: {
     type: true;
+    recipients: { include: { office: { select: { id: true; name: true; code: true } } } };
     _count: { select: { routingSteps: true; reviews: true; releases: true; archives: true } };
   };
 }>;
@@ -62,6 +63,7 @@ export type DocumentDetail = Prisma.DocumentGetPayload<{
     releases: true;
     archives: true;
     history: true;
+    recipients: { include: { office: { select: { id: true; name: true; code: true } } } };
   };
 }>;
 
@@ -120,9 +122,40 @@ export class DocumentsService {
       throw new BadRequestException('Authenticated user has no assigned office');
     }
     const trackingNumber = await this.generateTrackingNumber();
-    const documentNumber =
+
+    const useManualOrigin = !dto.originatingOfficeId;
+    let documentNumber =
       dto.documentNumber?.trim() ||
-      (await this.suggestDocumentNumber(dto.originatingOfficeId));
+      (useManualOrigin
+        ? await this.generateManualDocumentNumber()
+        : await this.suggestDocumentNumber(dto.originatingOfficeId!));
+
+    const destinationsAllOffices = dto.destinationsAllOffices ?? true;
+    const recipientOfficeIds = (dto.recipientOfficeIds ?? []).filter((id) => !!id);
+
+    // Validation: cannot target both "all offices" and specific offices.
+    if (destinationsAllOffices && recipientOfficeIds.length > 0) {
+      throw new BadRequestException(
+        'Cannot specify recipient offices when the document is sent to all offices.',
+      );
+    }
+
+    // Manual origin requires a text name.
+    if (useManualOrigin && !dto.originatingOfficeName?.trim()) {
+      throw new BadRequestException(
+        'A manual originating office name is required when no office is selected.',
+      );
+    }
+
+    if (recipientOfficeIds.length > 0) {
+      const offices = await this.prisma.office.findMany({
+        where: { id: { in: recipientOfficeIds } },
+        select: { id: true },
+      });
+      if (offices.length !== recipientOfficeIds.length) {
+        throw new BadRequestException('One or more recipient offices do not exist.');
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
       try {
@@ -138,13 +171,18 @@ export class DocumentsService {
             source: dto.source,
             senderName: dto.senderName,
             tags: dto.tags ?? [],
-            originatingOfficeId: dto.originatingOfficeId,
+            originatingOfficeId: dto.originatingOfficeId ?? null,
+            originatingOfficeName: useManualOrigin ? dto.originatingOfficeName?.trim() : null,
             currentOfficeId: authenticatedOfficeId,
             currentHolderId: dto.currentHolderId ?? null,
+            destinationsAllOffices,
             encodedById,
             receivedById: dto.receivedById,
             dateReceived: dto.dateReceived ? new Date(dto.dateReceived) : null,
             dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+            recipients: recipientOfficeIds.length
+              ? { create: recipientOfficeIds.map((officeId) => ({ officeId })) }
+              : undefined,
           },
         });
         await tx.documentHistory.create({
@@ -165,6 +203,8 @@ export class DocumentsService {
               trackingNumber,
               documentNumber,
               classification: dto.classification,
+              destinationsAllOffices,
+              recipientOfficeIds,
             } as Prisma.InputJsonValue,
           },
         });
@@ -175,7 +215,9 @@ export class DocumentsService {
           err.code === 'P2002'
         ) {
           throw new ConflictException(
-            `Document number '${documentNumber}' is already used in this originating office.`,
+            useManualOrigin
+              ? `Document number '${documentNumber}' is already used.`
+              : `Document number '${documentNumber}' is already used in this originating office.`,
           );
         }
         throw err;
@@ -238,6 +280,7 @@ export class DocumentsService {
         where,
         include: {
           type: true,
+          recipients: { include: { office: { select: { id: true, name: true, code: true } } } },
           _count: { select: { routingSteps: true, reviews: true, releases: true, archives: true } },
         },
         orderBy: { [sortBy ?? 'createdAt']: order },
@@ -261,6 +304,7 @@ export class DocumentsService {
         releases: { orderBy: { releasedAt: 'desc' } },
         archives: { orderBy: { archivedAt: 'desc' } },
         history: { orderBy: { occurredAt: 'asc' } },
+        recipients: { include: { office: { select: { id: true, name: true, code: true } } } },
       },
     });
     if (!doc) throw new NotFoundException('Document not found');
@@ -325,13 +369,59 @@ export class DocumentsService {
   }
 
   async update(id: string, dto: UpdateDocumentDto): Promise<unknown> {
-    return this.prisma.document.update({
-      where: { id },
-      data: {
-        ...dto,
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-      },
-    });
+    const { recipientOfficeIds, destinationsAllOffices, ...rest } = dto;
+
+    if (
+      destinationsAllOffices !== undefined &&
+      recipientOfficeIds !== undefined &&
+      destinationsAllOffices &&
+      recipientOfficeIds.length > 0
+    ) {
+      throw new BadRequestException(
+        'Cannot specify recipient offices when the document is sent to all offices.',
+      );
+    }
+
+    if (recipientOfficeIds !== undefined && recipientOfficeIds.length > 0) {
+      const offices = await this.prisma.office.findMany({
+        where: { id: { in: recipientOfficeIds } },
+        select: { id: true },
+      });
+      if (offices.length !== recipientOfficeIds.length) {
+        throw new BadRequestException('One or more recipient offices do not exist.');
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const finalAllOffices =
+        destinationsAllOffices !== undefined
+          ? destinationsAllOffices
+          : recipientOfficeIds !== undefined && recipientOfficeIds.length === 0;
+
+      const doc = await tx.document.update({
+        where: { id },
+        data: {
+          ...rest,
+          ...(recipientOfficeIds !== undefined || destinationsAllOffices !== undefined
+            ? { destinationsAllOffices: finalAllOffices }
+            : {}),
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+        },
+      });
+
+      if (recipientOfficeIds !== undefined || destinationsAllOffices !== undefined) {
+        // Replace the recipient set with the provided list (or clear when all-offices).
+        const ids = finalAllOffices ? [] : (recipientOfficeIds ?? []);
+        await tx.documentRecipient.deleteMany({ where: { documentId: id } });
+        if (ids.length > 0) {
+          await tx.documentRecipient.createMany({
+            data: ids.map((officeId) => ({ documentId: id, officeId })),
+          });
+        }
+      }
+
+      return doc;
+    }).then(() => this.findOne(id));
   }
 
   async remove(id: string): Promise<{ id: string }> {
@@ -597,6 +687,28 @@ export class DocumentsService {
     let nextSeq = 1;
     if (last?.trackingNumber) {
       const tail = last.trackingNumber.slice(prefix.length);
+      const n = parseInt(tail, 10);
+      if (!Number.isNaN(n)) nextSeq = n + 1;
+    }
+    return `${prefix}${nextSeq.toString().padStart(4, '0')}`;
+  }
+
+  /**
+   * Generate a globally unique document number for manual-origin documents
+   * (no originating office selected). Uses a dedicated prefix so it never
+   * collides with office-prefixed numbers.
+   */
+  private async generateManualDocumentNumber(): Promise<string> {
+    const year = new Date().getFullYear();
+    const prefix = `MAN-${year}-`;
+    const last = await this.prisma.document.findFirst({
+      where: { documentNumber: { startsWith: prefix } },
+      orderBy: { documentNumber: 'desc' },
+      select: { documentNumber: true },
+    });
+    let nextSeq = 1;
+    if (last?.documentNumber) {
+      const tail = last.documentNumber.slice(prefix.length);
       const n = parseInt(tail, 10);
       if (!Number.isNaN(n)) nextSeq = n + 1;
     }

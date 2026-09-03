@@ -181,6 +181,7 @@ model Office {
   description String?
   isActive    Boolean    @default(true)
   employees   Employee[]
+  documentRecipients DocumentRecipient[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -236,11 +237,13 @@ model Document {
   source              DocumentSource
   senderName          String?
   tags                String[]
-  originatingOfficeId String
+  originatingOfficeId String?
+  originatingOfficeName String?
   currentOfficeId     String
   currentHolderId     String?
   encodedById         String
   receivedById        String?
+  destinationsAllOffices Boolean             @default(true)
   dateReceived        DateTime?
   dueDate             DateTime?
   createdAt           DateTime               @default(now())
@@ -252,8 +255,9 @@ model Document {
   trackings           DocumentTracking[]
   archives            DocumentArchive[]
   history             DocumentHistory[]
+  recipients          DocumentRecipient[]
 
-  @@unique([originatingOfficeId, documentNumber])
+  @@unique([documentNumber])
   @@index([status])
   @@index([originatingOfficeId])
   @@index([currentOfficeId])
@@ -364,6 +368,20 @@ model DocumentHistory {
   occurredAt DateTime        @default(now())
 
   @@index([documentId])
+}
+
+// Receiving / Destination offices for a document (informational only).
+// Independent from DocumentRoutingStep — does not drive the routing workflow.
+model DocumentRecipient {
+  id         String   @id @default(uuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  officeId   String
+  office     Office   @relation(fields: [officeId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([documentId, officeId])
+  @@index([officeId])
 }
 
 // =====================================================

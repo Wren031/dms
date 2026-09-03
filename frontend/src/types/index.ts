@@ -115,9 +115,9 @@ export interface Document {
   type: DocumentType;
   classification: DocumentClassification;
   status: DocumentStatus;
-  originatingOfficeId: string;
-  receivingOfficeId?: string;
-  destinationOfficeId?: string;
+  originatingOfficeId: string | null;
+  originatingOfficeName?: string | null;
+  destinationsAllOffices?: boolean;
   currentOfficeId: string;
   currentHolderId: string;
   encodedById: string;

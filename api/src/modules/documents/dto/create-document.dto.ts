@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsOptional,
@@ -56,11 +57,29 @@ export class CreateDocumentDto {
   @Length(1, 50, { each: true })
   tags?: string[];
 
+  @IsOptional()
   @IsUUID()
-  originatingOfficeId!: string;
+  originatingOfficeId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  originatingOfficeName?: string;
 
   @IsUUID()
   currentOfficeId!: string;
+
+  // Informational Receiving / Destination Offices.
+  // When destinationsAllOffices is true, recipientOfficeIds MUST be empty.
+  @IsOptional()
+  @IsBoolean()
+  destinationsAllOffices?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('4', { each: true })
+  recipientOfficeIds?: string[];
 
   @IsOptional()
   @IsUUID()

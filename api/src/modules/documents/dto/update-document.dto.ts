@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsOptional,
@@ -53,6 +54,25 @@ export class UpdateDocumentDto {
   @IsOptional()
   @IsUUID()
   currentOfficeId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  originatingOfficeId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  originatingOfficeName?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  destinationsAllOffices?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('4', { each: true })
+  recipientOfficeIds?: string[];
 
   @IsOptional()
   @IsUUID()

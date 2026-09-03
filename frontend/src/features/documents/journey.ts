@@ -235,7 +235,7 @@ export function buildDocumentJourney(ctx: JourneyContext): JourneyEvent[] {
         state: 'completed',
         timestamp: document.dateReceived,
         actor: pickUser(users, document.receivedById),
-        office: pickOffice(offices, document.receivingOfficeId ?? document.currentOfficeId),
+        office: pickOffice(offices, document.currentOfficeId),
         action: 'Document classified & assigned',
         description: `Document classified as ${document.classification.toUpperCase()} and tagged for routing.`,
         source: 'synthesis',

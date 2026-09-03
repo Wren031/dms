@@ -218,13 +218,13 @@ export function ReviewPage() {
               header: 'From',
               width: '170px',
               cell: d => {
-                const office = officeById(d.originatingOfficeId);
+                const office = d.originatingOfficeId ? officeById(d.originatingOfficeId) : null;
                 return (
                   <div className="flex items-center gap-1.5 text-xs">
                     <Building2 className="w-3.5 h-3.5 text-slate-400" />
                     <div>
-                      <p className="text-slate-700">{office?.code}</p>
-                      <p className="text-slate-400 text-[10px]">{office?.name}</p>
+                      <p className="text-slate-700">{office?.code ?? 'Manual'}</p>
+                      <p className="text-slate-400 text-[10px]">{office?.name ?? d.originatingOfficeName ?? '—'}</p>
                     </div>
                   </div>
                 );

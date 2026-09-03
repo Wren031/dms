@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  PlusCircle,
   ArrowLeft,
-  Paperclip,
   Save,
   Send,
   X,
@@ -15,13 +13,23 @@ import {
   AlertCircle,
   CheckCircle2,
   Info,
+  Building2,
+  Route,
+  Users,
+  Paperclip,
+  FileInput,
+  ClipboardList,
+  ShieldCheck,
+  CalendarClock,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Card, CardHeader } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
@@ -45,9 +53,11 @@ interface FormState {
   priority: 'low' | 'normal' | 'high' | 'urgent';
   source: 'internal' | 'external';
   senderName: string;
+  originMode: 'manual' | 'select' | '';
   originatingOfficeId: string;
-  receivingOfficeId: string;
-  destinationOfficeId: string;
+  originatingOfficeName: string;
+  allOffices: boolean;
+  recipientOfficeIds: string[];
   assignedUserId: string;
   description: string;
   dateReceived: string;
@@ -65,9 +75,11 @@ const INITIAL_STATE: FormState = {
   priority: 'normal',
   source: 'internal',
   senderName: '',
+  originMode: '',
   originatingOfficeId: '',
-  receivingOfficeId: '',
-  destinationOfficeId: '',
+  originatingOfficeName: '',
+  allOffices: true,
+  recipientOfficeIds: [],
   assignedUserId: '',
   description: '',
   dateReceived: new Date().toISOString().slice(0, 10),
@@ -99,7 +111,6 @@ export function DocumentRegistrationPage() {
 
   const [form, setForm] = useState<FormState>(() => ({
     ...INITIAL_STATE,
-    originatingOfficeId: user.officeId,
   }));
 
   const [files, setFiles] = useState<File[]>([]);
@@ -109,18 +120,26 @@ export function DocumentRegistrationPage() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [recipientSearch, setRecipientSearch] = useState('');
 
   const tags = useMemo(
     () => form.tagsInput.split(',').map(t => t.trim()).filter(Boolean),
     [form.tagsInput]
   );
 
+  const filteredRecipientOffices = useMemo(() => {
+    const q = recipientSearch.trim().toLowerCase();
+    if (!q) return offices;
+    return offices.filter(
+      o => o.name.toLowerCase().includes(q) || o.code.toLowerCase().includes(q)
+    );
+  }, [offices, recipientSearch]);
+
   const assignedUsers = useMemo(() => {
-    if (!form.receivingOfficeId) return [];
-    // The current authenticated user is always a valid UUID and can be
-    // selected without exposing the admin-only users list endpoint.
-    return routingUsers.filter(option => option.officeId === form.receivingOfficeId);
-  }, [form.receivingOfficeId, routingUsers]);
+    // Officers are scoped to the current authenticated user's office since the
+    // document is held by the encoder at registration time.
+    return routingUsers.filter(option => option.officeId === user.officeId);
+  }, [routingUsers, user.officeId]);
 
   useEffect(() => {
     if (officesLoading || offices.length === 0) return;
@@ -129,23 +148,15 @@ export function DocumentRegistrationPage() {
     setForm(previous => {
       const originatingOfficeId = officeIds.has(previous.originatingOfficeId)
         ? previous.originatingOfficeId
-        : officeIds.has(user.officeId)
-          ? user.officeId
-          : '';
-      const receivingOfficeId = officeIds.has(previous.receivingOfficeId)
-        ? previous.receivingOfficeId
         : '';
-      const destinationOfficeId = officeIds.has(previous.destinationOfficeId)
-        ? previous.destinationOfficeId
-        : '';
+      const recipientOfficeIds = previous.recipientOfficeIds.filter(id => officeIds.has(id));
       const assignedUserId = routingUserIds.has(previous.assignedUserId)
         ? previous.assignedUserId
         : '';
 
       if (
         originatingOfficeId === previous.originatingOfficeId &&
-        receivingOfficeId === previous.receivingOfficeId &&
-        destinationOfficeId === previous.destinationOfficeId &&
+        recipientOfficeIds.length === previous.recipientOfficeIds.length &&
         assignedUserId === previous.assignedUserId
       ) {
         return previous;
@@ -154,8 +165,7 @@ export function DocumentRegistrationPage() {
       return {
         ...previous,
         originatingOfficeId,
-        receivingOfficeId,
-        destinationOfficeId,
+        recipientOfficeIds,
         assignedUserId,
       };
     });
@@ -165,12 +175,6 @@ export function DocumentRegistrationPage() {
     if (field === 'title' && !value.trim()) return 'Title is required';
     if (field === 'title' && value.trim().length < 5)
       return 'Title must be at least 5 characters';
-    if (field === 'originatingOfficeId' && !value)
-      return 'Originating office is required';
-    if (field === 'receivingOfficeId' && !value)
-      return 'Receiving office is required';
-    if (field === 'destinationOfficeId' && !value)
-      return 'Destination / responsible office is required';
     if (field === 'description' && !value.trim())
       return 'Description is required';
     if (field === 'description' && value.trim().length < 10)
@@ -187,27 +191,48 @@ export function DocumentRegistrationPage() {
     return undefined;
   };
 
+  const getOriginValue = (state: FormState): string =>
+    state.originMode === 'select'
+      ? state.originatingOfficeId
+      : state.originMode === 'manual'
+        ? state.originatingOfficeName
+        : '';
+
+  const validateOrigin = (state: FormState): string | undefined => {
+    if (!state.originMode) return 'Choose how to specify the originating office';
+    if (state.originMode === 'select' && !state.originatingOfficeId)
+      return 'Select an originating office';
+    if (state.originMode === 'manual' && !state.originatingOfficeName.trim())
+      return 'Originating office name is required';
+    return undefined;
+  };
+
   const validateAll = (state: FormState): FormErrors => {
     const next: FormErrors = {};
     (Object.keys(state) as Array<keyof FormState>).forEach(key => {
-      const err = validateField(key, state[key]);
+      if (key === 'originMode' || key === 'allOffices' || key === 'recipientOfficeIds')
+        return;
+      const err = validateField(key, String((state as never)[key]) ?? '');
       if (err) next[key] = err;
     });
+    const originError = validateOrigin(state);
+    if (originError) next.originMode = originError;
     return next;
   };
 
   const setField = <K extends keyof FormState>(field: K, value: FormState[K]) => {
     setForm(prev => {
       const next = { ...prev, [field]: value };
-      if (touched[field]) {
+      if (typeof value !== 'boolean' && !Array.isArray(value) && touched[field]) {
         const err = validateField(field, String(value ?? ''));
         setErrors(e => ({ ...e, [field]: err }));
       }
       if (field === 'source' && value === 'internal') {
         setErrors(e => ({ ...e, senderName: undefined }));
       }
-      if (field === 'receivingOfficeId') {
-        next.assignedUserId = '' as FormState['assignedUserId'];
+      if (field === 'originMode') {
+        next.originatingOfficeId = '';
+        next.originatingOfficeName = '';
       }
       return next;
     });
@@ -215,6 +240,8 @@ export function DocumentRegistrationPage() {
 
   const markTouched = (field: keyof FormState) => {
     setTouched(t => ({ ...t, [field]: true }));
+    if (field === 'originMode' || field === 'allOffices' || field === 'recipientOfficeIds')
+      return;
     const err = validateField(field, String(form[field] ?? ''));
     setErrors(e => ({ ...e, [field]: err }));
   };
@@ -259,12 +286,12 @@ export function DocumentRegistrationPage() {
       return;
     }
     if (!user) return;
-    if (!offices.some(office => office.id === form.originatingOfficeId)) {
+    if (form.originMode === 'select' && !offices.some(office => office.id === form.originatingOfficeId)) {
       toast.error('Invalid originating office', 'Select an office loaded from the server.');
       return;
     }
-    if (!offices.some(office => office.id === form.receivingOfficeId)) {
-      toast.error('Invalid receiving office', 'Select an office loaded from the server.');
+    if (!form.allOffices && form.recipientOfficeIds.length === 0) {
+      toast.error('No recipient selected', 'Select at least one receiving office, or enable All Offices.');
       return;
     }
 
@@ -273,6 +300,11 @@ export function DocumentRegistrationPage() {
       toast.error('Document type unavailable', 'The selected document type is not configured by the server.');
       return;
     }
+
+    const originatingOfficeId = form.originMode === 'select' ? form.originatingOfficeId : undefined;
+    const originatingOfficeName =
+      form.originMode === 'manual' ? form.originatingOfficeName.trim() : undefined;
+    const destinationsAllOffices = form.allOffices;
 
     setSubmitting(true);
     const doc = await registration.register({
@@ -284,7 +316,10 @@ export function DocumentRegistrationPage() {
       senderName: form.source === 'external' ? form.senderName : undefined,
       description: form.description,
       priority: form.priority,
-      originatingOfficeId: form.originatingOfficeId,
+      originatingOfficeId,
+      originatingOfficeName,
+      destinationsAllOffices,
+      recipientOfficeIds: destinationsAllOffices ? [] : form.recipientOfficeIds,
       currentOfficeId: user.officeId,
       currentHolderId: form.assignedUserId || user.id,
       receivedById: user.id,
@@ -310,36 +345,65 @@ export function DocumentRegistrationPage() {
     }
     toast.success(
       mode === 'register' ? 'Document registered' : 'Document registered & routed',
-      `${doc.trackingNumber} has been ${mode === 'register' ? 'successfully registered' : 'registered and forwarded to ' + (form.receivingOfficeId ? offices.find(o => o.id === form.receivingOfficeId)?.code : 'the receiving office')}.`
+      `${doc.trackingNumber} has been ${mode === 'register' ? 'successfully registered' : 'registered and forwarded to the recipient offices'}.`
     );
     navigate(`/documents/${doc.id}`);
   };
 
   const requiredFieldsComplete =
     form.title.trim() &&
-    form.originatingOfficeId &&
-    form.receivingOfficeId &&
-    form.destinationOfficeId &&
+    !!getOriginValue(form) &&
+    (form.allOffices || form.recipientOfficeIds.length > 0) &&
     form.description.trim() &&
     (form.source === 'internal' || form.senderName.trim());
 
   const errorCount = Object.keys(errors).filter(k => errors[k as keyof FormState]).length;
 
+  const checklist = [
+    { key: 'title', ok: !!form.title.trim() && form.title.trim().length >= 5, label: 'Title is filled' },
+    { key: 'origin', ok: !!getOriginValue(form), label: 'Originating office specified' },
+    { key: 'recipients', ok: form.allOffices || form.recipientOfficeIds.length > 0, label: 'Receiving / destination offices set' },
+    { key: 'source', ok: form.source === 'internal' || !!form.senderName.trim(), label: 'Source / sender specified' },
+    { key: 'description', ok: !!form.description.trim() && form.description.trim().length >= 10, label: 'Description is detailed' },
+    { key: 'dateReceived', ok: !!form.dateReceived, label: 'Date received is set' },
+  ];
+  const checklistDone = checklist.filter(item => item.ok).length;
+  const completionPercent = Math.round((checklistDone / checklist.length) * 100);
+
+  const originSummary =
+    form.originMode === 'select'
+      ? (offices.find(o => o.id === form.originatingOfficeId)?.code ?? '—')
+      : form.originMode === 'manual'
+        ? (form.originatingOfficeName || '—')
+        : '—';
+
+  const recipientSummary = form.allOffices
+    ? 'All Offices'
+    : form.recipientOfficeIds.length > 0
+      ? offices
+          .filter(o => form.recipientOfficeIds.includes(o.id))
+          .map(o => o.code)
+          .join(', ')
+      : '—';
+
   return (
     <div className="space-y-6 w-full">
-      <div>
-        <button
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center text-xs text-slate-600 hover:text-brand-700 mb-2"
-        >
-          <ArrowLeft className="w-3 h-3 mr-1" />
-          Back
-        </button>
-      </div>
+      {/* Back link */}
+      <button
+        onClick={() => navigate(-1)}
+        className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-brand-700 transition-colors mb-5"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Documents
+      </button>
 
+      {/* Header */}
       <PageHeader
+        breadcrumbs={[{ label: 'Documents', to: '/documents' }, { label: 'Register New Document' }]}
+        eyebrow="Document Control"
         title="Register New Document"
-        description="Encode a new document into the system. Fields marked with * are required."
+        description="Encode a new document into the system. Fields marked with an asterisk (*) are required."
+        className="mb-5"
         actions={
           <>
             <Button variant="outline" onClick={() => navigate('/documents')}>
@@ -351,22 +415,23 @@ export function DocumentRegistrationPage() {
               onClick={() => submitRegistration('register')}
               disabled={submitting}
             >
-              Save
+              Save Draft
             </Button>
             <Button
               leftIcon={<Send className="w-4 h-4" />}
               onClick={() => submitRegistration('route')}
               loading={submitting}
             >
-              Register & Route
+              Register &amp; Route
             </Button>
           </>
         }
       />
 
+      {/* Validation banner */}
       {errorCount > 0 && (
-        <div className="flex items-start gap-3 p-3.5 rounded-md border border-rose-200 bg-rose-50">
-          <AlertCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
+        <div className="flex items-start gap-3 p-4 rounded-lg border border-rose-200 bg-rose-50 mb-6">
+          <AlertCircle className="w-5 h-5 text-rose-600 mt-0.5 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-rose-900">
               {errorCount} validation {errorCount === 1 ? 'error' : 'errors'} found
@@ -375,16 +440,25 @@ export function DocumentRegistrationPage() {
               Please review the highlighted fields below before submitting.
             </p>
           </div>
+          <button
+            onClick={() => setErrors({})}
+            className="ml-auto shrink-0 text-xs font-medium text-rose-700 hover:text-rose-900"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-6">
-          <Card>
-            <CardHeader
-              title="Document Identifiers"
-              description="Tracking and document numbers uniquely identify this record"
-            />
+          {/* 1 - Identifiers */}
+          <SectionCard
+            step="01"
+            icon={FileInput}
+            tint="indigo"
+            title="Document Identifiers"
+            description="Tracking and document numbers uniquely identify this record"
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="Document Number"
@@ -405,13 +479,16 @@ export function DocumentRegistrationPage() {
                 hint="The system-assigned unique identifier (DMS-YYYY-NNNN)"
               />
             </div>
-          </Card>
+          </SectionCard>
 
-          <Card>
-            <CardHeader
-              title="Basic Information"
-              description="General details about the document"
-            />
+          {/* 2 - Details */}
+          <SectionCard
+            step="02"
+            icon={Users}
+            tint="sky"
+            title="Basic Information"
+            description="Core details about the document content"
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="md:col-span-2 lg:col-span-3">
                 <Input
@@ -434,7 +511,7 @@ export function DocumentRegistrationPage() {
                 hint={documentTypes.length === 0 ? 'No active document types are configured.' : undefined}
               />
               <Select
-                label="Classification / Confidentiality"
+                label="Classification"
                 required
                 value={form.classification}
                 onChange={e => setField('classification', e.target.value as DocumentClassification)}
@@ -453,27 +530,70 @@ export function DocumentRegistrationPage() {
                 ]}
               />
             </div>
-          </Card>
+          </SectionCard>
 
-          <Card>
-            <CardHeader
-              title="Source & Routing"
-              description="Where the document came from and where it needs to go"
-            />
+          {/* 3 - Source & Routing */}
+          <SectionCard
+            step="03"
+            icon={Route}
+            tint="violet"
+            title="Source & Routing"
+            description="Origin, recipients, and assignment"
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Select
-                label="Originating Office"
-                required
-                value={form.originatingOfficeId}
-                onChange={e => setField('originatingOfficeId', e.target.value)}
-                onBlur={() => markTouched('originatingOfficeId')}
-                error={errors.originatingOfficeId}
-                options={[
-                  { value: '', label: officesLoading ? 'Loading offices…' : 'Choose originating office…' },
-                  ...offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` })),
-                ]}
-                disabled={officesLoading || offices.length === 0}
-              />
+              <div className="md:col-span-2">
+                <span className="block text-sm font-medium text-slate-700 mb-2">
+                  Originating Office <span className="text-rose-500">*</span>
+                </span>
+                <div className="inline-flex rounded-lg border border-slate-300 bg-slate-50 p-0.5 gap-0.5">
+                  <OriginOption
+                    label="Select office"
+                    active={form.originMode === 'select'}
+                    onClick={() => setField('originMode', 'select')}
+                  />
+                  <OriginOption
+                    label="Manual entry"
+                    active={form.originMode === 'manual'}
+                    onClick={() => setField('originMode', 'manual')}
+                  />
+                </div>
+                {errors.originMode && (
+                  <p className="mt-1.5 text-xs text-rose-600">{errors.originMode}</p>
+                )}
+              </div>
+
+              {form.originMode === 'select' && (
+                <div className="md:col-span-2">
+                  <Select
+                    label="Originating Office"
+                    placeholder="Choose originating office…"
+                    value={form.originatingOfficeId}
+                    onChange={e => setField('originatingOfficeId', e.target.value)}
+                    onBlur={() => markTouched('originatingOfficeId')}
+                    error={errors.originatingOfficeId}
+                    options={[
+                      { value: '', label: officesLoading ? 'Loading offices…' : 'Choose originating office…' },
+                      ...offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` })),
+                    ]}
+                    disabled={officesLoading || offices.length === 0}
+                  />
+                </div>
+              )}
+
+              {form.originMode === 'manual' && (
+                <div className="md:col-span-2">
+                  <Input
+                    label="Originating Office Name"
+                    placeholder="e.g., Barangay San Isidro, Office of the Mayor"
+                    value={form.originatingOfficeName}
+                    onChange={e => setField('originatingOfficeName', e.target.value)}
+                    onBlur={() => markTouched('originatingOfficeName')}
+                    error={errors.originatingOfficeName}
+                    leftIcon={<Building2 className="w-4 h-4" />}
+                  />
+                </div>
+              )}
+
               <Select
                 label="Source"
                 value={form.source}
@@ -497,41 +617,78 @@ export function DocumentRegistrationPage() {
                   />
                 </div>
               )}
-              <Select
-                label="Receiving Office"
-                required
-                placeholder="Choose receiving office…"
-                value={form.receivingOfficeId}
-                onChange={e => setField('receivingOfficeId', e.target.value)}
-                onBlur={() => markTouched('receivingOfficeId')}
-                error={errors.receivingOfficeId}
-                options={[
-                  { value: '', label: officesLoading ? 'Loading offices…' : 'Choose receiving office…' },
-                  ...offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` })),
-                ]}
-                disabled={officesLoading || offices.length === 0}
-                hint="Office that will receive the document first"
-              />
-              <Select
-                label="Destination / Responsible Office"
-                required
-                placeholder="Choose destination office…"
-                value={form.destinationOfficeId}
-                onChange={e => setField('destinationOfficeId', e.target.value)}
-                onBlur={() => markTouched('destinationOfficeId')}
-                error={errors.destinationOfficeId}
-                options={[
-                  { value: '', label: officesLoading ? 'Loading offices…' : 'Choose destination office…' },
-                  ...offices.map(o => ({ value: o.id, label: `${o.code} — ${o.name}` })),
-                ]}
-                disabled={officesLoading || offices.length === 0}
-                hint="Final office responsible for action"
-              />
+
+              <div className="md:col-span-2">
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <span className="text-sm font-medium text-slate-700">
+                    Receiving / Destination Offices
+                  </span>
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                    <Checkbox
+                      checked={form.allOffices}
+                      onChange={checked => setField('allOffices', checked)}
+                      ariaLabel="Send to all offices"
+                    />
+                    All Offices
+                  </label>
+                </div>
+                <p className="text-xs text-slate-500">
+                  {form.allOffices
+                    ? 'The document will be visible to all offices. Uncheck All Offices to target specific offices.'
+                    : 'Select one or more offices that will receive this document. No selection defaults to All Offices.'}
+                </p>
+                {!form.allOffices && (
+                  <div className="mt-3">
+                    <SearchInput
+                      value={recipientSearch}
+                      onChange={setRecipientSearch}
+                      placeholder="Search offices by name or code…"
+                      className="max-w-sm"
+                    />
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
+                      {filteredRecipientOffices.map(office => {
+                        const checked = form.recipientOfficeIds.includes(office.id);
+                        return (
+                          <label
+                            key={office.id}
+                            className="flex items-center gap-2.5 p-2.5 rounded-md border border-slate-200 hover:border-slate-300 hover:bg-slate-50 cursor-pointer transition-colors"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onChange={() => {
+                                setField(
+                                  'recipientOfficeIds',
+                                  checked
+                                    ? form.recipientOfficeIds.filter(id => id !== office.id)
+                                    : [...form.recipientOfficeIds, office.id],
+                                );
+                              }}
+                              ariaLabel={office.name}
+                            />
+                            <span className="font-mono text-[11px] text-slate-500 shrink-0">{office.code}</span>
+                            <span className="text-sm text-slate-700 truncate">{office.name}</span>
+                          </label>
+                        );
+                      })}
+                      {filteredRecipientOffices.length === 0 && (
+                        <p className="text-sm text-slate-500 col-span-full py-5 text-center border border-dashed border-slate-200 rounded-md">
+                          No offices match "{recipientSearch.trim()}".
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {!form.allOffices && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    {form.recipientOfficeIds.length} office
+                    {form.recipientOfficeIds.length === 1 ? '' : 's'} selected
+                  </p>
+                )}
+              </div>
+
               <Select
                 label="Assigned Officer (Optional)"
-                placeholder={
-                  form.receivingOfficeId ? 'Choose officer…' : 'Select receiving office first'
-                }
+                placeholder="Choose officer…"
                 value={form.assignedUserId}
                 onChange={e => setField('assignedUserId', e.target.value)}
                 options={[
@@ -541,7 +698,7 @@ export function DocumentRegistrationPage() {
                      label: `${u.fullName}${u.position ? ` (${u.position})` : ''}`,
                    })),
                  ]}
-                 disabled={!form.receivingOfficeId || usersLoading}
+                 disabled={usersLoading}
                  hint={usersError ?? undefined}
                />
               <div className="md:col-span-2">
@@ -557,59 +714,72 @@ export function DocumentRegistrationPage() {
                 />
               </div>
             </div>
-          </Card>
+          </SectionCard>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader title="Timeline" description="Important dates for tracking" />
-              <div className="space-y-4">
-                <Input
-                  type="date"
-                  label="Date Received"
-                  required
-                  value={form.dateReceived}
-                  onChange={e => setField('dateReceived', e.target.value)}
-                  onBlur={() => markTouched('dateReceived')}
-                  error={errors.dateReceived}
-                  leftIcon={<Calendar className="w-4 h-4" />}
-                />
-                <Input
-                  type="date"
-                  label="Due Date"
-                  value={form.dueDate}
-                  onChange={e => setField('dueDate', e.target.value)}
-                  onBlur={() => markTouched('dueDate')}
-                  error={errors.dueDate}
-                  hint="Optional. Set a deadline if applicable."
-                  leftIcon={<Calendar className="w-4 h-4" />}
-                />
-              </div>
-            </Card>
-
-            <Card>
-              <CardHeader title="Tags" description="Comma-separated for searching" />
+          {/* 4 - Schedule */}
+          <SectionCard
+            step="04"
+            icon={CalendarClock}
+            tint="amber"
+            title="Schedule"
+            description="Dates that govern this record"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
-                leftIcon={<TagIcon className="w-4 h-4" />}
-                placeholder="e.g., budget, infrastructure, 2026"
-                value={form.tagsInput}
-                onChange={e => setField('tagsInput', e.target.value)}
-                hint="Separate tags with commas"
+                type="date"
+                label="Date Received"
+                required
+                value={form.dateReceived}
+                onChange={e => setField('dateReceived', e.target.value)}
+                onBlur={() => markTouched('dateReceived')}
+                error={errors.dateReceived}
+                leftIcon={<Calendar className="w-4 h-4" />}
               />
-              {tags.length > 0 && (
-                <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-                  {tags.map(t => (
-                    <Badge key={t} variant="slate" size="sm">#{t}</Badge>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </div>
+              <Input
+                type="date"
+                label="Due Date"
+                value={form.dueDate}
+                onChange={e => setField('dueDate', e.target.value)}
+                onBlur={() => markTouched('dueDate')}
+                error={errors.dueDate}
+                hint="Optional. Set a deadline if applicable."
+                leftIcon={<Calendar className="w-4 h-4" />}
+              />
+            </div>
+          </SectionCard>
 
-          <Card>
-            <CardHeader
-              title="Attachments"
-              description="Upload supporting files (PDF, images, documents)"
+          {/* 5 - Classification Tags */}
+          <SectionCard
+            step="05"
+            icon={TagIcon}
+            tint="emerald"
+            title="Classification Tags"
+            description="Optional labels to help organize and find documents"
+          >
+            <Input
+              leftIcon={<TagIcon className="w-4 h-4" />}
+              placeholder="e.g., budget, infrastructure, 2026"
+              value={form.tagsInput}
+              onChange={e => setField('tagsInput', e.target.value)}
+              hint="Separate tags with commas"
             />
+            {tags.length > 0 && (
+              <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+                {tags.map(t => (
+                  <Badge key={t} variant="slate" size="sm">#{t}</Badge>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* 6 - Attachments */}
+          <SectionCard
+            step="06"
+            icon={Paperclip}
+            tint="rose"
+            title="Attachments"
+            description="Supporting files to attach to this document"
+          >
             <div
               onDragOver={e => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
@@ -621,7 +791,9 @@ export function DocumentRegistrationPage() {
               onClick={() => document.getElementById('file-input')?.click()}
               className={cn(
                 'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
-                dragOver ? 'border-brand-500 bg-brand-50/50' : 'border-slate-300 hover:border-brand-400 hover:bg-brand-50/30'
+                dragOver
+                  ? 'border-brand-500 bg-brand-50/50'
+                  : 'border-slate-300 hover:border-brand-400 hover:bg-brand-50/30'
               )}
             >
               <input
@@ -635,8 +807,8 @@ export function DocumentRegistrationPage() {
                   e.target.value = '';
                 }}
               />
-              <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-              <p className="text-sm font-semibold text-slate-700">
+              <Upload className="w-6 h-6 mx-auto text-slate-400 mb-2" />
+              <p className="text-sm font-medium text-slate-700">
                 {dragOver ? 'Drop files here' : 'Click to upload or drag and drop'}
               </p>
               <p className="text-xs text-slate-500 mt-1">
@@ -644,7 +816,7 @@ export function DocumentRegistrationPage() {
               </p>
             </div>
             {files.length > 0 && (
-              <div className="mt-3 space-y-2">
+              <div className="mt-4 space-y-2">
                 {files.map((f, i) => (
                   <div
                     key={i}
@@ -675,99 +847,80 @@ export function DocumentRegistrationPage() {
                 </p>
               </div>
             )}
-          </Card>
+          </SectionCard>
         </div>
 
-        <div className="xl:col-span-1 space-y-6">
-          <Card>
-            <CardHeader
-              title="Completion"
-              description="Form readiness overview"
-            />
-            <div className="space-y-2.5">
-              <ChecklistItem
-                ok={!!form.title.trim() && form.title.trim().length >= 5}
-                label="Title is filled"
-              />
-              <ChecklistItem
-                ok={!!form.originatingOfficeId}
-                label="Originating office selected"
-              />
-              <ChecklistItem
-                ok={!!form.receivingOfficeId}
-                label="Receiving office selected"
-              />
-              <ChecklistItem
-                ok={!!form.destinationOfficeId}
-                label="Destination office selected"
-              />
-              <ChecklistItem
-                ok={form.source === 'internal' || !!form.senderName.trim()}
-                label="Source / sender specified"
-              />
-              <ChecklistItem
-                ok={!!form.description.trim() && form.description.trim().length >= 10}
-                label="Description is detailed"
-              />
-              <ChecklistItem
-                ok={!!form.dateReceived}
-                label="Date received is set"
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Completion checklist */}
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-brand-600" />
+                Completion Checklist
+              </h3>
+              <span className="text-xs font-semibold text-brand-700">{completionPercent}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden mb-4">
+              <div
+                className="h-full bg-brand-600 rounded-full transition-all duration-300"
+                style={{ width: `${completionPercent}%` }}
               />
             </div>
-            {requiredFieldsComplete && (
-              <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-1.5 text-xs text-emerald-700">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Required fields complete
-              </div>
-            )}
+            <ul className="space-y-2.5">
+              {checklist.map(item => (
+                <ChecklistItem
+                  key={item.key}
+                  checked={item.ok}
+                  label={
+                    <span className={item.ok ? 'text-slate-500 line-through' : 'text-slate-700'}>
+                      {item.label}
+                    </span>
+                  }
+                />
+              ))}
+            </ul>
           </Card>
 
-          <Card>
-            <CardHeader
-              title="Submission Summary"
-              description="Quick overview before submission"
-            />
+          {/* Submission summary */}
+          <Card className="p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <h3 className="text-sm font-semibold text-slate-900">Submission Summary</h3>
+            </div>
             <dl className="space-y-3 text-sm">
-              <SummaryRow
-                label="Type"
-                value={DOCUMENT_TYPE_LABELS[form.type]}
-              />
+              <SummaryRow label="Type" value={DOCUMENT_TYPE_LABELS[form.type]} />
               <SummaryRow
                 label="Classification"
                 value={DOCUMENT_CLASSIFICATION_LABELS[form.classification]}
               />
               <SummaryRow label="Priority" value={<span className="capitalize">{form.priority}</span>} />
               <SummaryRow label="Source" value={<span className="capitalize">{form.source}</span>} />
-              <SummaryRow
-                label="Originating"
-                value={offices.find(o => o.id === form.originatingOfficeId)?.code ?? '—'}
-              />
-              <SummaryRow
-                label="Receiving"
-                value={offices.find(o => o.id === form.receivingOfficeId)?.code ?? '—'}
-              />
-              <SummaryRow
-                label="Destination"
-                value={offices.find(o => o.id === form.destinationOfficeId)?.code ?? '—'}
-              />
+              <SummaryRow label="Originating" value={originSummary} />
+              <SummaryRow label="Recipients" value={recipientSummary} />
               <SummaryRow
                 label="Tags"
                 value={tags.length > 0 ? tags.map(t => `#${t}`).join(' ') : '—'}
               />
               <SummaryRow label="Attachments" value={`${files.length} file${files.length === 1 ? '' : 's'}`} />
             </dl>
+            {requiredFieldsComplete && (
+              <div className="mt-4 pt-3 border-t border-slate-200 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                All required fields complete
+              </div>
+            )}
           </Card>
 
-          <Card>
+          {/* Workflow tip */}
+          <Card className="p-5 border-brand-200 bg-brand-50/50">
             <div className="flex items-start gap-2.5">
               <Info className="w-4 h-4 text-brand-600 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Workflow tip</p>
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  Use <strong>Register &amp; Route</strong> to forward the document to the receiving
-                  office immediately. Use <strong>Save</strong> to keep it on hold for review.
-                </p>
-              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                <strong className="text-slate-800">Pro tip:</strong> Use{' '}
+                <strong>Register &amp; Route</strong> to forward immediately, or{' '}
+                <strong>Save Draft</strong> to keep the document on hold for review.
+              </p>
             </div>
           </Card>
         </div>
@@ -776,24 +929,101 @@ export function DocumentRegistrationPage() {
   );
 }
 
+type IconType = React.ComponentType<{ className?: string }>;
+
+function SectionCard({
+  step,
+  icon: Icon,
+  tint,
+  title,
+  description,
+  children,
+}: {
+  step: string;
+  icon: IconType;
+  tint: 'indigo' | 'sky' | 'violet' | 'amber' | 'emerald' | 'rose';
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  const tints: Record<string, { chip: string; title: string }> = {
+    indigo: { chip: 'text-indigo-600 bg-indigo-50 border-indigo-200', title: 'text-indigo-700' },
+    sky: { chip: 'text-sky-600 bg-sky-50 border-sky-200', title: 'text-sky-700' },
+    violet: { chip: 'text-violet-600 bg-violet-50 border-violet-200', title: 'text-violet-700' },
+    amber: { chip: 'text-amber-700 bg-amber-50 border-amber-200', title: 'text-amber-700' },
+    emerald: { chip: 'text-emerald-600 bg-emerald-50 border-emerald-200', title: 'text-emerald-700' },
+    rose: { chip: 'text-rose-600 bg-rose-50 border-rose-200', title: 'text-rose-700' },
+  };
+  const t = tints[tint];
+  return (
+    <Card className="overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-center gap-3 mb-1">
+          <span
+            className={cn(
+              'flex items-center justify-center w-9 h-9 rounded-lg border text-xs font-bold',
+              t.chip
+            )}
+          >
+            {step}
+          </span>
+          <div>
+            <h3 className={cn('text-sm font-semibold flex items-center gap-2', t.title)}>
+              {title}
+              <Icon className={cn('w-4 h-4', t.title)} />
+            </h3>
+            <p className="text-xs text-slate-500">{description}</p>
+          </div>
+        </div>
+        <div className="mt-4">{children}</div>
+      </div>
+    </Card>
+  );
+}
+
+function OriginOption({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'text-sm font-medium px-4 h-8 rounded-md transition-colors',
+        active
+          ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+          : 'text-slate-500 hover:text-slate-700'
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ChecklistItem({ checked, label }: { checked: boolean; label: React.ReactNode }) {
+  return (
+    <li className="flex items-center gap-2.5">
+      {checked ? (
+        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+      ) : (
+        <span className="w-4 h-4 rounded-full border-2 border-slate-300 shrink-0" />
+      )}
+      <span className="text-sm">{label}</span>
+    </li>
+  );
+}
+
 function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <dt className="text-slate-500 shrink-0">{label}</dt>
       <dd className="font-medium text-slate-900 text-right truncate max-w-[180px]">{value}</dd>
-    </div>
-  );
-}
-
-function ChecklistItem({ ok, label }: { ok: boolean; label: string }) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      {ok ? (
-        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-      ) : (
-        <span className="w-3.5 h-3.5 rounded-full border border-slate-300 shrink-0" />
-      )}
-      <span className={ok ? 'text-slate-700' : 'text-slate-500'}>{label}</span>
     </div>
   );
 }

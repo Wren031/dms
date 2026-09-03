@@ -956,7 +956,7 @@ function DocumentInfoSidebar({
           <PersonLine label="Current holder" user={holder} />
           <PersonLine
             label="Originating office"
-            text={originator ? `${originator.code} — ${originator.name}` : '—'}
+            text={originator ? `${originator.code} — ${originator.name}` : (d.originatingOfficeName ?? '—')}
           />
         </ul>
       </Card>
@@ -975,6 +975,16 @@ function DocumentInfoSidebar({
             label="Source"
             value={
               d.source === 'internal' ? 'Internal' : `External${d.senderName ? ` · ${d.senderName}` : ''}`
+            }
+          />
+          <InfoLine
+            label="Recipients"
+            value={
+              d.destinationsAllOffices
+                ? 'All Offices'
+                : d.recipients.length > 0
+                  ? d.recipients.map(r => `${r.office.code} — ${r.office.name}`).join(', ')
+                  : '—'
             }
           />
           <InfoLine label="Created" value={formatDate(d.createdAt, true)} />

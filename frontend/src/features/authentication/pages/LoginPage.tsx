@@ -28,7 +28,7 @@ const FEATURES = [
   {
     icon: ShieldCheck,
     title: 'Role-based access',
-    description: 'Granular permissions across 5 user roles.',
+    description: 'Granular permissions across 4 user roles.',
   },
   {
     icon: BellRing,

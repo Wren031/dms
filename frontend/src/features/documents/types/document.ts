@@ -88,6 +88,19 @@ export interface DocumentArchive {
   archivedAt: string;
 }
 
+export interface DocumentRecipientOffice {
+  id: string;
+  name: string;
+  code: string;
+}
+
+export interface DocumentRecipient {
+  id: string;
+  officeId: string;
+  office: DocumentRecipientOffice;
+  createdAt: string;
+}
+
 export interface DocumentListItem {
   id: string;
   trackingNumber: string;
@@ -102,9 +115,10 @@ export interface DocumentListItem {
   status: DocumentStatus;
   senderName: string | null;
   tags: string[];
-  originatingOfficeId: string;
-  receivingOfficeId?: string | null;
-  destinationOfficeId?: string | null;
+  originatingOfficeId: string | null;
+  originatingOfficeName: string | null;
+  destinationsAllOffices: boolean;
+  recipients: DocumentRecipient[];
   currentOfficeId: string;
   currentHolderId: string | null;
   encodedById: string;
@@ -207,7 +221,10 @@ export interface DocumentCreateInput {
   source: DocumentSource;
   senderName?: string;
   description?: string;
-  originatingOfficeId: string;
+  originatingOfficeId?: string;
+  originatingOfficeName?: string;
+  destinationsAllOffices?: boolean;
+  recipientOfficeIds?: string[];
   currentOfficeId: string;
   currentHolderId?: string;
   receivedById?: string;

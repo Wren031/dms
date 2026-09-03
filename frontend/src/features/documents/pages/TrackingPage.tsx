@@ -34,7 +34,7 @@ import {
 } from '@/constants';
 import { formatRelative, cn, formatDate } from '@/lib/utils';
 import { useToast } from '@/hooks/useToast';
-import type { DocumentListItem } from '@/features/documents/types/document';
+import type { DocumentListItem, DocumentStatus } from '@/features/documents/types/document';
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -50,7 +50,7 @@ const TERMINAL_COMPLETE_STATUSES = ['released', 'archived', 'rejected'];
 function lifecycleProgress(status: string): number {
   if (TERMINAL_COMPLETE_STATUSES.includes(status)) return 100;
   if (status === 'returned') return Math.round((5 / DOCUMENT_WORKFLOW.length) * 100);
-  const idx = DOCUMENT_WORKFLOW.indexOf(status);
+  const idx = DOCUMENT_WORKFLOW.indexOf(status as DocumentStatus);
   if (idx < 0) return 0;
   return Math.min(Math.round(((idx + 1) / DOCUMENT_WORKFLOW.length) * 100), 99);
 }

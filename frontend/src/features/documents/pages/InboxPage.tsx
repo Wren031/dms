@@ -184,13 +184,15 @@ export function InboxPage() {
               header: 'From',
               width: '180px',
               cell: d => {
-                const fromOffice = officeById(d.originatingOfficeId);
+                const fromOffice = d.originatingOfficeId ? officeById(d.originatingOfficeId) : null;
+                const internalFrom = fromOffice?.name ?? d.originatingOfficeName;
+                const internalFromCode = fromOffice?.code ?? 'Manual';
                 return (
                   <div className="flex items-center gap-1.5 text-xs">
                     <Building2 className="w-3.5 h-3.5 text-slate-400" />
                     <div>
-                      <p className="text-slate-700">{d.source === 'external' ? d.senderName : fromOffice?.name}</p>
-                      <p className="text-slate-400 text-[10px]">{d.source === 'external' ? 'External' : fromOffice?.code}</p>
+                      <p className="text-slate-700">{d.source === 'external' ? d.senderName : internalFrom}</p>
+                      <p className="text-slate-400 text-[10px]">{d.source === 'external' ? 'External' : internalFromCode}</p>
                     </div>
                   </div>
                 );
