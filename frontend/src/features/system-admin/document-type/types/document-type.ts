@@ -10,7 +10,7 @@ export type DocumentTypeCode =
 
 export interface DocumentTypeRecord {
   id: string;
-  code: DocumentTypeCode;
+  codes: DocumentTypeCode[];
   name: string;
   description: string | null;
   isActive: boolean;
@@ -32,19 +32,19 @@ export interface DocumentTypeListFilters {
   search?: string;
   code?: DocumentTypeCode;
   isActive?: boolean;
-  sortBy?: 'name' | 'code' | 'createdAt';
+  sortBy?: 'name' | 'createdAt';
   order?: 'asc' | 'desc';
 }
 
 export interface CreateDocumentTypePayload {
-  code: DocumentTypeCode;
+  codes: DocumentTypeCode[];
   name: string;
   description?: string;
   isActive?: boolean;
 }
 
 export interface UpdateDocumentTypePayload {
-  code?: DocumentTypeCode;
+  codes?: DocumentTypeCode[];
   name?: string;
   description?: string | null;
   isActive?: boolean;

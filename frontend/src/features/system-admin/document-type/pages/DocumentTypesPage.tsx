@@ -101,18 +101,18 @@ export function DocumentTypesPage() {
     search.trim().length > 0 || codeFilter !== 'all' || statusFilter !== 'all';
 
   const existingCodes = useMemo(
-    () => new Set(items.map(i => i.code)),
+    () => new Map(items.flatMap(i => i.codes.map(c => [c as DocumentTypeCode, i.id]))),
     [items],
   );
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return items.filter(i => {
-      if (codeFilter !== 'all' && i.code !== codeFilter) return false;
+      if (codeFilter !== 'all' && !i.codes.includes(codeFilter)) return false;
       if (statusFilter === 'active' && !i.isActive) return false;
       if (statusFilter === 'inactive' && i.isActive) return false;
       if (q) {
-        const haystack = `${i.name} ${i.code} ${i.description ?? ''}`.toLowerCase();
+        const haystack = `${i.name} ${i.codes.join(' ')} ${i.description ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
@@ -127,7 +127,7 @@ export function DocumentTypesPage() {
     const inactive = items.length - active;
     const byCode = DOCUMENT_TYPE_CODES.map(code => ({
       code,
-      count: items.filter(i => i.code === code).length,
+      count: items.filter(i => i.codes.includes(code)).length,
     }));
     const totalDocuments = items.reduce(
       (sum, i) => sum + (i._count?.documents ?? 0),
@@ -402,9 +402,15 @@ export function DocumentTypesPage() {
             },
             {
               key: 'code',
-              header: 'Code',
-              width: '180px',
-              cell: i => <DocumentTypeCodeBadge code={i.code} />,
+              header: 'Codes',
+              width: '220px',
+              cell: i => (
+                <div className="flex flex-wrap gap-1">
+                  {i.codes.map(code => (
+                    <DocumentTypeCodeBadge key={code} code={code as DocumentTypeCode} />
+                  ))}
+                </div>
+              ),
             },
             {
               key: 'status',

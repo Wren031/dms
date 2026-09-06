@@ -111,8 +111,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 function normalizeDocument<T extends DocumentListItem | DocumentDetail>(document: T): T {
-  const rawType = document.type as unknown as { code?: string } | string;
-  const type = (typeof rawType === 'string' ? rawType : rawType?.code) as DocumentType;
+  const rawType = document.type as unknown as { codes?: string[]; code?: string } | string;
+  const type = (typeof rawType === 'string'
+    ? rawType
+    : rawType?.codes?.[0] ?? rawType?.code) as DocumentType;
   return {
     ...document,
     type,

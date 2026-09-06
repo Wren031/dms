@@ -35,10 +35,9 @@ import { useToast } from '@/hooks/useToast';
 import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
 import {
   ALL_CLASSIFICATIONS,
-  DOCUMENT_TYPE_LABELS,
   DOCUMENT_CLASSIFICATION_LABELS,
 } from '@/constants';
-import type { DocumentType, DocumentClassification } from '@/types';
+import type { DocumentClassification } from '@/types';
 import { useDocumentTypes } from '@/features/system-admin/document-type/hooks/useDocumentTypes';
 import { useRegisterDocument } from '@/features/documents/hooks/useRegisterDocument';
 import { attachmentsService } from '@/features/documents/services/documents.service';
@@ -48,7 +47,7 @@ import { cn } from '@/lib/utils';
 interface FormState {
   documentNumber: string;
   title: string;
-  type: DocumentType;
+  type: string;
   classification: DocumentClassification;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   source: 'internal' | 'external';
@@ -70,7 +69,7 @@ type FormErrors = Partial<Record<keyof FormState, string>>;
 const INITIAL_STATE: FormState = {
   documentNumber: '',
   title: '',
-  type: 'memo',
+  type: '',
   classification: 'internal',
   priority: 'normal',
   source: 'internal',
@@ -295,9 +294,9 @@ export function DocumentRegistrationPage() {
       return;
     }
 
-    const typeId = documentTypes.find(t => t.code === form.type)?.id;
+    const typeId = form.type;
     if (!typeId) {
-      toast.error('Document type unavailable', 'The selected document type is not configured by the server.');
+      toast.error('Document type unavailable', 'Please select a document type.');
       return;
     }
 
@@ -505,8 +504,8 @@ export function DocumentRegistrationPage() {
                 label="Document Type"
                 required
                 value={form.type}
-                onChange={e => setField('type', e.target.value as DocumentType)}
-                options={documentTypes.map(t => ({ value: t.code, label: t.name }))}
+                onChange={e => setField('type', e.target.value)}
+                options={documentTypes.map(t => ({ value: t.id, label: t.name }))}
                 disabled={documentTypes.length === 0}
                 hint={documentTypes.length === 0 ? 'No active document types are configured.' : undefined}
               />
@@ -889,7 +888,7 @@ export function DocumentRegistrationPage() {
               <h3 className="text-sm font-semibold text-slate-900">Submission Summary</h3>
             </div>
             <dl className="space-y-3 text-sm">
-              <SummaryRow label="Type" value={DOCUMENT_TYPE_LABELS[form.type]} />
+              <SummaryRow label="Type" value={documentTypes.find(t => t.id === form.type)?.name ?? '—'} />
               <SummaryRow
                 label="Classification"
                 value={DOCUMENT_CLASSIFICATION_LABELS[form.classification]}

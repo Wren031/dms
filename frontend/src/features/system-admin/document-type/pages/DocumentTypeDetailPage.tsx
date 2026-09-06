@@ -184,8 +184,10 @@ export function DocumentTypeDetailPage() {
   }
 
   const usageCount = record._count?.documents ?? 0;
-  const existingCodes = new Set(
-    items.filter(i => i.id !== record.id).map(i => i.code as DocumentTypeCode),
+  const existingCodes = new Map(
+    items
+      .filter(i => i.id !== record.id)
+      .flatMap(i => i.codes.map(c => [c as DocumentTypeCode, i.id])),
   );
 
   return (
@@ -253,8 +255,10 @@ export function DocumentTypeDetailPage() {
 
       <Card padded={false}>
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500">
-            <DocumentTypeCodeBadge code={record.code} />
+          <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-500">
+            {record.codes.map(code => (
+              <DocumentTypeCodeBadge key={code} code={code as DocumentTypeCode} />
+            ))}
             <DocumentTypeStatusBadge isActive={record.isActive} />
             <span className="text-slate-300">·</span>
             <span>Created {formatDate(record.createdAt)}</span>
@@ -269,11 +273,15 @@ export function DocumentTypeDetailPage() {
             value={<span className="text-sm font-semibold text-slate-900">{record.name}</span>}
           />
           <MetaField
-            label="Code"
+            label="Codes"
             value={
-              <span className="font-mono text-[11px] text-slate-700 uppercase">
-                {record.code}
-              </span>
+              <div className="flex flex-wrap gap-1">
+                {record.codes.map(code => (
+                  <span key={code} className="font-mono text-[11px] text-slate-700 uppercase bg-slate-100 px-1.5 py-0.5 rounded">
+                    {code}
+                  </span>
+                ))}
+              </div>
             }
           />
           <MetaField
@@ -315,11 +323,15 @@ export function DocumentTypeDetailPage() {
             </div>
             <dl className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
               <Row
-                label="Code"
+                label="Codes"
                 value={
-                  <span className="font-mono text-xs text-slate-700 uppercase">
-                    {record.code}
-                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {record.codes.map(code => (
+                      <span key={code} className="font-mono text-xs text-slate-700 uppercase bg-slate-100 px-1.5 py-0.5 rounded">
+                        {code}
+                      </span>
+                    ))}
+                  </div>
                 }
               />
               <Row
@@ -368,11 +380,16 @@ export function DocumentTypeDetailPage() {
             <div className="flex items-start gap-2 text-sm text-slate-600">
               <Tag className="w-4 h-4 text-brand-600 mt-0.5 shrink-0" />
               <div>
-                <p className="font-semibold text-slate-900">About this code</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  {DOCUMENT_TYPE_CODE_DESCRIPTIONS[record.code] ??
-                    'Custom document type used to classify records.'}
-                </p>
+                <p className="font-semibold text-slate-900">About these codes</p>
+                <ul className="text-xs text-slate-500 mt-1 space-y-1">
+                  {record.codes.map(code => (
+                    <li key={code}>
+                      <span className="font-medium text-slate-700">{DOCUMENT_TYPE_CODE_LABELS[code]}:</span>{' '}
+                      {DOCUMENT_TYPE_CODE_DESCRIPTIONS[code] ??
+                        'Custom document type used to classify records.'}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </Card>
@@ -385,7 +402,7 @@ export function DocumentTypeDetailPage() {
                   This type is currently used by{' '}
                   <span className="font-semibold">{usageCount}</span>{' '}
                   document{usageCount === 1 ? '' : 's'}. Deleting it may
-                  break historical records that reference this code.
+                  break historical records that reference these codes.
                 </p>
               </div>
             </Card>
@@ -405,9 +422,13 @@ export function DocumentTypeDetailPage() {
                 <p className="text-sm font-semibold text-slate-900 truncate">
                   {record.name}
                 </p>
-                <p className="text-xs text-slate-500 font-mono uppercase">
-                  {record.code}
-                </p>
+                <div className="flex flex-wrap gap-1 mt-0.5">
+                  {record.codes.map(code => (
+                    <span key={code} className="text-[10px] text-slate-500 font-mono uppercase">
+                      {code}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
           </Card>
@@ -442,7 +463,7 @@ export function DocumentTypeDetailPage() {
             </div>
             <ul className="px-5 py-4 space-y-2 text-xs">
               {DOCUMENT_TYPE_CODES.map(code => {
-                const isCurrent = code === record.code;
+                const isCurrent = record.codes.includes(code);
                 return (
                   <li
                     key={code}

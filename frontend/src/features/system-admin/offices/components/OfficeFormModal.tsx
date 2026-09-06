@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Building2 } from 'lucide-react';
+import { Building2, Lock } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Button } from '@/components/ui/Button';
+import { OFFICE_DIRECTORY } from '@/constants';
 import type {
   CreateOfficeInput,
   Office,
@@ -47,6 +49,13 @@ const TYPE_OPTIONS: { value: OfficeType; label: string }[] = [
   { value: 'unit', label: 'Unit' },
 ];
 
+const OFFICE_NAME_OPTIONS: ComboboxOption[] = OFFICE_DIRECTORY.map(entry => ({
+  value: entry.name,
+  label: entry.name,
+  group: entry.group,
+  description: entry.code,
+}));
+
 function toFormState(office?: Office): FormState {
   if (!office) return EMPTY_FORM;
   return {
@@ -75,6 +84,15 @@ export function OfficeFormModal({
   useEffect(() => {
     if (open) setForm(toFormState(initial));
   }, [open, initial]);
+
+  const handleNameChange = (name: string) => {
+    const entry = OFFICE_DIRECTORY.find(e => e.name === name);
+    setForm(prev => ({
+      ...prev,
+      name,
+      code: entry?.code ?? prev.code,
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,26 +169,27 @@ export function OfficeFormModal({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Input
+          <Combobox
             label="Office Name"
             name="name"
             required
             value={form.name}
-            onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-            placeholder="e.g., City Budget Office"
+            onChange={handleNameChange}
+            options={OFFICE_NAME_OPTIONS}
+            placeholder="Search for an office…"
+            searchPlaceholder="Type to filter offices…"
             disabled={loading}
+            hint="Pick from the official office directory."
           />
           <Input
             label="Office Code"
             name="code"
             required
             value={form.code}
-            onChange={e =>
-              setForm(prev => ({ ...prev, code: e.target.value.toUpperCase() }))
-            }
-            placeholder="e.g., CBO"
-            hint="3-5 letter acronym"
-            disabled={loading}
+            readOnly
+            leftIcon={<Lock className="w-4 h-4" />}
+            placeholder="—"
+            hint="Auto-derived from the office name."
           />
           <Select
             label="Office Type"

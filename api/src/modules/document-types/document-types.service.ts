@@ -5,12 +5,27 @@ import { UpdateDocumentTypeDto } from './dto/update-document-type.dto';
 import { FilterDocumentTypesDto } from './dto/filter-document-types.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
 
+const CODES_INCLUDE = { codes: { select: { code: true } } };
+
+function flattenCodes(row: any) {
+  const { codes, ...rest } = row;
+  return { ...rest, codes: codes.map((c: any) => c.code) };
+}
+
 @Injectable()
 export class DocumentTypesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(dto: CreateDocumentTypeDto): Promise<unknown> {
-    return this.prisma.documentType.create({ data: dto });
+  async create(dto: CreateDocumentTypeDto): Promise<unknown> {
+    const { codes, ...rest } = dto;
+    const created = await this.prisma.documentType.create({
+      data: {
+        ...rest,
+        codes: { create: codes.map(code => ({ code })) },
+      },
+      include: CODES_INCLUDE,
+    });
+    return flattenCodes(created);
   }
 
   async findAll(filter: FilterDocumentTypesDto): Promise<PaginatedResult<unknown>> {
@@ -20,38 +35,54 @@ export class DocumentTypesService {
       Object.assign(where, {
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
-          { code: { contains: search, mode: 'insensitive' } },
+          { codes: { some: { code: { contains: search, mode: 'insensitive' } } } },
         ],
       });
     }
-    if (code) where.code = code;
+    if (code) where.codes = { some: { code } };
     if (typeof isActive === 'boolean') where.isActive = isActive;
 
-    const [items, total] = await this.prisma.$transaction([
+    const [rows, total] = await this.prisma.$transaction([
       this.prisma.documentType.findMany({
         where,
-        include: { _count: { select: { documents: true } } },
+        include: { ...CODES_INCLUDE, _count: { select: { documents: true } } },
         orderBy: { [sortBy ?? 'name']: order },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       this.prisma.documentType.count({ where }),
     ]);
+    const items = rows.map(r => {
+      const { codes, ...rest } = r;
+      return { ...rest, codes: codes.map((c: any) => c.code) };
+    });
     return { items, total, page, pageSize };
   }
 
-  findOne(id: string): Promise<unknown> {
-    return this.prisma.documentType.findUniqueOrThrow({
+  async findOne(id: string): Promise<unknown> {
+    const row = await this.prisma.documentType.findUniqueOrThrow({
       where: { id },
-      include: { _count: { select: { documents: true } } },
+      include: { ...CODES_INCLUDE, _count: { select: { documents: true } } },
     });
+    return flattenCodes(row);
   }
 
-  update(id: string, dto: UpdateDocumentTypeDto): Promise<unknown> {
-    return this.prisma.documentType.update({ where: { id }, data: dto });
+  async update(id: string, dto: UpdateDocumentTypeDto): Promise<unknown> {
+    const { codes, ...rest } = dto;
+    const data: Record<string, unknown> = { ...rest };
+    if (codes !== undefined) {
+      await this.prisma.documentTypeCodeEntry.deleteMany({ where: { documentTypeId: id } });
+      data.codes = { create: codes.map(code => ({ code })) };
+    }
+    const updated = await this.prisma.documentType.update({
+      where: { id },
+      data,
+      include: CODES_INCLUDE,
+    });
+    return flattenCodes(updated);
   }
 
-  remove(id: string): Promise<unknown> {
+  async remove(id: string): Promise<unknown> {
     return this.prisma.documentType.delete({ where: { id } });
   }
 }

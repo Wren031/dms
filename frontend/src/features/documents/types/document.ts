@@ -19,7 +19,7 @@ export type DocumentClassification = 'public' | 'internal' | 'confidential' | 'r
 
 export interface DocumentTypeMeta {
   id: string;
-  code: string;
+  codes: string[];
   name: string;
   description: string | null;
   isActive: boolean;

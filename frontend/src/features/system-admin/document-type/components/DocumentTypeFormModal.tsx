@@ -19,7 +19,7 @@ interface DocumentTypeFormModalProps {
   initial?: DocumentTypeRecord;
   loading: boolean;
   errorMessage: string | null;
-  existingCodes: Set<DocumentTypeCode>;
+  existingCodes: Map<DocumentTypeCode, string>;
   onClose: () => void;
   onSubmit: (input: CreateDocumentTypePayload | UpdateDocumentTypePayload) => Promise<void>;
 }
@@ -41,17 +41,12 @@ const EMPTY_FORM: FormState = {
 function toFormState(record?: DocumentTypeRecord): FormState {
   if (!record) return EMPTY_FORM;
   return {
-    code: record.code,
+    code: record.codes[0] ?? '',
     name: record.name,
     description: record.description ?? '',
     isActive: record.isActive,
   };
 }
-
-const CODE_OPTIONS = DOCUMENT_TYPE_CODES.map(c => ({
-  value: c,
-  label: `${DOCUMENT_TYPE_CODE_LABELS[c]} (${c})`,
-}));
 
 export function DocumentTypeFormModal({
   open,
@@ -72,12 +67,12 @@ export function DocumentTypeFormModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
-    if (mode === 'create' && !form.code) return;
+    if (!form.code) return;
 
     const description = form.description.trim();
     if (mode === 'create') {
       const payload: CreateDocumentTypePayload = {
-        code: form.code as DocumentTypeCode,
+        codes: [form.code],
         name: form.name.trim(),
         description: description || undefined,
         isActive: form.isActive,
@@ -85,6 +80,7 @@ export function DocumentTypeFormModal({
       await onSubmit(payload);
     } else {
       const payload: UpdateDocumentTypePayload = {
+        codes: [form.code],
         name: form.name.trim(),
         description: description || null,
         isActive: form.isActive,
@@ -97,13 +93,14 @@ export function DocumentTypeFormModal({
   const description =
     mode === 'create'
       ? 'Create a new category used when registering documents.'
-      : 'Update the label and description for this document type.';
+      : 'Update the label, code, and description for this document type.';
 
-  const codeIsTaken =
-    mode === 'create' && form.code !== '' && existingCodes.has(form.code as DocumentTypeCode);
+  const isInvalid = !form.name.trim() || !form.code;
 
-  const isInvalid =
-    !form.name.trim() || (mode === 'create' && (!form.code || codeIsTaken));
+  const codeOptions = DOCUMENT_TYPE_CODES.map(c => ({
+    value: c,
+    label: `${DOCUMENT_TYPE_CODE_LABELS[c]} (${c})`,
+  }));
 
   return (
     <Modal
@@ -148,43 +145,32 @@ export function DocumentTypeFormModal({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {mode === 'create' ? (
-            <Select
-              label="Code"
-              name="code"
-              required
-              value={form.code}
-              onChange={e => setForm(prev => ({ ...prev, code: e.target.value as DocumentTypeCode }))}
-              options={CODE_OPTIONS}
-              disabled={loading}
-              hint={
-                codeIsTaken
-                  ? 'This code is already in use. Choose another or edit the existing one.'
-                  : 'Internal identifier used by documents.'
-              }
-            />
-          ) : (
-            <Input
-              label="Code"
-              name="code"
-              value={initial?.code ?? ''}
-              readOnly
-              disabled
-              hint="Code cannot be changed after creation."
-            />
-          )}
-          <Input
-            label="Display Name"
-            name="name"
-            required
-            value={form.name}
-            onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
-            placeholder="e.g., Memorandum Circular"
-            disabled={loading}
-            hint="Shown to users when selecting a document type."
-          />
-        </div>
+        <Input
+          label="Display Name"
+          name="name"
+          required
+          value={form.name}
+          onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+          placeholder="e.g., Memorandum Circular"
+          disabled={loading}
+          hint="Shown to users when selecting a document type."
+        />
+
+        <Select
+          label="Code"
+          name="code"
+          required
+          value={form.code}
+          onChange={e => setForm(prev => ({ ...prev, code: e.target.value as DocumentTypeCode }))}
+          options={codeOptions}
+          disabled={loading}
+          hint={
+            existingCodes.has(form.code as DocumentTypeCode) &&
+            (mode === 'create' || existingCodes.get(form.code as DocumentTypeCode) !== initial?.id)
+              ? 'This code is also assigned to another document type.'
+              : 'Internal identifier used by documents.'
+          }
+        />
 
         <Textarea
           label="Description"

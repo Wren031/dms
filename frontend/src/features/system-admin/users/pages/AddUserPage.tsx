@@ -53,7 +53,6 @@ const TOUCHED_INITIAL: Record<string, boolean> = {
   username: false,
   password: false,
   status: false,
-  confirmPassword: false,
 };
 
 function generatePassword(): string {
@@ -72,7 +71,7 @@ function usernameFrom(firstName: string, lastName: string): string {
   return `${f}.${l}`;
 }
 
-function validate(form: AddUserFormState, confirmPassword: string, username: string): FormErrors {
+function validate(form: AddUserFormState, username: string): FormErrors {
   const e: FormErrors = {};
   if (!form.firstName.trim()) e.firstName = 'First name is required';
   if (!form.lastName.trim()) e.lastName = 'Last name is required';
@@ -85,8 +84,6 @@ function validate(form: AddUserFormState, confirmPassword: string, username: str
   else if (username.length < 3) e.username = 'At least 3 characters';
   if (!form.password) e.password = 'Password is required';
   else if (form.password.length < 8) e.password = 'At least 8 characters';
-  if (form.password && confirmPassword !== form.password)
-    e.confirmPassword = 'Passwords do not match';
   return e;
 }
 
@@ -109,7 +106,6 @@ export function AddUserPage() {
   const { createUser, creating, actionError, clearActionError } = useUsers();
 
   const [form, setForm] = useState<AddUserFormState>(DEFAULT_FORM);
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [touched, setTouched] = useState<Record<string, boolean>>(TOUCHED_INITIAL);
   const [usernameTouched, setUsernameTouched] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -139,8 +135,8 @@ export function AddUserPage() {
     : (form.username || suggestedUsername);
 
   const errors = useMemo(
-    () => validate(form, confirmPassword, usernameValue),
-    [form, confirmPassword, usernameValue],
+    () => validate(form, usernameValue),
+    [form, usernameValue],
   );
 
   const isValid = Object.keys(errors).length === 0;
@@ -162,7 +158,6 @@ export function AddUserPage() {
       role: true,
       username: true,
       password: true,
-      confirmPassword: true,
     });
     if (!isValid) {
       toast.error('Please fix the errors', 'Some required fields are missing or invalid.');
@@ -209,7 +204,6 @@ export function AddUserPage() {
 
   const regeneratePassword = () => {
     setForm(prev => ({ ...prev, password: generatePassword() }));
-    setConfirmPassword('');
     markTouched('password');
   };
 
@@ -284,8 +278,6 @@ export function AddUserPage() {
               touched={touched}
               onTouched={markTouched}
               errors={showFormError ? errors : touchedErrors(touched, errors)}
-              confirmPassword={confirmPassword}
-              onConfirmPasswordChange={setConfirmPassword}
               offices={flatOffices}
               usernameTouched={usernameTouched}
               onUsernameTouched={setUsernameTouched}

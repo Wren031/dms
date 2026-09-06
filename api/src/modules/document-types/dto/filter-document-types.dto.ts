@@ -18,7 +18,7 @@ export class FilterDocumentTypesDto extends PaginationDto {
 
   @IsOptional()
   @IsString()
-  sortBy?: 'name' | 'code' | 'createdAt';
+  sortBy?: 'name' | 'createdAt';
 
   @IsOptional()
   @IsString()

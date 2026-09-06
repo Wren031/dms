@@ -1,13 +1,14 @@
-import type { ChangeEvent, FocusEvent } from 'react';
-import { Briefcase, Mail, Phone, User as UserIcon } from 'lucide-react';
+import { Mail, Phone, User as UserIcon } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { PasswordInputField } from '@/features/system-admin/users/components/PasswordInputField';
 import type { OfficeSummary } from '@/features/system-admin/users/types/user';
 import { ALL_ROLES, ROLE_LABELS } from '@/constants';
 import type { UserRole } from '@/types';
 import {
+  POSITION_OPTIONS,
   STATUS_FROM_API,
   USER_STATUS_API,
   USER_STATUS_LABELS,
@@ -41,12 +42,16 @@ export interface FormErrors {
   officeId?: string;
   username?: string;
   password?: string;
-  confirmPassword?: string;
 }
 
 const STATUS_OPTIONS: { value: UserStatusUi; label: string }[] = USER_STATUS_API.map(
   s => ({ value: STATUS_FROM_API[s], label: USER_STATUS_LABELS[s] }),
 );
+
+const POSITION_SELECT_OPTIONS: ComboboxOption[] = POSITION_OPTIONS.map(p => ({
+  value: p,
+  label: p,
+}));
 
 export interface UserFormFieldsProps {
   form: AddUserFormState;
@@ -54,8 +59,6 @@ export interface UserFormFieldsProps {
   touched: TouchedMap;
   onTouched: (field: string) => void;
   errors: FormErrors;
-  confirmPassword: string;
-  onConfirmPasswordChange: (value: string) => void;
   offices: OfficeSummary[];
   usernameTouched: boolean;
   onUsernameTouched: (value: boolean) => void;
@@ -70,8 +73,6 @@ export function UserFormFields({
   touched,
   onTouched,
   errors,
-  confirmPassword,
-  onConfirmPasswordChange,
   offices,
   usernameTouched,
   onUsernameTouched,
@@ -80,7 +81,6 @@ export function UserFormFields({
   disabled,
 }: UserFormFieldsProps) {
   const usernameValue = usernameTouched ? form.username : (form.username || suggestedUsername);
-  const showConfirmAsText = Boolean(form.password) && Boolean(confirmPassword) && confirmPassword === form.password;
 
   return (
     <div className="space-y-6">
@@ -146,17 +146,17 @@ export function UserFormFields({
             leftIcon={<Phone className="w-4 h-4" />}
             disabled={disabled}
           />
-          <Input
+          <Combobox
             label="Position"
             name="position"
             required
             value={form.position}
-            onChange={e => onChange({ ...form, position: e.target.value })}
-            onBlur={() => onTouched('position')}
-            placeholder="Administrative Officer"
+            onChange={value => onChange({ ...form, position: value })}
+            options={POSITION_SELECT_OPTIONS}
+            placeholder="Select a position"
             error={touched.position ? errors.position : undefined}
-            leftIcon={<Briefcase className="w-4 h-4" />}
             disabled={disabled}
+            searchable={false}
           />
         </div>
       </Card>
@@ -235,21 +235,6 @@ export function UserFormFields({
             onGenerate={onGeneratePassword}
             disabled={disabled}
             name="password"
-          />
-          <Input
-            label="Confirm Password"
-            name="confirmPassword"
-            required
-            type={showConfirmAsText ? 'text' : 'password'}
-            value={confirmPassword}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              onConfirmPasswordChange(e.target.value)
-            }
-            onBlur={(e: FocusEvent<HTMLInputElement>) => onTouched('confirmPassword')}
-            placeholder="••••••••"
-            error={confirmPassword ? errors.confirmPassword : undefined}
-            disabled={disabled}
-            autoComplete="new-password"
           />
         </div>
       </Card>

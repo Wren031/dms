@@ -204,3 +204,77 @@ export const AVATAR_COLORS = [
   'bg-teal-600',
   'bg-orange-600',
 ];
+
+export interface OfficeDirectoryEntry {
+  name: string;
+  code: string;
+  group: string;
+}
+
+export const OFFICE_DIRECTORY: OfficeDirectoryEntry[] = [
+  // City Government Offices
+  { name: 'Office of the City Mayor', code: 'OCM', group: 'City Government Offices' },
+  { name: 'Office of the City Vice Mayor', code: 'OCVM', group: 'City Government Offices' },
+  { name: 'Sangguniang Panlungsod', code: 'SP', group: 'City Government Offices' },
+  { name: "City Administrator's Office", code: 'ADMIN', group: 'City Government Offices' },
+  { name: 'City Legal Office', code: 'LEGAL', group: 'City Government Offices' },
+  { name: 'City Human Resource Management Office', code: 'HRMO', group: 'City Government Offices' },
+  { name: 'City Planning and Development Office', code: 'CPDO', group: 'City Government Offices' },
+  { name: 'City Budget Office', code: 'CBO', group: 'City Government Offices' },
+  { name: 'City Accounting Office', code: 'ACCT', group: 'City Government Offices' },
+  { name: "City Treasurer's Office", code: 'TREAS', group: 'City Government Offices' },
+  { name: "City Assessor's Office", code: 'ASSESS', group: 'City Government Offices' },
+  { name: 'City Engineering Office', code: 'ENG', group: 'City Government Offices' },
+  { name: 'City Agriculture Office', code: 'AGRI', group: 'City Government Offices' },
+  { name: 'City Veterinary Office', code: 'VET', group: 'City Government Offices' },
+  { name: 'City Health Office', code: 'HEALTH', group: 'City Government Offices' },
+  { name: 'City Social Welfare and Development Office', code: 'CSWDO', group: 'City Government Offices' },
+  { name: 'City Environment and Natural Resources Office', code: 'CITY-ENRO', group: 'City Government Offices' },
+  { name: 'City Disaster Risk Reduction and Management Office', code: 'CDRRMO', group: 'City Government Offices' },
+  { name: 'City General Services Office', code: 'GSO', group: 'City Government Offices' },
+  { name: "City Civil Registrar's Office", code: 'CCRO', group: 'City Government Offices' },
+  { name: 'City Cooperative Office', code: 'COOP', group: 'City Government Offices' },
+  { name: 'City Economic Enterprise Office', code: 'CEEO', group: 'City Government Offices' },
+  { name: 'Office of the Building Official', code: 'OBO', group: 'City Government Offices' },
+  { name: 'Public Employment Service Office (PESO)', code: 'PESO', group: 'City Government Offices' },
+  { name: 'Bids and Awards Committee (BAC)', code: 'BAC', group: 'City Government Offices' },
+  { name: 'Information and Communications Technology Office', code: 'ICTO', group: 'City Government Offices' },
+  { name: 'City Tourism Office', code: 'TOUR', group: 'City Government Offices' },
+  { name: 'City Library', code: 'LIBRARY', group: 'City Government Offices' },
+  { name: 'Public Information Office', code: 'PIO', group: 'City Government Offices' },
+  { name: 'Local Economic Enterprise Office', code: 'LEEO', group: 'City Government Offices' },
+
+  // National Government Offices in Valencia City
+  { name: 'Bureau of Fire Protection (BFP)', code: 'BFP', group: 'National Government Offices in Valencia City' },
+  { name: 'Bureau of Internal Revenue (BIR)', code: 'BIR', group: 'National Government Offices in Valencia City' },
+  { name: 'Bureau of Jail Management and Penology (BJMP)', code: 'BJMP', group: 'National Government Offices in Valencia City' },
+  { name: 'Commission on Audit (COA)', code: 'COA', group: 'National Government Offices in Valencia City' },
+  { name: 'Commission on Elections (COMELEC)', code: 'COMELEC', group: 'National Government Offices in Valencia City' },
+  { name: 'Community Environment and Natural Resources Office (CENRO)', code: 'CENRO', group: 'National Government Offices in Valencia City' },
+  { name: 'Department of Agrarian Reform (DAR)', code: 'DAR', group: 'National Government Offices in Valencia City' },
+  { name: 'Department of the Interior and Local Government (DILG)', code: 'DILG', group: 'National Government Offices in Valencia City' },
+  { name: 'Department of Education – Valencia City', code: 'DEPED-VAL', group: 'National Government Offices in Valencia City' },
+  { name: 'Land Transportation Office (LTO)', code: 'LTO', group: 'National Government Offices in Valencia City' },
+  { name: 'Municipal Trial Court in Cities (MTCC)', code: 'MTCC', group: 'National Government Offices in Valencia City' },
+  { name: 'Pag-IBIG Fund', code: 'PAG-IBIG', group: 'National Government Offices in Valencia City' },
+  { name: 'Parole and Probation Office', code: 'PPO', group: 'National Government Offices in Valencia City' },
+  { name: 'Philippine Health Insurance Corporation (PhilHealth)', code: 'PHILHEALTH', group: 'National Government Offices in Valencia City' },
+  { name: 'Philippine National Police (PNP)', code: 'PNP', group: 'National Government Offices in Valencia City' },
+  { name: 'Philippine Postal Corporation (PhilPost)', code: 'PHILPOST', group: 'National Government Offices in Valencia City' },
+  { name: 'Professional Regulation Commission (PRC)', code: 'PRC', group: 'National Government Offices in Valencia City' },
+  { name: "Prosecutor's Office", code: 'PROSEC', group: 'National Government Offices in Valencia City' },
+  { name: "Public Attorney's Office (PAO)", code: 'PAO', group: 'National Government Offices in Valencia City' },
+  { name: 'Social Security System (SSS)', code: 'SSS', group: 'National Government Offices in Valencia City' },
+  { name: 'Technical Education and Skills Development Authority (TESDA)', code: 'TESDA', group: 'National Government Offices in Valencia City' },
+  { name: 'National Irrigation Administration (NIA)', code: 'NIA', group: 'National Government Offices in Valencia City' },
+  { name: 'National Food Authority (NFA)', code: 'NFA', group: 'National Government Offices in Valencia City' },
+];
+
+export const OFFICE_DIRECTORY_GROUPS: { label: string; offices: string[] }[] = (() => {
+  const groups = new Map<string, string[]>();
+  for (const entry of OFFICE_DIRECTORY) {
+    if (!groups.has(entry.group)) groups.set(entry.group, []);
+    groups.get(entry.group)!.push(entry.name);
+  }
+  return Array.from(groups.entries()).map(([label, offices]) => ({ label, offices }));
+})();

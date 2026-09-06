@@ -1,10 +1,11 @@
-import { IsBoolean, IsEnum, IsOptional, IsString, Length } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsOptional, IsString, Length } from 'class-validator';
 import { DocumentTypeCode } from '@prisma/client';
 
 export class UpdateDocumentTypeDto {
   @IsOptional()
-  @IsEnum(DocumentTypeCode)
-  code?: DocumentTypeCode;
+  @IsArray()
+  @IsEnum(DocumentTypeCode, { each: true })
+  codes?: DocumentTypeCode[];
 
   @IsOptional()
   @IsString()

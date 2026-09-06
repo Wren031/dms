@@ -14,14 +14,11 @@ async function bootstrap(): Promise<void> {
   const appCfg = configService.getOrThrow<AppConfig>('app');
   const cors = configService.getOrThrow<CorsConfig>('cors');
 
-  // Trust X-Forwarded-* headers when running behind a reverse proxy.
-  // Express + Nest will then populate req.ip from the upstream address.
   const expressInstance = app.getHttpAdapter().getInstance() as { set?: (key: string, value: unknown) => void };
   if (typeof expressInstance.set === 'function') {
     expressInstance.set('trust proxy', appCfg.host === '0.0.0.0' || appCfg.host === '::' ? 'loopback' : true);
   }
 
-  // Security headers
   app.use(
     helmet({
       contentSecurityPolicy: false, // API-only; enable in browser apps via gateway
