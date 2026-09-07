@@ -8,6 +8,7 @@ encoder
 }
 
 {
+    
 system_admin
     "emailOrUsername": "admin@city.gov",
     "password": "admin123"
