@@ -2,6 +2,7 @@ import { authApi } from '@/features/authentication/api/authApi';
 import type {
   AuthUser,
   ChangePasswordRequest,
+  FirstLoginChangePasswordRequest,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
   LoginRequest,
@@ -36,7 +37,14 @@ export const authService = {
 
   logout: () => authApi.logout(),
   changePassword: (payload: ChangePasswordRequest) => authApi.changePassword(payload),
-  
+
+  async firstLoginChangePassword(
+    payload: FirstLoginChangePasswordRequest,
+  ): Promise<AuthUser> {
+    const response = await authApi.firstLoginChangePassword(payload);
+    return response.user;
+  },
+
   updateMe: (payload: UpdateMyProfileRequest) => authApi.updateMe(payload),
   listSessions: () => authApi.sessions(),
   revokeSession: (sessionId: string) => authApi.revokeSession(sessionId),

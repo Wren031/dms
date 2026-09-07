@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
-import { FileText } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { FileText, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
+import { DraftIndicator } from '@/components/ui/DraftIndicator';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { FORM_DRAFT_KEYS } from '@/lib/formDraftKeys';
 import {
   DOCUMENT_TYPE_CODES,
   DOCUMENT_TYPE_CODE_LABELS,
@@ -60,6 +63,34 @@ export function DocumentTypeFormModal({
 }: DocumentTypeFormModalProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
+  const formDraft = useFormDraft(FORM_DRAFT_KEYS.DOCUMENT_TYPE_CREATE, {
+    enabled: open && mode === 'create',
+    onRestore: payload => {
+      const restored: Partial<FormState> = {};
+      for (const key of Object.keys(EMPTY_FORM) as Array<keyof FormState>) {
+        const v = payload[key as string];
+        if (v !== undefined) {
+          (restored as Record<string, unknown>)[key] = v;
+        }
+      }
+      if (Object.keys(restored).length > 0) {
+        setForm(prev => ({ ...prev, ...restored }));
+      }
+    },
+  });
+
+  const formRef = useRef(form);
+  formRef.current = form;
+  const updateForm = useCallback(
+    (next: FormState) => {
+      setForm(next);
+      if (mode === 'create') {
+        formDraft.saveDraft(next as unknown as Record<string, unknown>);
+      }
+    },
+    [formDraft, mode],
+  );
+
   useEffect(() => {
     if (open) setForm(toFormState(initial));
   }, [open, initial]);
@@ -87,6 +118,14 @@ export function DocumentTypeFormModal({
       };
       await onSubmit(payload);
     }
+    if (mode === 'create') {
+      await formDraft.clearDraft();
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    updateForm(EMPTY_FORM);
+    void formDraft.clearDraft();
   };
 
   const title = mode === 'create' ? 'Add Document Type' : 'Edit Document Type';
@@ -145,12 +184,36 @@ export function DocumentTypeFormModal({
           </div>
         )}
 
+        {mode === 'create' && (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+            <DraftIndicator
+              state={formDraft.saving}
+              lastSavedAt={formDraft.lastSavedAt}
+              error={formDraft.error}
+              onRetry={() =>
+                formDraft.saveDraftNow(formRef.current as unknown as Record<string, unknown>)
+              }
+            />
+            {formDraft.draft && (
+              <button
+                type="button"
+                onClick={handleDiscardDraft}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-rose-600 transition-colors"
+                aria-label="Discard draft"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Discard draft
+              </button>
+            )}
+          </div>
+        )}
+
         <Input
           label="Display Name"
           name="name"
           required
           value={form.name}
-          onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+          onChange={e => updateForm({ ...formRef.current, name: e.target.value })}
           placeholder="e.g., Memorandum Circular"
           disabled={loading}
           hint="Shown to users when selecting a document type."
@@ -161,7 +224,9 @@ export function DocumentTypeFormModal({
           name="code"
           required
           value={form.code}
-          onChange={e => setForm(prev => ({ ...prev, code: e.target.value as DocumentTypeCode }))}
+          onChange={e =>
+            updateForm({ ...formRef.current, code: e.target.value as DocumentTypeCode })
+          }
           options={codeOptions}
           disabled={loading}
           hint={
@@ -177,7 +242,7 @@ export function DocumentTypeFormModal({
           name="description"
           rows={3}
           value={form.description}
-          onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+          onChange={e => updateForm({ ...formRef.current, description: e.target.value })}
           placeholder="Briefly describe what documents fall under this type…"
           disabled={loading}
           hint="Optional. Helpful for encoders when classifying documents."
@@ -187,7 +252,9 @@ export function DocumentTypeFormModal({
           label="Status"
           name="isActive"
           value={form.isActive ? 'true' : 'false'}
-          onChange={e => setForm(prev => ({ ...prev, isActive: e.target.value === 'true' }))}
+          onChange={e =>
+            updateForm({ ...formRef.current, isActive: e.target.value === 'true' })
+          }
           options={[
             { value: 'true', label: 'Active' },
             { value: 'false', label: 'Inactive' },

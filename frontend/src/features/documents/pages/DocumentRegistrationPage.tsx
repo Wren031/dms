@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -21,6 +21,7 @@ import {
   ClipboardList,
   ShieldCheck,
   CalendarClock,
+  Trash2,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
@@ -30,6 +31,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { SearchInput } from '@/components/ui/SearchInput';
+import { DraftIndicator } from '@/components/ui/DraftIndicator';
 import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
@@ -42,6 +44,8 @@ import { useDocumentTypes } from '@/features/system-admin/document-type/hooks/us
 import { useRegisterDocument } from '@/features/documents/hooks/useRegisterDocument';
 import { attachmentsService } from '@/features/documents/services/documents.service';
 import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { FORM_DRAFT_KEYS } from '@/lib/formDraftKeys';
 import { cn } from '@/lib/utils';
 
 interface FormState {
@@ -99,6 +103,12 @@ const ACCEPTED_TYPES = [
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
+interface AttachmentMeta {
+  name: string;
+  size: number;
+  type: string;
+}
+
 export function DocumentRegistrationPage() {
   const user = useCurrentUser();
   const navigate = useNavigate();
@@ -120,10 +130,64 @@ export function DocumentRegistrationPage() {
   const [submitting, setSubmitting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [recipientSearch, setRecipientSearch] = useState('');
+  const [restoredAttachmentMeta, setRestoredAttachmentMeta] = useState<AttachmentMeta[]>([]);
+
+  const formDraft = useFormDraft(FORM_DRAFT_KEYS.DOCUMENT_REGISTER, {
+    onRestore: payload => {
+      const restored: Partial<FormState> = {};
+      for (const key of Object.keys(INITIAL_STATE) as Array<keyof FormState>) {
+        const v = payload[key as string];
+        if (v !== undefined) {
+          (restored as Record<string, unknown>)[key] = v;
+        }
+      }
+      if (Object.keys(restored).length > 0) {
+        setForm(prev => ({ ...prev, ...restored }));
+      }
+      const rawAttachments = payload.attachments;
+      if (Array.isArray(rawAttachments)) {
+        const meta: AttachmentMeta[] = [];
+        for (const item of rawAttachments) {
+          if (
+            item &&
+            typeof item === 'object' &&
+            typeof (item as AttachmentMeta).name === 'string' &&
+            typeof (item as AttachmentMeta).size === 'number' &&
+            typeof (item as AttachmentMeta).type === 'string'
+          ) {
+            meta.push({
+              name: (item as AttachmentMeta).name,
+              size: (item as AttachmentMeta).size,
+              type: (item as AttachmentMeta).type,
+            });
+          }
+        }
+        if (meta.length > 0) setRestoredAttachmentMeta(meta);
+      }
+    },
+  });
 
   const tags = useMemo(
     () => form.tagsInput.split(',').map(t => t.trim()).filter(Boolean),
     [form.tagsInput]
+  );
+
+  const formRef = useRef(form);
+  formRef.current = form;
+  const updateForm = useCallback(
+    (next: FormState) => {
+      setForm(next);
+      const attachmentsMeta = files.map(f => ({
+        name: f.name,
+        size: f.size,
+        type: f.type,
+      }));
+      formDraft.saveDraft({
+        ...(next as unknown as Record<string, unknown>),
+        attachments: attachmentsMeta,
+      });
+    },
+    [files, formDraft],
   );
 
   const filteredRecipientOffices = useMemo(() => {
@@ -233,6 +297,15 @@ export function DocumentRegistrationPage() {
         next.originatingOfficeId = '';
         next.originatingOfficeName = '';
       }
+      const attachmentsMeta = files.map(f => ({
+        name: f.name,
+        size: f.size,
+        type: f.type,
+      }));
+      formDraft.saveDraft({
+        ...(next as unknown as Record<string, unknown>),
+        attachments: attachmentsMeta,
+      });
       return next;
     });
   };
@@ -346,6 +419,8 @@ export function DocumentRegistrationPage() {
       mode === 'register' ? 'Document registered' : 'Document registered & routed',
       `${doc.trackingNumber} has been ${mode === 'register' ? 'successfully registered' : 'registered and forwarded to the recipient offices'}.`
     );
+    void formDraft.clearDraft();
+    setRestoredAttachmentMeta([]);
     navigate(`/documents/${doc.id}`);
   };
 
@@ -411,7 +486,19 @@ export function DocumentRegistrationPage() {
             <Button
               variant="outline"
               leftIcon={<Save className="w-4 h-4" />}
-              onClick={() => submitRegistration('register')}
+              onClick={() => {
+                const attachmentsMeta = files.map(f => ({
+                  name: f.name,
+                  size: f.size,
+                  type: f.type,
+                }));
+                void formDraft
+                  .saveDraftNow({
+                    ...(formRef.current as unknown as Record<string, unknown>),
+                    attachments: attachmentsMeta,
+                  })
+                  .then(() => toast.success('Draft saved', 'You can return to this form anytime.'));
+              }}
               disabled={submitting}
             >
               Save Draft
@@ -426,6 +513,77 @@ export function DocumentRegistrationPage() {
           </>
         }
       />
+
+      {/* Draft status row */}
+      <div className="flex items-center justify-between gap-3 flex-wrap -mt-3 mb-2">
+        <DraftIndicator
+          state={formDraft.saving}
+          lastSavedAt={formDraft.lastSavedAt}
+          error={formDraft.error}
+          onRetry={() => {
+            const attachmentsMeta = files.map(f => ({
+              name: f.name,
+              size: f.size,
+              type: f.type,
+            }));
+            void formDraft.saveDraftNow({
+              ...(formRef.current as unknown as Record<string, unknown>),
+              attachments: attachmentsMeta,
+            });
+          }}
+        />
+        {formDraft.draft && (
+          <button
+            type="button"
+            onClick={() => {
+              setForm(INITIAL_STATE);
+              setFiles([]);
+              setErrors({});
+              setTouched({} as Record<keyof FormState, boolean>);
+              setRestoredAttachmentMeta([]);
+              void formDraft.clearDraft();
+              toast.info('Draft discarded', 'The form has been reset.');
+            }}
+            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-rose-600 transition-colors"
+            aria-label="Discard draft"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Discard draft
+          </button>
+        )}
+      </div>
+
+      {/* Restored attachment metadata banner */}
+      {restoredAttachmentMeta.length > 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-200 bg-amber-50 mb-4">
+          <Paperclip className="w-5 h-5 text-amber-700 mt-0.5 shrink-0" />
+          <div className="text-xs leading-relaxed text-amber-900">
+            <p className="font-semibold">
+              {restoredAttachmentMeta.length} attachment
+              {restoredAttachmentMeta.length === 1 ? '' : 's'} were previously attached.
+            </p>
+            <p className="mt-0.5">
+              File contents are not stored in drafts for security. Please re-attach the files
+              below before submitting.
+            </p>
+            <ul className="mt-2 space-y-0.5 font-mono text-[11px] text-amber-800">
+              {restoredAttachmentMeta.map((m, i) => (
+                <li key={`${m.name}-${i}`}>
+                  · {m.name} ({(m.size / 1024).toFixed(1)} KB)
+                </li>
+              ))}
+            </ul>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRestoredAttachmentMeta([])}
+            className="ml-auto shrink-0 text-xs font-medium text-amber-800 hover:text-amber-900"
+            aria-label="Dismiss attachment notice"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Validation banner */}
       {errorCount > 0 && (
@@ -916,9 +1074,9 @@ export function DocumentRegistrationPage() {
             <div className="flex items-start gap-2.5">
               <Info className="w-4 h-4 text-brand-600 mt-0.5 shrink-0" />
               <p className="text-xs text-slate-600 leading-relaxed">
-                <strong className="text-slate-800">Pro tip:</strong> Use{' '}
-                <strong>Register &amp; Route</strong> to forward immediately, or{' '}
-                <strong>Save Draft</strong> to keep the document on hold for review.
+                <strong className="text-slate-800">Pro tip:</strong> Your work is{' '}
+                <strong>auto-saved as a draft</strong>. Use <strong>Save Draft</strong> to save
+                immediately, or <strong>Register &amp; Route</strong> to forward when ready.
               </p>
             </div>
           </Card>

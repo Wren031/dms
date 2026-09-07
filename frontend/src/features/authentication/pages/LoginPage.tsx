@@ -56,8 +56,16 @@ export function LoginPage() {
     setError(undefined);
     const res = await login(username, password);
     if (res.ok) {
-      toast.success('Welcome back', 'You have been signed in successfully.');
-      navigate('/dashboard');
+      if (res.mustChangePassword) {
+        toast.info(
+          'Temporary password detected',
+          'Please set a new password to continue.',
+        );
+        navigate('/change-password', { replace: true });
+      } else {
+        toast.success('Welcome back', 'You have been signed in successfully.');
+        navigate('/dashboard');
+      }
     } else {
       setError(res.error ?? 'Sign in failed. Please check your credentials.');
     }

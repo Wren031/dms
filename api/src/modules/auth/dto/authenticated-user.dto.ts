@@ -13,6 +13,7 @@ export class AuthenticatedUserDto {
   username!: string | null;
   role!: Role;
   status!: AccountStatus;
+  mustChangePassword!: boolean;
   permissions!: string[];
   officeId?: string | null;
   office?: OfficeSummaryDto | null;

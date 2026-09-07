@@ -29,20 +29,24 @@ const userWithEmployeeInclude = {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateUserDto): Promise<UserWithEmployee> {
-    const passwordHash = await hashPassword(dto.password);
+  async create(dto: CreateUserDto): Promise<{ user: UserWithEmployee; temporaryPassword: string }> {
+    const temporaryPassword = this.generateTempPassword();
+    const passwordHash = await hashPassword(temporaryPassword);
 
-    return this.prisma.user.create({
+    const user = await this.prisma.user.create({
       data: {
         username: dto.username ?? null,
         email: dto.email ?? null,
         passwordHash,
         role: dto.role ?? 'DOCUMENT_ENCODER',
         status: dto.status ?? 'ACTIVE',
+        mustChangePassword: true,
         employeeId: dto.employeeId,
       },
       include: userWithEmployeeInclude,
     });
+
+    return { user, temporaryPassword };
   }
 
   async findAll(filter: FilterUsersDto): Promise<PaginatedResult<UserWithEmployee>> {

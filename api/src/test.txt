@@ -1,0 +1,30 @@
+POST http://localhost:3000/auth/login
+
+encoder
+
+{
+    "emailOrUsername": "encoder.doe",
+    "password": "encoder123"
+}
+
+system_admin
+{
+    "emailOrUsername": "admin@city.gov",
+    "password": "admin123"
+}
+
+office_admin
+{
+    "emailOrUsername": "office.doe",
+    "password": "office123"
+
+    "carl.doe"
+    "a4BpnLBWtkQ2"
+}
+
+document_officer
+{
+    "emailOrUsername": "document.doe",
+    "password": "document123"
+}
+

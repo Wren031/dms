@@ -129,6 +129,8 @@ export class AuditInterceptor implements NestInterceptor {
       'password',
       'currentPassword',
       'newPassword',
+      'confirmPassword',
+      'temporaryPassword',
       'token',
       'refreshToken',
     ]);

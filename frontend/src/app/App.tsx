@@ -8,6 +8,7 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { LoginPage } from '@/features/authentication/pages/LoginPage';
 import { ForgotPasswordPage } from '@/features/authentication/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/authentication/pages/ResetPasswordPage';
+import { ChangePasswordPage } from '@/features/authentication/pages/ChangePasswordPage';
 import { DashboardPage } from '@/features/documents/pages/DashboardPage';
 import { DocumentsListPage } from '@/features/documents/pages/DocumentsListPage';
 import { DocumentDetailPage } from '@/features/documents/pages/DocumentDetailPage';
@@ -52,6 +53,7 @@ export function App() {
               >
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/change-password" element={<ChangePasswordPage />} />
                 <Route path="/documents" element={<DocumentsListPage />} />
                 <Route path="/documents/register" element={<DocumentRegistrationPage />} />
                 <Route path="/documents/:id" element={<DocumentDetailPage />} />

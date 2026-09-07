@@ -66,22 +66,25 @@ export class DocumentAttachmentsController {
   @Get(':id/download')
   async download(
     @Param('id', new ParseUUIDPipe()) id: string,
+    @Query('inline') inline: string | undefined,
     @Res() res: Response,
   ) {
     const info = await this.attachmentsService.getDownloadInfo(id);
+    const wantsInline = inline === '1' || inline === 'true';
+    const dispositionType = wantsInline ? 'inline' : 'attachment';
     res.setHeader('Content-Type', info.mimeType);
     res.setHeader('Content-Length', String(info.sizeBytes));
-    res.download(
-      info.absolutePath,
-      info.fileName,
-      (err: Error | undefined) => {
-        if (err && !res.headersSent) {
-          // eslint-disable-next-line no-console
-          console.error('Attachment download failed', err);
-          res.status(500).end();
-        }
-      },
+    res.setHeader(
+      'Content-Disposition',
+      `${dispositionType}; filename="${encodeURIComponent(info.fileName)}"`,
     );
+    res.sendFile(info.absolutePath, (err: Error | undefined) => {
+      if (err && !res.headersSent) {
+        // eslint-disable-next-line no-console
+        console.error('Attachment download failed', err);
+        res.status(500).end();
+      }
+    });
   }
 
   @Patch(':id')

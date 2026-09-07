@@ -1,14 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Copy, Check, KeyRound, AlertTriangle, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
+import { DraftIndicator } from '@/components/ui/DraftIndicator';
 import { useToast } from '@/hooks/useToast';
 import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { useUsers } from '@/features/system-admin/users/hooks/useUsers';
 import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
 import { ApiError } from '@/features/system-admin/users/services/user.service';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { FORM_DRAFT_KEYS } from '@/lib/formDraftKeys';
 import {
   ROLE_TO_API,
   STATUS_TO_API,
@@ -55,15 +59,6 @@ const TOUCHED_INITIAL: Record<string, boolean> = {
   status: false,
 };
 
-function generatePassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
-  let result = '';
-  for (let i = 0; i < 12; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
-
 function usernameFrom(firstName: string, lastName: string): string {
   const f = firstName.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   const l = lastName.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -82,8 +77,6 @@ function validate(form: AddUserFormState, username: string): FormErrors {
   if (!form.officeId) e.officeId = 'Office is required';
   if (!username) e.username = 'Username is required';
   else if (username.length < 3) e.username = 'At least 3 characters';
-  if (!form.password) e.password = 'Password is required';
-  else if (form.password.length < 8) e.password = 'At least 8 characters';
   return e;
 }
 
@@ -98,6 +91,13 @@ function flattenOffices(tree: { id: string; name: string; code: string; type: 'm
   return out;
 }
 
+interface CreatedCredential {
+  fullName: string;
+  username: string;
+  email: string;
+  temporaryPassword: string;
+}
+
 export function AddUserPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -109,6 +109,38 @@ export function AddUserPage() {
   const [touched, setTouched] = useState<Record<string, boolean>>(TOUCHED_INITIAL);
   const [usernameTouched, setUsernameTouched] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [credential, setCredential] = useState<CreatedCredential | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const formDraft = useFormDraft(FORM_DRAFT_KEYS.USER_CREATE, {
+    onRestore: payload => {
+      const restored: Partial<AddUserFormState> = {};
+      for (const key of Object.keys(DEFAULT_FORM) as Array<keyof AddUserFormState>) {
+        const v = payload[key as string];
+        if (v !== undefined) {
+          (restored as Record<string, unknown>)[key] = v;
+        }
+      }
+      if (Object.keys(restored).length > 0) {
+        setForm(prev => ({ ...prev, ...restored }));
+        if (typeof payload.username === 'string' && payload.username.length > 0) {
+          setUsernameTouched(true);
+        }
+      }
+    },
+  });
+
+  const formRef = useRef(form);
+  formRef.current = form;
+  const handleFormChange = useCallback(
+    (next: AddUserFormState) => {
+      setForm(next);
+      const { password: _password, ...persistable } = next;
+      void _password;
+      formDraft.saveDraft(persistable as unknown as Record<string, unknown>);
+    },
+    [formDraft],
+  );
 
   const flatOffices = useMemo(() => flattenOffices(offices), [offices]);
 
@@ -172,7 +204,7 @@ export function AddUserPage() {
     clearActionError();
 
     try {
-      await createUser({
+      const result = await createUser({
         employee: {
           firstName: form.firstName.trim(),
           middleName: form.middleName.trim() || undefined,
@@ -186,13 +218,17 @@ export function AddUserPage() {
         user: {
           username: usernameValue.trim() || undefined,
           email: form.email.trim().toLowerCase(),
-          password: form.password,
           role: ROLE_TO_API[form.role],
           status: STATUS_TO_API[form.status],
         },
       });
-      toast.success('User created', `${fullName} has been added to the system.`);
-      navigate('/users');
+      setCredential({
+        fullName,
+        username: result.user.username ?? usernameValue,
+        email: result.user.email ?? form.email.trim().toLowerCase(),
+        temporaryPassword: result.temporaryPassword,
+      });
+      void formDraft.clearDraft();
     } catch (err) {
       if (err instanceof ApiError) {
         toast.error('Could not create user', err.message);
@@ -202,15 +238,38 @@ export function AddUserPage() {
     }
   };
 
-  const regeneratePassword = () => {
-    setForm(prev => ({ ...prev, password: generatePassword() }));
-    markTouched('password');
-  };
-
   const office = useMemo(
     () => flatOffices.find(o => o.id === form.officeId) ?? null,
     [flatOffices, form.officeId],
   );
+
+  const handleCopyPassword = async () => {
+    if (!credential) return;
+    try {
+      await navigator.clipboard.writeText(credential.temporaryPassword);
+      setCopied(true);
+      toast.info('Copied', 'The temporary password has been copied to your clipboard.');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Copy failed', 'Please select and copy the password manually.');
+    }
+  };
+
+  const handleAcknowledged = () => {
+    toast.success('User created', `${credential?.fullName ?? fullName} has been added to the system.`);
+    setCredential(null);
+    void formDraft.clearDraft();
+    navigate('/users');
+  };
+
+  const handleDiscardDraft = () => {
+    setForm(DEFAULT_FORM);
+    setTouched(TOUCHED_INITIAL);
+    setUsernameTouched(false);
+    setSubmitAttempted(false);
+    void formDraft.clearDraft();
+    toast.info('Draft discarded', 'The form has been reset.');
+  };
 
   if (!hasPermission('users.create')) {
     return (
@@ -260,6 +319,30 @@ export function AddUserPage() {
         }
       />
 
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <DraftIndicator
+          state={formDraft.saving}
+          lastSavedAt={formDraft.lastSavedAt}
+          error={formDraft.error}
+          onRetry={() => {
+            const { password: _p, ...rest } = formRef.current;
+            void _p;
+            void formDraft.saveDraftNow(rest as unknown as Record<string, unknown>);
+          }}
+        />
+        {formDraft.draft && !credential && (
+          <button
+            type="button"
+            onClick={handleDiscardDraft}
+            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-rose-600 transition-colors"
+            aria-label="Discard draft"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Discard draft
+          </button>
+        )}
+      </div>
+
       {actionError && (
         <div
           role="alert"
@@ -274,7 +357,7 @@ export function AddUserPage() {
           <div className="xl:col-span-2 space-y-6">
             <UserFormFields
               form={form}
-              onChange={setForm}
+              onChange={handleFormChange}
               touched={touched}
               onTouched={markTouched}
               errors={showFormError ? errors : touchedErrors(touched, errors)}
@@ -282,8 +365,8 @@ export function AddUserPage() {
               usernameTouched={usernameTouched}
               onUsernameTouched={setUsernameTouched}
               suggestedUsername={suggestedUsername}
-              onGeneratePassword={regeneratePassword}
               disabled={creating}
+              showPasswordField={false}
             />
             {showFormError && (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
@@ -310,6 +393,72 @@ export function AddUserPage() {
           </div>
         </div>
       </form>
+
+      <Modal
+        open={!!credential}
+        onClose={() => undefined}
+        title="User created — share the temporary password"
+        description={`${credential?.fullName ?? ''} can now sign in.`}
+        size="md"
+        hideCloseButton
+        footer={
+          <Button onClick={handleAcknowledged} leftIcon={<Check className="w-4 h-4" />}>
+            I have saved the password
+          </Button>
+        }
+      >
+        <div className="space-y-5">
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div className="text-xs leading-relaxed text-amber-800">
+              This password will <strong>only be shown once</strong>. The system does not store
+              the plain-text value. The user will be required to set a new private password on
+              their first login.
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Username
+            </p>
+            <p className="mt-1 font-mono text-sm text-slate-900 break-all">
+              {credential?.username}
+            </p>
+            <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Email
+            </p>
+            <p className="mt-1 font-mono text-sm text-slate-900 break-all">
+              {credential?.email}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">
+              Temporary password
+            </label>
+            <div className="mt-2 flex items-stretch gap-2">
+              <div className="flex-1 flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2.5">
+                <KeyRound className="h-4 w-4 text-slate-400 shrink-0" />
+                <code className="flex-1 break-all font-mono text-sm text-slate-900 select-all">
+                  {credential?.temporaryPassword}
+                </code>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCopyPassword}
+                leftIcon={copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              Deliver this password to the user through a secure channel. Once they sign in,
+              they will be prompted to set a new private password.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

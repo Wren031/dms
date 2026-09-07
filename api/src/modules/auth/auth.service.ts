@@ -391,6 +391,31 @@ export class AuthService {
     });
   }
 
+  async firstLoginChangePassword(
+    userId: string,
+    newPassword: string,
+  ): Promise<{ user: AuthenticatedUserDto }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { employee: { select: employeeSelect } },
+    });
+    if (!user) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    if (!user.mustChangePassword) {
+      throw new BadRequestException(
+        'A first-login password change is not required for this account.',
+      );
+    }
+    const passwordHash = await hashPassword(newPassword);
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
+      include: { employee: { select: employeeSelect } },
+    });
+    return { user: await this.toUserDto(updated) };
+  }
+
   async updateMe(userId: string, dto: UpdateMyProfileDto): Promise<AuthenticatedUserDto> {
     const email = dto.email.trim().toLowerCase();
 
@@ -546,6 +571,7 @@ export class AuthService {
       username: user.username,
       role: user.role,
       status: user.status,
+      mustChangePassword: user.mustChangePassword,
       permissions,
       officeId: user.employee?.officeId ?? null,
       office: user.employee?.office

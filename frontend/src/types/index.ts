@@ -20,6 +20,7 @@ export interface User {
   officeCode?: string;
   position: string;
   status: 'active' | 'inactive';
+  mustChangePassword?: boolean;
   avatarColor: string;
   createdAt: string;
 }

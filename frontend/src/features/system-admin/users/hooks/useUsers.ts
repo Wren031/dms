@@ -7,6 +7,7 @@ import {
 import type {
   CreateEmployeePayload,
   CreateUserPayload,
+  CreateUserResponse,
   EmployeeSummary,
   UpdateUserPayload,
   UserAccount,
@@ -31,7 +32,7 @@ interface UseUsersReturn {
   refetch: () => Promise<void>;
 
   fetchById: (id: string) => Promise<UserAccount>;
-  createUser: (input: CreateUserWithEmployeeInput) => Promise<UserAccount>;
+  createUser: (input: CreateUserWithEmployeeInput) => Promise<CreateUserResponse>;
   update: (id: string, input: UpdateUserPayload) => Promise<UserAccount>;
   remove: (id: string) => Promise<void>;
   resetPassword: (id: string, newPassword?: string) => Promise<void>;

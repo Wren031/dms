@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { existsSync } from 'fs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LocalStorageService } from './local-storage.service';
 import { UpdateAttachmentDto } from './dto/update-attachment.dto';
@@ -66,6 +67,9 @@ export class DocumentAttachmentsService {
     const att = await this.prisma.documentAttachment.findUnique({ where: { id } });
     if (!att || att.status !== 'uploaded') throw new NotFoundException('Attachment not found');
     const absolutePath = this.storage.getAbsolutePath(att.storageKey);
+    if (!existsSync(absolutePath)) {
+      throw new NotFoundException('File not found on server');
+    }
     return {
       absolutePath,
       fileName: att.fileName,

@@ -19,6 +19,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { FirstLoginChangePasswordDto } from './dto/first-login-change-password.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -129,6 +130,17 @@ export class AuthController {
   ): Promise<{ success: true }> {
     await this.authService.changePassword(user.id, dto);
     return { success: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Audit('user.first-login-change-password', 'auth', 'User')
+  @Post('first-login-change-password')
+  @HttpCode(HttpStatus.OK)
+  async firstLoginChangePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: FirstLoginChangePasswordDto,
+  ): Promise<AuthResponseDto> {
+    return this.authService.firstLoginChangePassword(user.id, dto.newPassword);
   }
 
   @UseGuards(JwtAuthGuard)

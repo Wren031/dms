@@ -6,6 +6,7 @@ export interface AuthUser {
   username: string | null;
   role: string;
   status: string;
+  mustChangePassword: boolean;
   permissions: string[];
   officeId: string | null;
   office?: { id: string; name: string; code: string; type: string } | null;
@@ -47,6 +48,11 @@ export interface RegisterRequest {
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface FirstLoginChangePasswordRequest {
+  newPassword: string;
+  confirmPassword: string;
 }
 
 export interface ForgotPasswordRequest {
@@ -138,6 +144,12 @@ export const authApi = {
 
   changePassword: (payload: ChangePasswordRequest) =>
     request<{ success: true }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  firstLoginChangePassword: (payload: FirstLoginChangePasswordRequest) =>
+    request<AuthResponse>('/auth/first-login-change-password', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

@@ -2,6 +2,7 @@ import { API_BASE_URL } from '@/lib/apiConfig';
 import type {
   CreateEmployeePayload,
   CreateUserPayload,
+  CreateUserResponse,
   EmployeeSummary,
   ResetUserPasswordPayload,
   UpdateUserPayload,
@@ -174,8 +175,8 @@ export const userService = {
     return request<UserAccount>(`/users/${id}`);
   },
 
-  create(payload: CreateUserPayload): Promise<UserAccount> {
-    return request<UserAccount>('/users', {
+  create(payload: CreateUserPayload): Promise<CreateUserResponse> {
+    return request<CreateUserResponse>('/users', {
       method: 'POST',
       body: JSON.stringify(payload),
     });

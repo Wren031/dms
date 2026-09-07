@@ -63,8 +63,9 @@ export interface UserFormFieldsProps {
   usernameTouched: boolean;
   onUsernameTouched: (value: boolean) => void;
   suggestedUsername: string;
-  onGeneratePassword: () => void;
+  onGeneratePassword?: () => void;
   disabled?: boolean;
+  showPasswordField?: boolean;
 }
 
 export function UserFormFields({
@@ -79,6 +80,7 @@ export function UserFormFields({
   suggestedUsername,
   onGeneratePassword,
   disabled,
+  showPasswordField = true,
 }: UserFormFieldsProps) {
   const usernameValue = usernameTouched ? form.username : (form.username || suggestedUsername);
 
@@ -202,9 +204,13 @@ export function UserFormFields({
       <Card>
         <CardHeader
           title="Account Credentials"
-          description="Login credentials for the new user"
+          description={
+            showPasswordField
+              ? 'Login credentials for the new user'
+              : 'A secure temporary password will be generated automatically when the user is created.'
+          }
         />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 ${showPasswordField ? 'md:grid-cols-2' : ''} gap-4`}>
           <Input
             label="Username"
             name="username"
@@ -220,22 +226,24 @@ export function UserFormFields({
             hint={!usernameTouched && suggestedUsername ? 'Auto-generated from name' : undefined}
             disabled={disabled}
           />
-          <PasswordInputField
-            value={form.password}
-            onChange={value => onChange({ ...form, password: value })}
-            onBlur={() => onTouched('password')}
-            error={touched.password ? errors.password : undefined}
-            required
-            hint={
-              touched.password && errors.password
-                ? undefined
-                : 'User will be required to change this password on first login.'
-            }
-            showGenerate
-            onGenerate={onGeneratePassword}
-            disabled={disabled}
-            name="password"
-          />
+          {showPasswordField && (
+            <PasswordInputField
+              value={form.password}
+              onChange={value => onChange({ ...form, password: value })}
+              onBlur={() => onTouched('password')}
+              error={touched.password ? errors.password : undefined}
+              required
+              hint={
+                touched.password && errors.password
+                  ? undefined
+                  : 'User will be required to change this password on first login.'
+              }
+              showGenerate={!!onGeneratePassword}
+              onGenerate={onGeneratePassword}
+              disabled={disabled}
+              name="password"
+            />
+          )}
         </div>
       </Card>
     </div>

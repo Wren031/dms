@@ -89,10 +89,14 @@ export interface CreateEmployeePayload {
 export interface CreateUserPayload {
   username?: string;
   email?: string;
-  password: string;
   role?: UserRoleApi;
   status?: UserStatusApi;
   employeeId: string;
+}
+
+export interface CreateUserResponse {
+  user: UserAccount;
+  temporaryPassword: string;
 }
 
 export interface UpdateUserPayload {

@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Building2, Lock } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Building2, Lock, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Button } from '@/components/ui/Button';
+import { DraftIndicator } from '@/components/ui/DraftIndicator';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { FORM_DRAFT_KEYS } from '@/lib/formDraftKeys';
 import { OFFICE_DIRECTORY } from '@/constants';
 import type {
   CreateOfficeInput,
@@ -81,17 +84,47 @@ export function OfficeFormModal({
 }: OfficeFormModalProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
+  const formDraft = useFormDraft(FORM_DRAFT_KEYS.OFFICE_CREATE, {
+    enabled: open && mode === 'create',
+    onRestore: payload => {
+      const restored: Partial<FormState> = {};
+      for (const key of Object.keys(EMPTY_FORM) as Array<keyof FormState>) {
+        const v = payload[key as string];
+        if (v !== undefined) {
+          (restored as Record<string, unknown>)[key] = v;
+        }
+      }
+      if (Object.keys(restored).length > 0) {
+        setForm(prev => ({ ...prev, ...restored }));
+      }
+    },
+  });
+
+  const formRef = useRef(form);
+  formRef.current = form;
+  const updateForm = useCallback(
+    (next: FormState) => {
+      setForm(next);
+      if (mode === 'create') {
+        formDraft.saveDraft(next as unknown as Record<string, unknown>);
+      }
+    },
+    [formDraft, mode],
+  );
+
   useEffect(() => {
     if (open) setForm(toFormState(initial));
+    // We intentionally do NOT clear the draft when the modal closes — the draft
+    // persists on the server so the user can return and restore later.
   }, [open, initial]);
 
   const handleNameChange = (name: string) => {
     const entry = OFFICE_DIRECTORY.find(e => e.name === name);
-    setForm(prev => ({
-      ...prev,
+    updateForm({
+      ...formRef.current,
       name,
-      code: entry?.code ?? prev.code,
-    }));
+      code: entry?.code ?? formRef.current.code,
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,6 +146,14 @@ export function OfficeFormModal({
     }
 
     await onSubmit(payload);
+    if (mode === 'create') {
+      await formDraft.clearDraft();
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    updateForm(EMPTY_FORM);
+    void formDraft.clearDraft();
   };
 
   const title = mode === 'create' ? 'Add New Office' : 'Edit Office';
@@ -168,6 +209,30 @@ export function OfficeFormModal({
           </div>
         )}
 
+        {mode === 'create' && (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+            <DraftIndicator
+              state={formDraft.saving}
+              lastSavedAt={formDraft.lastSavedAt}
+              error={formDraft.error}
+              onRetry={() =>
+                formDraft.saveDraftNow(formRef.current as unknown as Record<string, unknown>)
+              }
+            />
+            {formDraft.draft && (
+              <button
+                type="button"
+                onClick={handleDiscardDraft}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-rose-600 transition-colors"
+                aria-label="Discard draft"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Discard draft
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Combobox
             label="Office Name"
@@ -196,7 +261,7 @@ export function OfficeFormModal({
             name="type"
             value={form.type}
             onChange={e =>
-              setForm(prev => ({ ...prev, type: e.target.value as OfficeType }))
+              updateForm({ ...formRef.current, type: e.target.value as OfficeType })
             }
             options={TYPE_OPTIONS}
             disabled={loading}
@@ -206,7 +271,7 @@ export function OfficeFormModal({
             name="parentId"
             placeholder="None (top-level)"
             value={form.parentId}
-            onChange={e => setForm(prev => ({ ...prev, parentId: e.target.value }))}
+            onChange={e => updateForm({ ...formRef.current, parentId: e.target.value })}
             options={parentSelectOptions}
             disabled={loading || form.type === 'main'}
             hint={form.type === 'main' ? 'Main offices cannot have a parent' : undefined}
@@ -215,7 +280,7 @@ export function OfficeFormModal({
             label="Office Head"
             name="headName"
             value={form.headName}
-            onChange={e => setForm(prev => ({ ...prev, headName: e.target.value }))}
+            onChange={e => updateForm({ ...formRef.current, headName: e.target.value })}
             placeholder="Full name of office head"
             disabled={loading}
           />
@@ -225,7 +290,7 @@ export function OfficeFormModal({
               name="isActive"
               value={form.isActive ? 'true' : 'false'}
               onChange={e =>
-                setForm(prev => ({ ...prev, isActive: e.target.value === 'true' }))
+                updateForm({ ...formRef.current, isActive: e.target.value === 'true' })
               }
               options={[
                 { value: 'true', label: 'Active' },
@@ -241,7 +306,7 @@ export function OfficeFormModal({
           name="description"
           rows={3}
           value={form.description}
-          onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+          onChange={e => updateForm({ ...formRef.current, description: e.target.value })}
           placeholder="Brief description of the office's responsibilities…"
           disabled={loading}
         />

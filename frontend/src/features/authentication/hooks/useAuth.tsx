@@ -9,7 +9,8 @@ interface AuthContextValue {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (emailOrUsername: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  mustChangePassword: boolean;
+  login: (emailOrUsername: string, password: string) => Promise<{ ok: boolean; error?: string; mustChangePassword?: boolean }>;
   logout: () => Promise<void>;
   hasPermission: (permission: Permission) => boolean;
   allSwitchableUsers: User[];
@@ -46,6 +47,7 @@ function mapUser(user: AuthUser): User {
     officeCode: user.office?.code ?? undefined,
     position: user.position ?? '',
     status: user.status.toLowerCase() as User['status'],
+    mustChangePassword: user.mustChangePassword,
     avatarColor: user.avatarColor ?? 'bg-brand-600',
     createdAt: user.createdAt,
   };
@@ -69,8 +71,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (emailOrUsername: string, password: string) => {
     setLoading(true);
     try {
-      setUser(mapUser(await authService.login({ emailOrUsername, password })));
-      return { ok: true };
+      const authenticated = await authService.login({ emailOrUsername, password });
+      const mapped = mapUser(authenticated);
+      setUser(mapped);
+      return { ok: true, mustChangePassword: authenticated.mustChangePassword };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : 'Sign in failed' };
     } finally {
@@ -99,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     isAuthenticated: !!user,
     loading,
+    mustChangePassword: !!user?.mustChangePassword,
     login,
     logout,
     hasPermission,
