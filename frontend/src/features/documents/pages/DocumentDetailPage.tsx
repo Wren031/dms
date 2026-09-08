@@ -218,9 +218,13 @@ export function DocumentDetailPage() {
     terminalActions.push('archive');
   }
   const canRoute =
-    hasPermission('documents.route') && canTransition(doc.status, 'routed');
+    hasPermission('documents.route') &&
+    canTransition(doc.status, 'routed') &&
+    (user?.role === 'system_admin' || doc.currentOfficeId === user?.officeId);
   const canAssign =
-    doc.status === 'routed' && hasPermission('documents.route');
+    doc.status === 'routed' &&
+    hasPermission('documents.route') &&
+    (user?.role === 'system_admin' || doc.currentOfficeId === user?.officeId);
   const canStartReview =
     (doc.status === 'assigned' || doc.status === 'returned') &&
     hasPermission('documents.review');
