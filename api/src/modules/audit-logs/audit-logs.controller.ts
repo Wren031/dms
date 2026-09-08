@@ -6,6 +6,7 @@ import { FilterAuditLogsDto } from './dto/filter-audit-logs.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { normalizeClientIp } from '../../common/utils/ip.util';
@@ -33,12 +34,14 @@ export class AuditLogsController {
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('audit.view')
   @Get()
   findAll(@Query() filter: FilterAuditLogsDto) {
     return this.auditLogsService.findAll(filter);
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('audit.view')
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.auditLogsService.findOne(id);

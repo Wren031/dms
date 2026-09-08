@@ -19,6 +19,7 @@ import { FilterArchivesDto } from './dto/filter-archives.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Audit } from '../../common/decorators/audit.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -29,6 +30,7 @@ export class DocumentArchiveController {
   constructor(private readonly archiveService: DocumentArchiveService) {}
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('documents.archive')
   @Audit('archive.create', 'archive', 'DocumentArchive')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -36,17 +38,20 @@ export class DocumentArchiveController {
     return this.archiveService.create(dto, user.id);
   }
 
+  @Permissions('documents.view')
   @Get()
   findAll(@Query() filter: FilterArchivesDto) {
     return this.archiveService.findAll(filter);
   }
 
+  @Permissions('documents.view')
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.archiveService.findOne(id);
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('documents.archive')
   @Patch(':id')
   @Audit('archive.update', 'archive', 'DocumentArchive')
   update(
@@ -57,6 +62,7 @@ export class DocumentArchiveController {
   }
 
   @Roles(ROLES.SYSTEM_ADMIN)
+  @Permissions('documents.archive')
   @Delete(':id')
   @Audit('archive.delete', 'archive', 'DocumentArchive')
   @HttpCode(HttpStatus.OK)

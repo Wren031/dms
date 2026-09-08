@@ -22,6 +22,7 @@ import { AssignDocumentHolderDto } from './dto/assign-document-holder.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Audit } from '../../common/decorators/audit.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -31,7 +32,8 @@ import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.DOCUMENT_ENCODER)
+  @Permissions('documents.register')
   @Audit('document.register', 'documents', 'Document')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -40,6 +42,7 @@ export class DocumentsController {
   }
 
   @SkipThrottle()
+  @Permissions('documents.view')
   @Get()
   findAll(@Query() filter: FilterDocumentsDto) {
     return this.documentsService.findAll(filter);
@@ -55,12 +58,14 @@ export class DocumentsController {
   }
 
   @SkipThrottle()
+  @Permissions('documents.view')
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.documentsService.findOne(id);
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
+  @Permissions('documents.edit')
   @Audit('document.update', 'documents', 'Document')
   @Patch(':id')
   update(
@@ -70,7 +75,8 @@ export class DocumentsController {
     return this.documentsService.update(id, dto);
   }
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Roles(ROLES.SYSTEM_ADMIN)
+  @Permissions('documents.delete')
   @Audit('document.delete', 'documents', 'Document')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
@@ -91,6 +97,7 @@ export class DocumentsController {
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('documents.route')
   @Post(':id/assign-holder')
   @HttpCode(HttpStatus.OK)
   @Audit('document.assign-holder', 'documents', 'Document')
@@ -103,12 +110,14 @@ export class DocumentsController {
   }
 
   @SkipThrottle()
+  @Permissions('documents.view')
   @Get(':id/history')
   getHistory(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.documentsService.getHistory(id);
   }
 
   @SkipThrottle()
+  @Permissions('documents.view')
   @Get(':id/timeline')
   getTimeline(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.documentsService.getTimeline(id);

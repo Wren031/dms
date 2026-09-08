@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface RoleDefinition {
@@ -97,6 +97,8 @@ const ROLE_DEFINITIONS: Record<Role, { name: string; description: string }> = {
 
 @Injectable()
 export class RolesService {
+  private readonly logger = new Logger(RolesService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   toRoleId(value: string): Role {
@@ -123,14 +125,21 @@ export class RolesService {
     if (rows.length > 0) {
       return rows.map(r => r.permission);
     }
-    await this.prisma.rolePermission.createMany({
-      data: DEFAULT_ROLE_PERMISSIONS[role].map(permission => ({
-        role,
-        permission,
-      })),
-      skipDuplicates: true,
-    });
-    return DEFAULT_ROLE_PERMISSIONS[role].slice();
+    // Seed defaults only on a fresh database where no role has been configured
+    // yet. An intentionally empty permission set must be honored, otherwise a
+    // full revoke would silently restore the defaults on the next login.
+    const totalRows = await this.prisma.rolePermission.count();
+    if (totalRows === 0) {
+      await this.prisma.rolePermission.createMany({
+        data: DEFAULT_ROLE_PERMISSIONS[role].map(permission => ({
+          role,
+          permission,
+        })),
+        skipDuplicates: true,
+      });
+      return DEFAULT_ROLE_PERMISSIONS[role].slice();
+    }
+    return [];
   }
 
   async findAll(): Promise<RoleSummary[]> {
@@ -165,7 +174,11 @@ export class RolesService {
    * Replaces the full effective permission list for a role. Returns the
    * updated effective list.
    */
-  async setPermissions(id: string, permissions: string[]): Promise<string[]> {
+  async setPermissions(
+    id: string,
+    permissions: string[],
+    actor?: { id: string; role: string },
+  ): Promise<string[]> {
     const role = this.toRoleId(id);
 
     // Normalize and validate every permission against the catalog.
@@ -175,14 +188,24 @@ export class RolesService {
       throw new BadRequestException(`Unknown permissions: ${invalid.join(', ')}`);
     }
 
-    // Never allow removing roles.edit from the last remaining editor model,
-    // but in practice the SYSTEM_ADMIN role should stay fully privileged.
-    // Guard against locking out all permission management.
-    if (role === Role.SYSTEM_ADMIN && !normalized.includes('roles.edit')) {
-      throw new ForbiddenException(
-        'Cannot remove roles.edit from the System Administrator role.',
+    // The SYSTEM_ADMIN role must stay fully privileged. Rejecting removal of
+    // any permission prevents accidental self lockout of the admin's own UI.
+    if (role === Role.SYSTEM_ADMIN) {
+      const missing = DEFAULT_ROLE_PERMISSIONS[role].filter(
+        p => !normalized.includes(p),
       );
+      if (missing.length > 0) {
+        throw new ForbiddenException(
+          'Cannot remove permissions from the System Administrator role.',
+        );
+      }
     }
+
+    const before = await this.prisma.rolePermission.findMany({
+      where: { role },
+      select: { permission: true },
+    });
+    const prev = before.map(r => r.permission);
 
     await this.prisma.$transaction([
       this.prisma.rolePermission.deleteMany({ where: { role } }),
@@ -192,7 +215,64 @@ export class RolesService {
       }),
     ]);
 
+    this.recordPermissionChanges(role, prev, normalized, actor);
+
     return normalized;
+  }
+
+  /**
+   * Fire-and-forget audit rows for each granted/revoked permission. Never
+   * blocks or fails the permission update itself.
+   */
+  private recordPermissionChanges(
+    role: Role,
+    prev: string[],
+    next: string[],
+    actor?: { id: string; role: string },
+  ): void {
+    if (!actor) return;
+    const granted = next.filter(p => !prev.includes(p));
+    const revoked = prev.filter(p => !next.includes(p));
+    if (granted.length === 0 && revoked.length === 0) return;
+
+    const entries: Prisma.AuditLogCreateManyInput[] = [
+      ...granted.map(permission => ({
+        actorId: actor.id,
+        action: 'roles.permission-granted',
+        module: 'roles',
+        description: `Granted ${permission} to ${role}`,
+        targetId: role.toLowerCase(),
+        targetType: 'Role',
+        metadata: {
+          role,
+          permission,
+          action: 'granted',
+          actorRole: actor.role,
+        } as Prisma.InputJsonValue,
+      })),
+      ...revoked.map(permission => ({
+        actorId: actor.id,
+        action: 'roles.permission-revoked',
+        module: 'roles',
+        description: `Revoked ${permission} from ${role}`,
+        targetId: role.toLowerCase(),
+        targetType: 'Role',
+        metadata: {
+          role,
+          permission,
+          action: 'revoked',
+          actorRole: actor.role,
+        } as Prisma.InputJsonValue,
+      })),
+    ];
+
+    void this.prisma.auditLog
+      .createMany({ data: entries })
+      .catch((err: unknown) => {
+        this.logger.error(
+          `Permission-change audit write failed: ${(err as Error).message}`,
+        );
+      });
   }
 
   async getRoleUsers(roleId: string): Promise<RoleUser[]> {

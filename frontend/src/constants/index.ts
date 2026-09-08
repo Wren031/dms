@@ -1,10 +1,10 @@
 import type { DocumentStatus, DocumentType, DocumentClassification, UserRole, Permission } from '@/types';
 
 export const ALLOWED_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
-  registered: ['received'],
+  registered: ['received', 'routed'],
   received: ['routed'],
   routed: ['assigned'],
-  assigned: ['under_review'],
+  assigned: ['received', 'under_review'],
   under_review: ['recommended', 'returned'],
   recommended: ['approved', 'rejected'],
   approved: ['released'],

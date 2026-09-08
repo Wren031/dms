@@ -16,11 +16,9 @@ import {
   ThumbsUp,
   AlertCircle,
   History as HistoryIcon,
-  Hash,
   Route as RouteIcon,
   ChevronDown,
   ChevronUp,
-  Clock,
   Inbox,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -636,66 +634,55 @@ function DocumentHero({
 }: DocumentHeroProps) {
   const isTerminal = ['released', 'archived', 'rejected'].includes(d.status);
   return (
-    <header className="space-y-3">
-      <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500">
-        <span className="font-mono font-semibold text-slate-700">{d.trackingNumber}</span>
-        {d.documentNumber && (
-          <>
-            <span className="text-slate-300">·</span>
-            <span className="inline-flex items-center gap-1 font-mono">
-              <Hash className="w-3 h-3" />
-              {d.documentNumber}
-            </span>
-          </>
-        )}
-        <span className="text-slate-300">·</span>
+    <header className="space-y-4">
+      <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap text-xs text-slate-500">
+        <span className="font-mono font-semibold text-slate-800">{d.trackingNumber}</span>
+        {d.documentNumber && <span className="font-mono text-slate-600">{d.documentNumber}</span>}
         <span>Created {formatDate(d.createdAt)}</span>
-        {d.source === 'external' && d.senderName && (
-          <>
-            <span className="text-slate-300">·</span>
-            <span>From {d.senderName}</span>
-          </>
-        )}
+        {d.source === 'external' && d.senderName && <span>From {d.senderName}</span>}
       </div>
 
-      <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight leading-snug">
-        {d.title}
-      </h1>
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="px-5 sm:px-6 py-5 flex flex-col gap-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-tight leading-snug">
+              {d.title}
+            </h1>
+            <div className="flex flex-wrap items-center gap-1.5 xl:justify-end">
+              <StatusBadge status={d.status} />
+              <PriorityBadge priority={d.priority} />
+              <ClassificationBadge classification={d.classification} />
+              <Tag variant="slate">{DOCUMENT_TYPE_LABELS[d.type]}</Tag>
+              {isOverdue && (
+                <Tag variant="rose" icon={<AlertCircle className="w-3 h-3" />}>
+                  Overdue
+                </Tag>
+              )}
+            </div>
+          </div>
 
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <StatusBadge status={d.status} size="md" />
-        <PriorityBadge priority={d.priority} />
-        <ClassificationBadge classification={d.classification} />
-        <Tag variant="slate">{DOCUMENT_TYPE_LABELS[d.type]}</Tag>
-        {isOverdue && (
-          <Tag variant="rose" icon={<AlertCircle className="w-3 h-3" />}>
-            Overdue
-          </Tag>
-        )}
-      </div>
+          {d.description && (
+            <p className="text-sm text-slate-600 leading-relaxed">{d.description}</p>
+          )}
 
-      {d.description && (
-        <p className="text-sm text-slate-600 max-w-3xl leading-relaxed">{d.description}</p>
-      )}
-
-      {d.tags.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <TagIcon className="w-3.5 h-3.5 text-slate-400" />
-          {d.tags.map(t => (
-            <span
-              key={t}
-              className="text-[11px] font-mono text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded"
-            >
-              #{t}
-            </span>
-          ))}
+          {d.tags.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <TagIcon className="w-3.5 h-3.5 text-slate-400" />
+              {d.tags.map(t => (
+                <span
+                  key={t}
+                  className="text-[11px] font-mono text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded"
+                >
+                  #{t}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-      )}
 
-      <div className="border border-slate-200 rounded-md bg-white p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 min-w-0">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5 px-5 sm:px-6 py-4 border-t border-slate-100">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
               Office
             </p>
             <p className="text-sm font-semibold text-slate-900 truncate">
@@ -703,7 +690,7 @@ function DocumentHero({
             </p>
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
               Holder
             </p>
             {holder ? (
@@ -727,7 +714,7 @@ function DocumentHero({
             )}
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
               Date Received
             </p>
             <p className="text-sm font-semibold text-slate-900">
@@ -735,36 +722,41 @@ function DocumentHero({
             </p>
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
               Due
             </p>
-            <p
-              className={cn(
-                'text-sm font-semibold inline-flex items-center gap-1.5',
-                isOverdue ? 'text-rose-700' : 'text-slate-900'
-              )}
-            >
-              <Clock className="w-3 h-3" />
+            <p className={cn('text-sm font-semibold', isOverdue ? 'text-rose-700' : 'text-slate-900')}>
               {d.dueDate ? formatDate(d.dueDate) : 'No deadline'}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {canDownload && (
-            <Button variant="outline" size="sm" leftIcon={<Download className="w-4 h-4" />}>
-              Download
-            </Button>
-          )}
-          {primaryAction && !isTerminal && (
-            <Button
-              size="sm"
-              leftIcon={ACTION_META[primaryAction].icon}
-              onClick={onPrimaryAction}
-            >
-              {ACTION_META[primaryAction].label}
-            </Button>
-          )}
-        </div>
+
+        {(canDownload || (primaryAction && !isTerminal)) && (
+          <div className="flex flex-col-reverse gap-3 border-t border-slate-100 px-5 sm:px-6 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="hidden sm:block text-xs text-slate-500">
+              {primaryAction && !isTerminal
+                ? `Next step: ${ACTION_META[primaryAction].label} this document.`
+                : 'No further actions available.'}
+            </p>
+            <div className="flex items-center gap-2 sm:justify-end">
+              {canDownload && (
+                <Button variant="outline" size="md" leftIcon={<Download className="w-4 h-4" />}>
+                  Download
+                </Button>
+              )}
+              {primaryAction && !isTerminal && (
+                <Button
+                  size="md"
+                  className="shadow-sm"
+                  leftIcon={ACTION_META[primaryAction].icon}
+                  onClick={onPrimaryAction}
+                >
+                  {ACTION_META[primaryAction].label}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );
@@ -811,20 +803,23 @@ function DocumentActions({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full px-5 py-3.5 flex items-center justify-between gap-2 text-left"
+        aria-expanded={open}
+        className="group w-full px-5 py-3.5 flex items-center justify-between gap-2 text-left"
       >
         <span className="text-sm font-semibold text-slate-900">Actions</span>
-        {open ? (
-          <ChevronUp className="w-4 h-4 text-slate-400" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400" />
-        )}
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors group-hover:bg-slate-200 group-hover:text-slate-700">
+          {open ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </span>
       </button>
       {open && (
-        <div className="px-5 pb-5 space-y-4 border-t border-slate-100 pt-4">
+        <div className="px-5 pb-5 space-y-5 border-t border-slate-100 pt-4">
           {decisionActions.length > 0 && (
             <div>
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
+              <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-400 mb-2.5">
                 Decision
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -841,6 +836,7 @@ function DocumentActions({
                       key={action}
                       variant={variant as 'primary' | 'outline' | 'danger'}
                       size="sm"
+                      className={meta.tone === 'primary' ? 'shadow-sm' : undefined}
                       leftIcon={meta.icon}
                       onClick={() => onAction(action)}
                     >
@@ -853,7 +849,7 @@ function DocumentActions({
           )}
           {(canRoute || canAssign || canStartReview) && (
             <div>
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
+              <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-400 mb-2.5">
                 Workflow
               </p>
               <div className="space-y-2">
@@ -872,6 +868,7 @@ function DocumentActions({
                   <Button
                     variant="primary"
                     size="sm"
+                    className="shadow-sm"
                     leftIcon={<Eye className="w-3.5 h-3.5" />}
                     onClick={onStartReview}
                     fullWidth
@@ -895,7 +892,7 @@ function DocumentActions({
           )}
           {terminalActions.length > 0 && (
             <div>
-              <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
+              <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-400 mb-2.5">
                 Final
               </p>
               <div className="grid grid-cols-1 gap-2">
@@ -906,6 +903,7 @@ function DocumentActions({
                       key={action}
                       variant={meta.tone === 'primary' ? 'primary' : 'outline'}
                       size="sm"
+                      className={meta.tone === 'primary' ? 'shadow-sm' : undefined}
                       leftIcon={meta.icon}
                       onClick={() => onAction(action)}
                       fullWidth
@@ -946,6 +944,14 @@ function DocumentInfoSidebar({
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch {
       // Keep detail view usable if download link fails
+    }
+  };
+  const handleViewAttachment = (att: { id: string; fileName: string; mimeType: string }) => {
+    if (att.mimeType.toLowerCase() === 'application/pdf') {
+      const url = attachmentsService.previewUrl(att.id);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      void downloadAttachment(att.id);
     }
   };
   return (
@@ -1022,9 +1028,10 @@ function DocumentInfoSidebar({
                 </div>
                 <button
                   type="button"
-                  onClick={() => void downloadAttachment(att.id)}
+                  onClick={() => handleViewAttachment(att)}
                   className="p-1.5 text-slate-400 hover:text-slate-700 rounded"
-                  aria-label="Preview"
+                  aria-label="View Attachment"
+                  title="View Attachment"
                 >
                   <Eye className="w-3.5 h-3.5" />
                 </button>

@@ -19,6 +19,7 @@ import { FilterReviewsDto } from './dto/filter-reviews.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Audit } from '../../common/decorators/audit.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -29,6 +30,7 @@ export class DocumentReviewController {
   constructor(private readonly reviewService: DocumentReviewService) {}
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.DOCUMENT_OFFICER)
+  @Permissions('documents.review')
   @Audit('review.create', 'review', 'DocumentReview')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -36,17 +38,20 @@ export class DocumentReviewController {
     return this.reviewService.create(dto, user.id);
   }
 
+  @Permissions('documents.view')
   @Get()
   findAll(@Query() filter: FilterReviewsDto) {
     return this.reviewService.findAll(filter);
   }
 
+  @Permissions('documents.view')
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.reviewService.findOne(id);
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.DOCUMENT_OFFICER)
+  @Permissions('documents.review')
   @Patch(':id')
   @Audit('review.update', 'review', 'DocumentReview')
   update(
@@ -56,7 +61,8 @@ export class DocumentReviewController {
     return this.reviewService.update(id, dto);
   }
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Roles(ROLES.SYSTEM_ADMIN)
+  @Permissions('documents.review')
   @Delete(':id')
   @Audit('review.delete', 'review', 'DocumentReview')
   @HttpCode(HttpStatus.OK)

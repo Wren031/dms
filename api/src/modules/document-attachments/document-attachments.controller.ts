@@ -25,6 +25,7 @@ import { FilterAttachmentsDto } from './dto/filter-attachments.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Audit } from '../../common/decorators/audit.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -35,6 +36,7 @@ export class DocumentAttachmentsController {
   constructor(private readonly attachmentsService: DocumentAttachmentsService) {}
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
+  @Permissions('documents.edit')
   @Post('document/:documentId')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -53,16 +55,19 @@ export class DocumentAttachmentsController {
     return this.attachmentsService.upload(documentId, file, user.id);
   }
 
+  @Permissions('documents.view')
   @Get('document/:documentId')
   findAll(@Param('documentId', new ParseUUIDPipe()) documentId: string) {
     return this.attachmentsService.findAll(documentId);
   }
 
+  @Permissions('documents.view')
   @Get()
   findByQuery(@Query() filter: FilterAttachmentsDto) {
     return this.attachmentsService.findByDocumentFilter(filter.documentId);
   }
 
+  @Permissions('documents.view')
   @Get(':id/download')
   async download(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -87,6 +92,8 @@ export class DocumentAttachmentsController {
     });
   }
 
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
+  @Permissions('documents.edit')
   @Patch(':id')
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -96,6 +103,7 @@ export class DocumentAttachmentsController {
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
+  @Permissions('documents.edit')
   @Audit('attachment.delete', 'attachments', 'DocumentAttachment')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)

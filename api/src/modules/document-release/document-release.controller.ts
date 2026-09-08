@@ -19,6 +19,7 @@ import { FilterReleasesDto } from './dto/filter-releases.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Audit } from '../../common/decorators/audit.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -29,6 +30,7 @@ export class DocumentReleaseController {
   constructor(private readonly releaseService: DocumentReleaseService) {}
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('documents.release')
   @Audit('release.create', 'release', 'DocumentRelease')
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -36,17 +38,20 @@ export class DocumentReleaseController {
     return this.releaseService.create(dto, user.id);
   }
 
+  @Permissions('documents.view')
   @Get()
   findAll(@Query() filter: FilterReleasesDto) {
     return this.releaseService.findAll(filter);
   }
 
+  @Permissions('documents.view')
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.releaseService.findOne(id);
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('documents.release')
   @Patch(':id')
   @Audit('release.update', 'release', 'DocumentRelease')
   update(
@@ -57,6 +62,7 @@ export class DocumentReleaseController {
   }
 
   @Roles(ROLES.SYSTEM_ADMIN)
+  @Permissions('documents.release')
   @Audit('release.delete', 'release', 'DocumentRelease')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)

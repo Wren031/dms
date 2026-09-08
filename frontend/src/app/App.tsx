@@ -55,7 +55,14 @@ export function App() {
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/change-password" element={<ChangePasswordPage />} />
                 <Route path="/documents" element={<DocumentsListPage />} />
-                <Route path="/documents/register" element={<DocumentRegistrationPage />} />
+                <Route
+                  path="/documents/register"
+                  element={
+                    <ProtectedRoute permission="documents.register">
+                      <DocumentRegistrationPage />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route path="/documents/:id" element={<DocumentDetailPage />} />
 
                 <Route
@@ -86,13 +93,20 @@ export function App() {
                 <Route
                   path="/release"
                   element={
-                    <ProtectedRoute roles={['system_admin', 'office_admin', 'document_officer']}>
+                    <ProtectedRoute roles={['system_admin', 'office_admin']}>
                       <ReleasePage />
                     </ProtectedRoute>
                   }
                 />
                 <Route path="/tracking" element={<TrackingPage />} />
-                <Route path="/archive" element={<ArchivePage />} />
+                <Route
+                  path="/archive"
+                  element={
+                    <ProtectedRoute roles={['system_admin', 'office_admin']}>
+                      <ArchivePage />
+                    </ProtectedRoute>
+                  }
+                />
 
                 <Route
                   path="/users"

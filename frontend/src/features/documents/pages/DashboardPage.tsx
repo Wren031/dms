@@ -172,7 +172,7 @@ export function DashboardPage() {
                 View All Documents
               </Button>
             </Link>
-            {hasPermission('documents.create') && (
+            {hasPermission('documents.register') && (
               <Link to="/documents/register">
                 <Button variant="primary" leftIcon={<FilePlus className="w-4 h-4" />}>
                   Register Document

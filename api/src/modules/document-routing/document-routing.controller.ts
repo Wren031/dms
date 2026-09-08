@@ -22,6 +22,7 @@ import { FilterRoutingStepsDto } from './dto/filter-routing-steps.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Audit } from '../../common/decorators/audit.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
@@ -32,6 +33,7 @@ export class DocumentRoutingController {
   constructor(private readonly routingService: DocumentRoutingService) {}
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('documents.route')
   @Audit('routing.create-plan', 'routing', 'DocumentRoutingStep')
   @Post('document/:documentId/plan')
   @HttpCode(HttpStatus.CREATED)
@@ -44,17 +46,20 @@ export class DocumentRoutingController {
     return this.routingService.createPlan(documentId, dto, user.id);
   }
 
+  @Permissions('documents.view')
   @Get()
   findAll(@Query() filter: FilterRoutingStepsDto) {
     return this.routingService.findAll(filter);
   }
 
+  @Permissions('documents.view')
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.routingService.findOne(id);
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('documents.route')
   @Patch(':id')
   @Audit('routing.update', 'routing', 'DocumentRoutingStep')
   update(
@@ -65,6 +70,8 @@ export class DocumentRoutingController {
     return this.routingService.update(id, dto, user.id);
   }
 
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('documents.route')
   @Post(':id/advance')
   @HttpCode(HttpStatus.OK)
   @Audit('routing.advance', 'routing', 'DocumentRoutingStep')
@@ -77,6 +84,7 @@ export class DocumentRoutingController {
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('documents.route')
   @Audit('routing.delete', 'routing', 'DocumentRoutingStep')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)

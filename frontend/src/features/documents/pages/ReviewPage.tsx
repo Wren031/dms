@@ -33,7 +33,7 @@ import { usePagination } from '@/hooks/usePagination';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
-import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
+import { useCurrentUser, useAuth } from '@/features/authentication/hooks/useAuth';
 import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import { DOCUMENT_TYPE_LABELS } from '@/constants';
 import { formatDate, formatRelative } from '@/lib/utils';
@@ -43,6 +43,7 @@ export function ReviewPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const user = useCurrentUser();
+  const { hasPermission } = useAuth();
   const { items: documents } = useDocuments({ fetchAll: true });
 
   const scopedDocuments = useMemo(
@@ -269,7 +270,7 @@ export function ReviewPage() {
               align: 'right',
               cell: d => (
                 <div className="flex items-center justify-end gap-1">
-                  {d.status === 'registered' && (
+                  {(d.status === 'registered' || d.status === 'assigned') && hasPermission('documents.receive') && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -279,7 +280,7 @@ export function ReviewPage() {
                       Receive
                     </Button>
                   )}
-                  {d.status === 'received' && (
+                  {(d.status === 'received' || d.status === 'registered') && hasPermission('documents.route') && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -289,7 +290,7 @@ export function ReviewPage() {
                       Route to office
                     </Button>
                   )}
-                  {d.status === 'routed' && (
+                  {d.status === 'routed' && hasPermission('documents.route') && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -299,7 +300,7 @@ export function ReviewPage() {
                       Assign
                     </Button>
                   )}
-                  {d.status === 'assigned' && (
+                  {d.status === 'assigned' && hasPermission('documents.review') && (
                     <Button
                       size="sm"
                       onClick={() => startReview(d.id)}
@@ -310,60 +311,72 @@ export function ReviewPage() {
                   )}
                   {d.status === 'under_review' && (
                     <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleAction(d.id, 'recommend')}
-                        leftIcon={<ThumbsUp className="w-3 h-3" />}
-                      >
-                        Recommend
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleAction(d.id, 'return')}
-                        leftIcon={<RotateCcw className="w-3 h-3" />}
-                      >
-                        Return
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => handleAction(d.id, 'reject')}
-                        leftIcon={<XCircle className="w-3 h-3" />}
-                      >
-                        Reject
-                      </Button>
+                      {hasPermission('documents.recommend') && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAction(d.id, 'recommend')}
+                          leftIcon={<ThumbsUp className="w-3 h-3" />}
+                        >
+                          Recommend
+                        </Button>
+                      )}
+                      {hasPermission('documents.return') && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleAction(d.id, 'return')}
+                          leftIcon={<RotateCcw className="w-3 h-3" />}
+                        >
+                          Return
+                        </Button>
+                      )}
+                      {hasPermission('documents.reject') && (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleAction(d.id, 'reject')}
+                          leftIcon={<XCircle className="w-3 h-3" />}
+                        >
+                          Reject
+                        </Button>
+                      )}
                     </>
                   )}
                   {d.status === 'recommended' && (
                     <>
-                      <Button
-                        size="sm"
-                        onClick={() => handleAction(d.id, 'approve')}
-                        leftIcon={<CheckCircle2 className="w-3 h-3" />}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleAction(d.id, 'return')}
-                        leftIcon={<RotateCcw className="w-3 h-3" />}
-                      >
-                        Return
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => handleAction(d.id, 'reject')}
-                        leftIcon={<XCircle className="w-3 h-3" />}
-                      >
-                        Reject
-                      </Button>
+                      {hasPermission('documents.approve') && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleAction(d.id, 'approve')}
+                          leftIcon={<CheckCircle2 className="w-3 h-3" />}
+                        >
+                          Approve
+                        </Button>
+                      )}
+                      {hasPermission('documents.return') && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleAction(d.id, 'return')}
+                          leftIcon={<RotateCcw className="w-3 h-3" />}
+                        >
+                          Return
+                        </Button>
+                      )}
+                      {hasPermission('documents.reject') && (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleAction(d.id, 'reject')}
+                          leftIcon={<XCircle className="w-3 h-3" />}
+                        >
+                          Reject
+                        </Button>
+                      )}
                     </>
                   )}
-                  {d.status === 'returned' && (
+                  {d.status === 'returned' && hasPermission('documents.review') && (
                     <Button
                       size="sm"
                       variant="outline"

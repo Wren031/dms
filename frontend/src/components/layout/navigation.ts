@@ -82,7 +82,7 @@ export const navigation: NavItem[] = [
     to: '/release',
     icon: 'PackageOpen',
     section: 'workspace',
-    roles: ['system_admin', 'office_admin', 'document_officer'],
+    roles: ['system_admin', 'office_admin'],
   },
   {
     id: 'tracking',
@@ -97,6 +97,7 @@ export const navigation: NavItem[] = [
     to: '/archive',
     icon: 'Archive',
     section: 'workspace',
+    roles: ['system_admin', 'office_admin'],
   },
   {
     id: 'users',

@@ -27,6 +27,7 @@ import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
+import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { useOfficeLookup } from '@/hooks/useLookups';
 import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
 import { DOCUMENT_TYPE_LABELS } from '@/constants';
@@ -34,6 +35,7 @@ import { formatDate, formatRelative } from '@/lib/utils';
 
 export function ReleasePage() {
   const toast = useToast();
+  const { hasPermission } = useAuth();
   const { items: documents } = useDocuments({ pageSize: 100 });
   const transition = useDocumentTransition();
   const { users: routingUsers } = useRoutingOptions();
@@ -236,7 +238,7 @@ export function ReleasePage() {
               width: '140px',
               align: 'right',
               cell: d => (
-                d.status === 'approved' ? (
+                d.status === 'approved' && hasPermission('documents.release') ? (
                   <Button size="sm" leftIcon={<Send className="w-3.5 h-3.5" />} onClick={() => handleRelease(d.id)}>
                     Release
                   </Button>

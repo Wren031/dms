@@ -16,10 +16,10 @@ import { PaginatedResult } from '../../common/dto/pagination.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 const ALLOWED_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
-  registered: ['received'],
+  registered: ['received', 'routed'],
   received: ['routed'],
   routed: ['assigned'],
-  assigned: ['under_review'],
+  assigned: ['received', 'under_review'],
   under_review: ['recommended', 'returned'],
   recommended: ['approved', 'rejected'],
   approved: ['released'],
@@ -42,6 +42,22 @@ const TRANSITION_ROLES: Record<DocumentStatus, Role[]> = {
   returned: [Role.SYSTEM_ADMIN, Role.OFFICE_ADMIN],
   released: [Role.SYSTEM_ADMIN, Role.OFFICE_ADMIN],
   archived: [Role.SYSTEM_ADMIN, Role.OFFICE_ADMIN],
+};
+
+// Persisted permission required for each target status. If a role's granted
+// permissions were revoked, the transition is rejected with 403.
+const TRANSITION_PERMISSIONS: Record<DocumentStatus, string> = {
+  registered: 'documents.register',
+  received: 'documents.receive',
+  routed: 'documents.route',
+  assigned: 'documents.route',
+  under_review: 'documents.review',
+  recommended: 'documents.recommend',
+  approved: 'documents.approve',
+  rejected: 'documents.reject',
+  returned: 'documents.return',
+  released: 'documents.release',
+  archived: 'documents.archive',
 };
 
 export type DocumentTypeMeta = Prisma.DocumentTypeGetPayload<Record<string, never>>;
@@ -124,7 +140,7 @@ export class DocumentsService {
     const trackingNumber = await this.generateTrackingNumber();
 
     const useManualOrigin = !dto.originatingOfficeId;
-    let documentNumber =
+    const documentNumber =
       dto.documentNumber?.trim() ||
       (useManualOrigin
         ? await this.generateManualDocumentNumber()
@@ -450,9 +466,23 @@ export class DocumentsService {
     });
     const permittedRoles = TRANSITION_ROLES[dto.toStatus] ?? [];
     if (!actor || !permittedRoles.includes(actor.role)) {
-      throw new BadRequestException(
+      throw new ForbiddenException(
         `Your role is not permitted to move documents to ${dto.toStatus}`,
       );
+    }
+
+    // Enforce the persisted permission for the target status (SYSTEM_ADMIN
+    // bypasses, matching the superuser convention used across the module).
+    const requiredPermission = TRANSITION_PERMISSIONS[dto.toStatus];
+    if (requiredPermission && actor.role !== Role.SYSTEM_ADMIN) {
+      const granted = await this.prisma.rolePermission.count({
+        where: { role: actor.role, permission: requiredPermission },
+      });
+      if (granted === 0) {
+        throw new ForbiddenException(
+          `Your role does not have permission to move documents to ${dto.toStatus}`,
+        );
+      }
     }
 
     await this.assertOfficeOwnership(actorId, doc);
