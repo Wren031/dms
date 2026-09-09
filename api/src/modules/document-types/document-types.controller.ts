@@ -20,7 +20,6 @@ import { FilterDocumentTypesDto } from './dto/filter-document-types.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { Audit } from '../../common/decorators/audit.decorator';
 import { ROLES } from '../../common/constants/roles.constants';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
