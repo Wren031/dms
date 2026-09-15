@@ -4,6 +4,9 @@ import type {
   CreateUserPayload,
   CreateUserResponse,
   EmployeeSummary,
+  MailTestResult,
+  ResendCredentialsResult,
+  ResetPasswordResult,
   ResetUserPasswordPayload,
   UpdateUserPayload,
   UserAccount,
@@ -138,10 +141,26 @@ export const userService = {
     return request<UserAccount>(`/users/${id}`, { method: 'DELETE' });
   },
 
-  resetPassword(id: string, payload?: ResetUserPasswordPayload): Promise<{ success: true }> {
-    return request<{ success: true }>(`/users/${id}/reset-password`, {
+  resetPassword(id: string, payload?: ResetUserPasswordPayload): Promise<ResetPasswordResult> {
+    return request<ResetPasswordResult>(`/users/${id}/reset-password`, {
       method: 'POST',
       body: JSON.stringify(payload ?? {}),
+    });
+  },
+
+  resendCredentials(id: string): Promise<ResendCredentialsResult> {
+    return request<ResendCredentialsResult>(`/users/${id}/resend-credentials`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  },
+};
+
+export const mailService = {
+  test(): Promise<MailTestResult> {
+    return request<MailTestResult>('/mail/test', {
+      method: 'POST',
+      body: JSON.stringify({}),
     });
   },
 };

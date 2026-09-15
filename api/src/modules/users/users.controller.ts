@@ -82,4 +82,13 @@ export class UsersController {
   ) {
     return this.usersService.resetPassword(id, dto.newPassword);
   }
+
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Audit('user.resend-credentials', 'users', 'User')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post(':id/resend-credentials')
+  @HttpCode(HttpStatus.OK)
+  resendCredentials(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.usersService.resendCredentials(id);
+  }
 }

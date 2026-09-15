@@ -9,6 +9,8 @@ import type {
   CreateUserPayload,
   CreateUserResponse,
   EmployeeSummary,
+  ResendCredentialsResult,
+  ResetPasswordResult,
   UpdateUserPayload,
   UserAccount,
   UserListFilters,
@@ -35,12 +37,17 @@ interface UseUsersReturn {
   createUser: (input: CreateUserWithEmployeeInput) => Promise<CreateUserResponse>;
   update: (id: string, input: UpdateUserPayload) => Promise<UserAccount>;
   remove: (id: string) => Promise<void>;
-  resetPassword: (id: string, newPassword?: string) => Promise<void>;
+  resetPassword: (
+    id: string,
+    newPassword?: string,
+  ) => Promise<ResetPasswordResult>;
+  resendCredentials: (id: string) => Promise<ResendCredentialsResult>;
 
   creating: boolean;
   updating: boolean;
   deleting: boolean;
   resettingPassword: boolean;
+  resendingCredentials: boolean;
   actionError: string | null;
   clearActionError: () => void;
 }
@@ -77,6 +84,7 @@ export function useUsers(initialFilters: UserListFilters = {}): UseUsersReturn {
   const [updating, setUpdating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [resendingCredentials, setResendingCredentials] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const clearActionError = useCallback(() => setActionError(null), []);
@@ -175,12 +183,31 @@ export function useUsers(initialFilters: UserListFilters = {}): UseUsersReturn {
       setResettingPassword(true);
       setActionError(null);
       try {
-        await userService.resetPassword(id, newPassword ? { newPassword } : undefined);
+        return await userService.resetPassword(
+          id,
+          newPassword ? { newPassword } : undefined,
+        );
       } catch (err) {
         setActionError(toMessage(err, 'Failed to reset password.'));
         throw err;
       } finally {
         setResettingPassword(false);
+      }
+    },
+    [],
+  );
+
+  const resendCredentials = useCallback(
+    async (id: string) => {
+      setResendingCredentials(true);
+      setActionError(null);
+      try {
+        return await userService.resendCredentials(id);
+      } catch (err) {
+        setActionError(toMessage(err, 'Failed to resend credentials.'));
+        throw err;
+      } finally {
+        setResendingCredentials(false);
       }
     },
     [],
@@ -202,10 +229,12 @@ export function useUsers(initialFilters: UserListFilters = {}): UseUsersReturn {
     update,
     remove,
     resetPassword,
+    resendCredentials,
     creating,
     updating,
     deleting,
     resettingPassword,
+    resendingCredentials,
     actionError,
     clearActionError,
   };

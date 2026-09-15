@@ -6,8 +6,9 @@ interface AddUserTipsCardProps {
 }
 
 const DEFAULT_TIPS = [
-  'Verify the email is correct — credentials will be sent here.',
+  'Verify the email is correct — the temporary password will be sent here.',
   'The user will be required to change the password on first login.',
+  'If the email cannot be delivered, resend the credentials from the user\'s profile page.',
   'Office assignment determines which documents they can access.',
 ];
 

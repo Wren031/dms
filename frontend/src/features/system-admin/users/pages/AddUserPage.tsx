@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Copy, Check, KeyRound, AlertTriangle, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Check, AlertTriangle, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +17,7 @@ import {
   ROLE_TO_API,
   STATUS_TO_API,
   USER_ROLE_LABELS,
+  type CredentialsEmailStatus,
   type OfficeSummary,
   type UserStatusUi,
 } from '@/features/system-admin/users/types/user';
@@ -93,9 +94,9 @@ function flattenOffices(tree: { id: string; name: string; code: string; type: 'm
 
 interface CreatedCredential {
   fullName: string;
-  username: string;
   email: string;
-  temporaryPassword: string;
+  status: CredentialsEmailStatus;
+  reason?: string;
 }
 
 export function AddUserPage() {
@@ -110,7 +111,6 @@ export function AddUserPage() {
   const [usernameTouched, setUsernameTouched] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [credential, setCredential] = useState<CreatedCredential | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const formDraft = useFormDraft(FORM_DRAFT_KEYS.USER_CREATE, {
     onRestore: payload => {
@@ -224,9 +224,9 @@ export function AddUserPage() {
       });
       setCredential({
         fullName,
-        username: result.user.username ?? usernameValue,
         email: result.user.email ?? form.email.trim().toLowerCase(),
-        temporaryPassword: result.temporaryPassword,
+        status: result.credentialsEmailStatus,
+        reason: result.credentialsEmailReason,
       });
       void formDraft.clearDraft();
     } catch (err) {
@@ -242,18 +242,6 @@ export function AddUserPage() {
     () => flatOffices.find(o => o.id === form.officeId) ?? null,
     [flatOffices, form.officeId],
   );
-
-  const handleCopyPassword = async () => {
-    if (!credential) return;
-    try {
-      await navigator.clipboard.writeText(credential.temporaryPassword);
-      setCopied(true);
-      toast.info('Copied', 'The temporary password has been copied to your clipboard.');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error('Copy failed', 'Please select and copy the password manually.');
-    }
-  };
 
   const handleAcknowledged = () => {
     toast.success('User created', `${credential?.fullName ?? fullName} has been added to the system.`);
@@ -397,67 +385,72 @@ export function AddUserPage() {
       <Modal
         open={!!credential}
         onClose={() => undefined}
-        title="User created — share the temporary password"
+        title={credential?.status === 'sent' ? 'Account created' : 'Account created — email not sent'}
         description={`${credential?.fullName ?? ''} can now sign in.`}
         size="md"
         hideCloseButton
         footer={
           <Button onClick={handleAcknowledged} leftIcon={<Check className="w-4 h-4" />}>
-            I have saved the password
+            Done
           </Button>
         }
       >
-        <div className="space-y-5">
+        {credential?.status === 'sent' ? (
+          <div className="space-y-5">
+            <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+              <div className="text-xs leading-relaxed text-emerald-800">
+                A temporary password has been sent to the email address on the account.
+                The user will be required to set a new private password on their first
+                login.
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+                Email
+              </p>
+              <p className="mt-1 font-mono text-sm text-slate-900 break-all">
+                {credential.email}
+              </p>
+            </div>
+          </div>
+        ) : (
           <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
             <div className="text-xs leading-relaxed text-amber-800">
-              This password will <strong>only be shown once</strong>. The system does not store
-              the plain-text value. The user will be required to set a new private password on
-              their first login.
+              {credential?.status === 'skipped' ? (
+                <>
+                  <p>
+                    The account was created, but <strong>email is not configured</strong>,
+                    so no credentials email was sent.
+                  </p>
+                  <p className="mt-2">
+                    Set the <code className="font-mono">MAIL_*</code> values in the API{' '}
+                    <code className="font-mono">.env</code>, then use{' '}
+                    <strong>Resend Credentials</strong> on the user's profile page.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    The account was created, but the credentials email could not be
+                    delivered.
+                  </p>
+                  {credential?.reason ? (
+                    <p className="mt-2 font-mono text-[11px] break-all text-amber-700">
+                      {credential.reason}
+                    </p>
+                  ) : null}
+                  <p className="mt-2">
+                    Use <strong>Resend Credentials</strong> on the user's profile page once
+                    the mail service is available.
+                  </p>
+                </>
+              )}
             </div>
           </div>
-
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-              Username
-            </p>
-            <p className="mt-1 font-mono text-sm text-slate-900 break-all">
-              {credential?.username}
-            </p>
-            <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-              Email
-            </p>
-            <p className="mt-1 font-mono text-sm text-slate-900 break-all">
-              {credential?.email}
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700">
-              Temporary password
-            </label>
-            <div className="mt-2 flex items-stretch gap-2">
-              <div className="flex-1 flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2.5">
-                <KeyRound className="h-4 w-4 text-slate-400 shrink-0" />
-                <code className="flex-1 break-all font-mono text-sm text-slate-900 select-all">
-                  {credential?.temporaryPassword}
-                </code>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleCopyPassword}
-                leftIcon={copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              >
-                {copied ? 'Copied' : 'Copy'}
-              </Button>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">
-              Deliver this password to the user through a secure channel. Once they sign in,
-              they will be prompted to set a new private password.
-            </p>
-          </div>
-        </div>
+        )}
       </Modal>
     </div>
   );

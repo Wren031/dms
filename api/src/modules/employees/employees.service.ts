@@ -5,6 +5,7 @@ import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { FilterEmployeesDto } from './dto/filter-employees.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
+import { throwOnUniqueConflict } from '../../common/utils/prisma-unique.util';
 
 type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
   include: {
@@ -38,10 +39,17 @@ export class EmployeesService {
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.hiredAt) data.hiredAt = new Date(dto.hiredAt);
 
-    return this.prisma.employee.create({
-      data,
-      include: employeeInclude,
-    });
+    try {
+      return await this.prisma.employee.create({
+        data,
+        include: employeeInclude,
+      });
+    } catch (err) {
+      throwOnUniqueConflict(err, {
+        email: 'A person with this email address is already registered.',
+        employeeNo: 'An employee with this number already exists.',
+      });
+    }
   }
 
   async findAll(filter: FilterEmployeesDto): Promise<PaginatedResult<EmployeeWithRelations>> {

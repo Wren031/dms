@@ -1,11 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomInt } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { FilterUsersDto } from './dto/filter-users.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
 import { hashPassword } from '../../common/utils/hash.util';
+import { throwOnUniqueConflict } from '../../common/utils/prisma-unique.util';
+import {
+  CredentialsEmailStatus,
+  MailService,
+} from '../mail/mail.service';
 
 type UserWithEmployee = Prisma.UserGetPayload<{
   include: {
@@ -27,26 +33,52 @@ const userWithEmployeeInclude = {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(UsersService.name);
 
-  async create(dto: CreateUserDto): Promise<{ user: UserWithEmployee; temporaryPassword: string }> {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+  ) {}
+
+  async create(
+    dto: CreateUserDto,
+  ): Promise<{
+    user: UserWithEmployee;
+    credentialsEmailStatus: CredentialsEmailStatus;
+    credentialsEmailReason?: string;
+  }> {
     const temporaryPassword = this.generateTempPassword();
     const passwordHash = await hashPassword(temporaryPassword);
 
-    const user = await this.prisma.user.create({
-      data: {
-        username: dto.username ?? null,
-        email: dto.email ?? null,
-        passwordHash,
-        role: dto.role ?? 'DOCUMENT_ENCODER',
-        status: dto.status ?? 'ACTIVE',
-        mustChangePassword: true,
-        employeeId: dto.employeeId,
-      },
-      include: userWithEmployeeInclude,
-    });
+    let user: UserWithEmployee;
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          username: dto.username ?? null,
+          email: dto.email ?? null,
+          passwordHash,
+          role: dto.role ?? 'DOCUMENT_ENCODER',
+          status: dto.status ?? 'ACTIVE',
+          mustChangePassword: true,
+          employeeId: dto.employeeId,
+        },
+        include: userWithEmployeeInclude,
+      });
+    } catch (err) {
+      throwOnUniqueConflict(err, {
+        email: 'A user account with this email address already exists.',
+        username: 'This username is already taken.',
+        employeeId: 'This person already has a user account.',
+      });
+    }
 
-    return { user, temporaryPassword };
+    const delivery = await this.deliverCredentials(user, temporaryPassword);
+
+    return {
+      user,
+      credentialsEmailStatus: delivery.status,
+      credentialsEmailReason: delivery.reason,
+    };
   }
 
   async findAll(filter: FilterUsersDto): Promise<PaginatedResult<UserWithEmployee>> {
@@ -145,11 +177,19 @@ export class UsersService {
     if (password) {
       data.passwordHash = await hashPassword(password);
     }
-    return this.prisma.user.update({
-      where: { id },
-      data,
-      include: userWithEmployeeInclude,
-    });
+    try {
+      return await this.prisma.user.update({
+        where: { id },
+        data,
+        include: userWithEmployeeInclude,
+      });
+    } catch (err) {
+      throwOnUniqueConflict(err, {
+        email: 'A user account with this email address already exists.',
+        username: 'This username is already taken.',
+        employeeId: 'This person already has a user account.',
+      });
+    }
   }
 
   async remove(id: string): Promise<UserWithEmployee> {
@@ -159,10 +199,18 @@ export class UsersService {
     });
   }
 
-  async resetPassword(id: string, newPassword?: string): Promise<{ success: true }> {
+  async resetPassword(
+    id: string,
+    newPassword?: string,
+  ): Promise<{
+    success: true;
+    credentialsEmailStatus: CredentialsEmailStatus;
+    credentialsEmailReason?: string;
+  }> {
+    const generated = newPassword === undefined;
     const password = newPassword ?? this.generateTempPassword();
     const passwordHash = await hashPassword(password);
-    await this.prisma.user.update({
+    const user = await this.prisma.user.update({
       where: { id },
       data: {
         passwordHash,
@@ -173,8 +221,106 @@ export class UsersService {
           },
         },
       },
+      include: userWithEmployeeInclude,
     });
-    return { success: true };
+
+    const delivery = generated
+      ? await this.deliverCredentials(user, password)
+      : {
+          status: 'skipped' as const,
+          reason: 'A password was supplied by the caller; no email was sent.',
+        };
+
+    return {
+      success: true,
+      credentialsEmailStatus: delivery.status,
+      credentialsEmailReason: delivery.reason,
+    };
+  }
+
+  async resendCredentials(
+    id: string,
+  ): Promise<{
+    credentialsEmailStatus: CredentialsEmailStatus;
+    credentialsEmailReason?: string;
+  }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: userWithEmployeeInclude,
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const temporaryPassword = this.generateTempPassword();
+    const passwordHash = await hashPassword(temporaryPassword);
+    await this.prisma.user.update({
+      where: { id },
+      data: {
+        passwordHash,
+        mustChangePassword: true,
+        authSessions: {
+          updateMany: {
+            where: { revokedAt: null },
+            data: { revokedAt: new Date() },
+          },
+        },
+      },
+    });
+
+    const delivery = await this.deliverCredentials(user, temporaryPassword);
+    return {
+      credentialsEmailStatus: delivery.status,
+      credentialsEmailReason: delivery.reason,
+    };
+  }
+
+  private async deliverCredentials(
+    user: UserWithEmployee,
+    temporaryPassword: string,
+  ): Promise<{ status: CredentialsEmailStatus; reason?: string }> {
+    const email = user.email;
+    if (!email) {
+      this.logger.warn(
+        `Account credentials email skipped for user ${user.id}: no email address on account.`,
+      );
+      return {
+        status: 'skipped',
+        reason: 'No email address is set on the account.',
+      };
+    }
+    if (!this.mailService.isConfigured) {
+      this.logger.warn(
+        `Account credentials email skipped for ${email}: SMTP is not configured.`,
+      );
+      return {
+        status: 'skipped',
+        reason:
+          'SMTP is not configured (MAIL_HOST/MAIL_FROM_ADDRESS are missing in api/.env).',
+      };
+    }
+
+    const fullName =
+      [user.employee?.firstName, user.employee?.middleName, user.employee?.lastName]
+        .filter(Boolean)
+        .join(' ') || user.username || email || user.id;
+
+    try {
+      await this.mailService.sendAccountCreated({
+        to: email,
+        email,
+        fullName,
+        temporaryPassword,
+      });
+      return { status: 'sent' };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `Failed to send account credentials email to ${email}.`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      return { status: 'failed', reason };
+    }
   }
 
   private generateTempPassword(): string {
@@ -182,7 +328,7 @@ export class UsersService {
     const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     let out = '';
     for (let i = 0; i < len; i++) {
-      out += charset[Math.floor(Math.random() * charset.length)];
+      out += charset[randomInt(charset.length)];
     }
     return out;
   }

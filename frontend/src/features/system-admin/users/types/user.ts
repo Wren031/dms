@@ -94,9 +94,26 @@ export interface CreateUserPayload {
   employeeId: string;
 }
 
-export interface CreateUserResponse {
+export type CredentialsEmailStatus = 'sent' | 'skipped' | 'failed';
+
+export interface CredentialsDelivery {
+  credentialsEmailStatus: CredentialsEmailStatus;
+  credentialsEmailReason?: string;
+}
+
+export interface CreateUserResponse extends CredentialsDelivery {
   user: UserAccount;
-  temporaryPassword: string;
+}
+
+export interface ResendCredentialsResult extends CredentialsDelivery {}
+
+export interface ResetPasswordResult extends CredentialsDelivery {
+  success: true;
+}
+
+export interface MailTestResult {
+  status: 'sent' | 'skipped' | 'failed';
+  recipient: string;
 }
 
 export interface UpdateUserPayload {

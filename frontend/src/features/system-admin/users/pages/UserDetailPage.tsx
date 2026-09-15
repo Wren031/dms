@@ -15,6 +15,7 @@ import {
   Edit2,
   Trash2,
   RefreshCw,
+  Send,
   AlertCircle,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -26,7 +27,7 @@ import { useToast } from '@/hooks/useToast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { useUsers } from '@/features/system-admin/users/hooks/useUsers';
-import { ApiError } from '@/features/system-admin/users/services/user.service';
+import { ApiError, mailService } from '@/features/system-admin/users/services/user.service';
 import { UserStatusBadge } from '@/features/system-admin/users/components/UserStatusBadge';
 import {
   ROLE_FROM_API,
@@ -57,13 +58,15 @@ export function UserDetailPage() {
   const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user: authUser } = useAuth();
 
-  const { fetchById, remove, resetPassword, deleting, resettingPassword } = useUsers();
+  const { fetchById, remove, resetPassword, resendCredentials, deleting, resettingPassword, resendingCredentials } =
+    useUsers();
 
   const [user, setUser] = useState<UserAccount | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [testingEmail, setTestingEmail] = useState(false);
 
   const load = async (userId: string) => {
     setLoading(true);
@@ -111,20 +114,85 @@ export function UserDetailPage() {
     const name = fullNameOf(user);
     const ok = await confirm({
       title: 'Reset Password',
-      description: `Reset the password for ${name}? A new temporary password will be generated.`,
+      description: `Reset the password for ${name}? A new temporary password will be generated and emailed to them.`,
       confirmText: 'Reset Password',
     });
     if (!ok) return;
     try {
-      await resetPassword(user.id);
-      toast.success(
-        'Password reset',
-        `A new temporary password was generated for ${name}.`,
-      );
+      const result = await resetPassword(user.id);
+      if (result.credentialsEmailStatus === 'sent') {
+        toast.success(
+          'Password reset',
+          `A new temporary password was generated and emailed to ${name}.`,
+        );
+      } else {
+        toast.warning(
+          'Password reset',
+          `A new temporary password was generated for ${name}, but the email could not be sent yet. ${result.credentialsEmailReason ? `Reason: ${result.credentialsEmailReason}. ` : ''}Use Resend Credentials to deliver it.`,
+        );
+      }
     } catch (err) {
       const message =
         err instanceof ApiError ? err.message : 'Failed to reset password.';
       toast.error('Reset failed', message);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    setTestingEmail(true);
+    try {
+      const result = await mailService.test();
+      if (result.status === 'sent') {
+        toast.success(
+          'Test email sent',
+          `Delivered to ${result.recipient}. Check the inbox for the DMS Test Email.`,
+        );
+      } else if (result.status === 'skipped') {
+        toast.warning(
+          'Email not configured',
+          'SMTP is not configured, so no email was sent. Set the MAIL_* values in the API .env to enable delivery.',
+        );
+      } else {
+        toast.error(
+          'Test email failed',
+          `Sending to ${result.recipient} failed. Check the server logs.`,
+        );
+      }
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : 'Failed to send test email.';
+      toast.error('Test email failed', message);
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
+  const handleResendCredentials = async () => {
+    if (!user) return;
+    const name = fullNameOf(user);
+    const ok = await confirm({
+      title: 'Resend Credentials',
+      description: `Send a new temporary password to ${name}? Their current sessions will be signed out and they will need to change this password on next login.`,
+      confirmText: 'Resend Credentials',
+    });
+    if (!ok) return;
+    try {
+      const result = await resendCredentials(user.id);
+      if (result.credentialsEmailStatus === 'sent') {
+        toast.success(
+          'Credentials sent',
+          `A new temporary password has been emailed to ${name}.`,
+        );
+      } else {
+        toast.warning(
+          'Email not delivered',
+          `The account credentials could not be emailed to ${name}.${result.credentialsEmailReason ? ` Reason: ${result.credentialsEmailReason}.` : ''} Check the email configuration and try again.`,
+        );
+      }
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : 'Failed to resend credentials.';
+      toast.error('Resend failed', message);
     }
   };
 
@@ -204,6 +272,26 @@ export function UserDetailPage() {
         ]}
         actions={
           <>
+            {authUser?.role === 'system_admin' && (
+              <Button
+                variant="outline"
+                leftIcon={<Send className="w-4 h-4" />}
+                onClick={handleTestEmail}
+                disabled={testingEmail || resettingPassword || resendingCredentials || deleting}
+              >
+                {testingEmail ? 'Sending…' : 'Test Email'}
+              </Button>
+            )}
+            {hasPermission('users.edit') && (
+              <Button
+                variant="outline"
+                leftIcon={<Mail className="w-4 h-4" />}
+                onClick={handleResendCredentials}
+                disabled={resendingCredentials || resettingPassword || deleting}
+              >
+                {resendingCredentials ? 'Sending…' : 'Resend Credentials'}
+              </Button>
+            )}
             {hasPermission('users.edit') && (
               <Button
                 variant="outline"
