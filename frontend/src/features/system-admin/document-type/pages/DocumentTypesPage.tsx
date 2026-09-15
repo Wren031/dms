@@ -105,6 +105,11 @@ export function DocumentTypesPage() {
     [items],
   );
 
+  const existingNames = useMemo(
+    () => new Map(items.map(i => [i.name.trim().toLowerCase(), i.id])),
+    [items],
+  );
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return items.filter(i => {
@@ -533,6 +538,7 @@ export function DocumentTypesPage() {
         loading={modalLoading}
         errorMessage={modalError}
         existingCodes={existingCodes}
+        existingNames={existingNames}
         onClose={closeModal}
         onSubmit={handleSubmit}
       />

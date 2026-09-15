@@ -190,6 +190,12 @@ export function DocumentTypeDetailPage() {
       .flatMap(i => i.codes.map(c => [c as DocumentTypeCode, i.id])),
   );
 
+  const existingNames = new Map(
+    items
+      .filter(i => i.id !== record.id)
+      .map(i => [i.name.trim().toLowerCase(), i.id]),
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -493,6 +499,7 @@ export function DocumentTypeDetailPage() {
         loading={updating}
         errorMessage={actionError}
         existingCodes={existingCodes}
+        existingNames={existingNames}
         onClose={() => {
           if (updating) return;
           setEditOpen(false);

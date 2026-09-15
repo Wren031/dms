@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Lock, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Input, Textarea } from '@/components/ui/Input';
@@ -120,10 +120,12 @@ export function OfficeFormModal({
 
   const handleNameChange = (name: string) => {
     const entry = OFFICE_DIRECTORY.find(e => e.name === name);
+    const matched = parentOptions.find(o => o.name === name);
     updateForm({
       ...formRef.current,
       name,
       code: entry?.code ?? formRef.current.code,
+      parentId: matched?.parentId ?? '',
     });
   };
 
@@ -162,9 +164,12 @@ export function OfficeFormModal({
       ? 'Create a new office in the organizational structure'
       : 'Update the details for this office';
 
-  const parentSelectOptions = parentOptions
-    .filter(o => o.id !== initial?.id && o.type !== 'unit')
-    .map(o => ({ value: o.id, label: `${o.code} — ${o.name}` }));
+  const parentDisplayName = useMemo(() => {
+    if (!form.parentId) return '';
+    const found = parentOptions.find(o => o.id === form.parentId);
+    if (found?.name) return found.name;
+    return initial?.parent?.name ?? '';
+  }, [form.parentId, parentOptions, initial]);
 
   return (
     <Modal
@@ -266,15 +271,14 @@ export function OfficeFormModal({
             options={TYPE_OPTIONS}
             disabled={loading}
           />
-          <Select
+          <Input
             label="Parent Office"
             name="parentId"
-            placeholder="None (top-level)"
-            value={form.parentId}
-            onChange={e => updateForm({ ...formRef.current, parentId: e.target.value })}
-            options={parentSelectOptions}
-            disabled={loading || form.type === 'main'}
-            hint={form.type === 'main' ? 'Main offices cannot have a parent' : undefined}
+            value={parentDisplayName}
+            readOnly
+            leftIcon={<Lock className="w-4 h-4" />}
+            placeholder="No Parent Office"
+            hint={form.type === 'main' ? 'Main offices cannot have a parent' : 'Derived from the selected office.'}
           />
           <Input
             label="Office Head"

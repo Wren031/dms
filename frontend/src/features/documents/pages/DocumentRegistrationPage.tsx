@@ -426,6 +426,14 @@ export function DocumentRegistrationPage() {
     setSubmitting(false);
     if (!doc) {
       toast.error('Registration failed', registration.error ?? 'Please retry.');
+      if (registration.status === 409) {
+        setErrors(e => ({
+          ...e,
+          documentNumber:
+            'This number already exists. Leave it blank to auto-generate a unique number.',
+        }));
+        setTouched(t => ({ ...t, documentNumber: true }));
+      }
       return;
     }
     if (files.length > 0) {

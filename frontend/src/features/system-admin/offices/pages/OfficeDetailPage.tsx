@@ -17,6 +17,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useToast } from '@/hooks/useToast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useAuth } from '@/features/authentication/hooks/useAuth';
+import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
 import { officeService, ApiError } from '@/features/system-admin/offices/services/office.service';
 import { OfficeFormModal } from '@/features/system-admin/offices/components/OfficeFormModal';
 import type {
@@ -39,6 +40,7 @@ export function OfficeDetailPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { hasPermission } = useAuth();
+  const { offices } = useOffices();
 
   const [office, setOffice] = useState<Office | null>(null);
   const [loading, setLoading] = useState(true);
@@ -404,7 +406,7 @@ export function OfficeDetailPage() {
         open={editOpen}
         mode="edit"
         initial={office}
-        parentOptions={[]}
+        parentOptions={offices}
         loading={editLoading}
         errorMessage={editError}
         onClose={() => {

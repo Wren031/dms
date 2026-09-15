@@ -23,6 +23,7 @@ interface DocumentTypeFormModalProps {
   loading: boolean;
   errorMessage: string | null;
   existingCodes: Map<DocumentTypeCode, string>;
+  existingNames: Map<string, string>;
   onClose: () => void;
   onSubmit: (input: CreateDocumentTypePayload | UpdateDocumentTypePayload) => Promise<void>;
 }
@@ -58,6 +59,7 @@ export function DocumentTypeFormModal({
   loading,
   errorMessage,
   existingCodes,
+  existingNames,
   onClose,
   onSubmit,
 }: DocumentTypeFormModalProps) {
@@ -95,10 +97,19 @@ export function DocumentTypeFormModal({
     if (open) setForm(toFormState(initial));
   }, [open, initial]);
 
+  const trimmedName = form.name.trim();
+  const normalizedName = trimmedName.toLowerCase();
+  const duplicateNameId = existingNames.get(normalizedName);
+  const nameConflict =
+    !!trimmedName &&
+    !!duplicateNameId &&
+    (mode === 'create' || duplicateNameId !== initial?.id);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
     if (!form.code) return;
+    if (nameConflict) return;
 
     const description = form.description.trim();
     if (mode === 'create') {
@@ -134,7 +145,7 @@ export function DocumentTypeFormModal({
       ? 'Create a new category used when registering documents.'
       : 'Update the label, code, and description for this document type.';
 
-  const isInvalid = !form.name.trim() || !form.code;
+  const isInvalid = !form.name.trim() || !form.code || nameConflict;
 
   const codeOptions = DOCUMENT_TYPE_CODES.map(c => ({
     value: c,
@@ -216,6 +227,7 @@ export function DocumentTypeFormModal({
           onChange={e => updateForm({ ...formRef.current, name: e.target.value })}
           placeholder="e.g., Memorandum Circular"
           disabled={loading}
+          error={nameConflict ? 'A document type with this name already exists.' : undefined}
           hint="Shown to users when selecting a document type."
         />
 

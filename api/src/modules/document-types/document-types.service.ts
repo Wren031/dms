@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateDocumentTypeDto } from './dto/create-document-type.dto';
 import { UpdateDocumentTypeDto } from './dto/update-document-type.dto';
@@ -18,9 +18,18 @@ export class DocumentTypesService {
 
   async create(dto: CreateDocumentTypeDto): Promise<unknown> {
     const { codes, ...rest } = dto;
+    const name = rest.name.trim();
+    const existing = await this.prisma.documentType.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException('A document type with this name already exists.');
+    }
     const created = await this.prisma.documentType.create({
       data: {
         ...rest,
+        name,
         codes: { create: codes.map(code => ({ code })) },
       },
       include: CODES_INCLUDE,
@@ -70,6 +79,17 @@ export class DocumentTypesService {
   async update(id: string, dto: UpdateDocumentTypeDto): Promise<unknown> {
     const { codes, ...rest } = dto;
     const data: Record<string, unknown> = { ...rest };
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      data.name = name;
+      const existing = await this.prisma.documentType.findFirst({
+        where: { name: { equals: name, mode: 'insensitive' }, id: { not: id } },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new ConflictException('A document type with this name already exists.');
+      }
+    }
     if (codes !== undefined) {
       await this.prisma.documentTypeCodeEntry.deleteMany({ where: { documentTypeId: id } });
       data.codes = { create: codes.map(code => ({ code })) };
