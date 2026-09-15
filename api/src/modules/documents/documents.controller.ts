@@ -18,7 +18,6 @@ import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { FilterDocumentsDto } from './dto/filter-documents.dto';
 import { TransitionDocumentDto } from './dto/transition-document.dto';
-import { AssignDocumentHolderDto } from './dto/assign-document-holder.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -94,19 +93,6 @@ export class DocumentsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.documentsService.transition(id, dto, user.id);
-  }
-
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
-  @Permissions('documents.route')
-  @Post(':id/assign-holder')
-  @HttpCode(HttpStatus.OK)
-  @Audit('document.assign-holder', 'documents', 'Document')
-  assignHolder(
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() dto: AssignDocumentHolderDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.documentsService.assignHolder(id, dto, user.id);
   }
 
   @SkipThrottle()

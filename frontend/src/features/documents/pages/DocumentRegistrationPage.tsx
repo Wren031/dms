@@ -90,6 +90,18 @@ const INITIAL_STATE: FormState = {
   tagsInput: '',
 };
 
+const ORIGIN_KEYS: Array<keyof FormState> = [
+  'originMode',
+  'originatingOfficeId',
+  'originatingOfficeName',
+];
+
+function defaultOrigin(officeId: string): Partial<FormState> {
+  return officeId
+    ? { originMode: 'select' as const, originatingOfficeId: officeId }
+    : {};
+}
+
 const ACCEPTED_TYPES = [
   'application/pdf',
   'image/jpeg',
@@ -120,6 +132,7 @@ export function DocumentRegistrationPage() {
 
   const [form, setForm] = useState<FormState>(() => ({
     ...INITIAL_STATE,
+    ...defaultOrigin(user.officeId),
   }));
 
   const [files, setFiles] = useState<File[]>([]);
@@ -137,9 +150,9 @@ export function DocumentRegistrationPage() {
       const restored: Partial<FormState> = {};
       for (const key of Object.keys(INITIAL_STATE) as Array<keyof FormState>) {
         const v = payload[key as string];
-        if (v !== undefined) {
-          (restored as Record<string, unknown>)[key] = v;
-        }
+        if (v === undefined) continue;
+        if (ORIGIN_KEYS.includes(key) && v === '') continue;
+        (restored as Record<string, unknown>)[key] = v;
       }
       if (Object.keys(restored).length > 0) {
         setForm(prev => ({ ...prev, ...restored }));
@@ -217,8 +230,18 @@ export function DocumentRegistrationPage() {
         ? previous.assignedUserId
         : '';
 
+      const originUntouched =
+        previous.originMode === '' &&
+        !previous.originatingOfficeId &&
+        !previous.originatingOfficeName;
+      const currentOfficeId = user.officeId && officeIds.has(user.officeId) ? user.officeId : '';
+      const origin = originUntouched && currentOfficeId
+        ? { originMode: 'select' as const, originatingOfficeId: currentOfficeId }
+        : { originMode: previous.originMode, originatingOfficeId };
+
       if (
-        originatingOfficeId === previous.originatingOfficeId &&
+        origin.originMode === previous.originMode &&
+        origin.originatingOfficeId === previous.originatingOfficeId &&
         recipientOfficeIds.length === previous.recipientOfficeIds.length &&
         assignedUserId === previous.assignedUserId
       ) {
@@ -227,7 +250,7 @@ export function DocumentRegistrationPage() {
 
       return {
         ...previous,
-        originatingOfficeId,
+        ...origin,
         recipientOfficeIds,
         assignedUserId,
       };
@@ -293,7 +316,7 @@ export function DocumentRegistrationPage() {
       if (field === 'source' && value === 'internal') {
         setErrors(e => ({ ...e, senderName: undefined }));
       }
-      if (field === 'originMode') {
+      if (field === 'originMode' && prev.originMode !== value) {
         next.originatingOfficeId = '';
         next.originatingOfficeName = '';
       }
@@ -536,7 +559,7 @@ export function DocumentRegistrationPage() {
           <button
             type="button"
             onClick={() => {
-              setForm(INITIAL_STATE);
+              setForm({ ...INITIAL_STATE, ...defaultOrigin(user.officeId) });
               setFiles([]);
               setErrors({});
               setTouched({} as Record<keyof FormState, boolean>);

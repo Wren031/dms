@@ -36,13 +36,8 @@ enum OfficeType {
 enum DocumentStatus {
   registered
   received
-  routed
-  assigned
-  under_review
-  recommended
   approved
   rejected
-  returned
   released
   archived
 }
@@ -266,6 +261,12 @@ model Document {
   receivedById        String?
   destinationsAllOffices Boolean             @default(true)
   dateReceived        DateTime?
+  approvedById        String?
+  approvedAt          DateTime?
+  approvedRemarks     String?
+  releasedById        String?
+  releasedAt          DateTime?
+  releasedRemarks     String?
   dueDate             DateTime?
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt

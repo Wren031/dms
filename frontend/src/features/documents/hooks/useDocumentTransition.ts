@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import { documentsService, DocumentsApiError } from '@/features/documents/services/documents.service';
 import type {
-  DocumentAssignHolderInput,
   DocumentListItem,
   DocumentTransitionInput,
 } from '@/features/documents/types/document';
@@ -14,7 +13,6 @@ function toMessage(err: unknown, fallback: string): string {
 
 export interface UseDocumentTransitionReturn {
   transition: (id: string, payload: DocumentTransitionInput) => Promise<DocumentListItem | null>;
-  assignHolder: (id: string, payload: DocumentAssignHolderInput) => Promise<DocumentListItem | null>;
   saving: boolean;
   error: string | null;
   reset: () => void;
@@ -39,22 +37,7 @@ export function useDocumentTransition(): UseDocumentTransitionReturn {
     }
   }, []);
 
-  const assignHolder = useCallback<UseDocumentTransitionReturn['assignHolder']>(async (id, payload) => {
-    setSaving(true);
-    setError(null);
-    try {
-      const updated = await documentsService.assignHolder(id, payload);
-      window.dispatchEvent(new Event('documents:invalidate'));
-      return updated;
-    } catch (err) {
-      setError(toMessage(err, 'Could not assign holder.'));
-      return null;
-    } finally {
-      setSaving(false);
-    }
-  }, []);
-
   const reset = useCallback(() => setError(null), []);
 
-  return { transition, assignHolder, saving, error, reset };
+  return { transition, saving, error, reset };
 }

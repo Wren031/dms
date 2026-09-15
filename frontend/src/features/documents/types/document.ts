@@ -3,13 +3,8 @@ import type { DocumentType } from '@/types';
 export type DocumentStatus =
   | 'registered'
   | 'received'
-  | 'routed'
-  | 'assigned'
-  | 'under_review'
-  | 'recommended'
   | 'approved'
   | 'rejected'
-  | 'returned'
   | 'released'
   | 'archived';
 
@@ -124,11 +119,16 @@ export interface DocumentListItem {
   encodedById: string;
   receivedById: string | null;
   dateReceived: string | null;
+  approvedById: string | null;
+  approvedAt: string | null;
+  approvedRemarks: string | null;
+  releasedById: string | null;
+  releasedAt: string | null;
+  releasedRemarks: string | null;
   dueDate: string | null;
   attachmentCount: number;
   attachments?: DocumentAttachment[];
   counts: {
-    routingSteps: number;
     reviews: number;
     releases: number;
     archives: number;
@@ -139,12 +139,13 @@ export interface DocumentListItem {
 
 export interface DocumentDetail extends Omit<DocumentListItem, 'attachmentCount'> {
   attachments: DocumentAttachment[];
-  routingSteps: DocumentRoutingStep[];
   reviews: DocumentReview[];
   releases: DocumentRelease[];
   archives: DocumentArchive[];
   encodedBy: DocumentPerson | null;
   receivedBy: DocumentPerson | null;
+  approvedBy: DocumentPerson | null;
+  releasedBy: DocumentPerson | null;
   currentHolder: DocumentPerson | null;
 }
 
@@ -240,12 +241,6 @@ export interface DocumentTransitionInput {
   currentOfficeId?: string;
   currentHolderId?: string;
   remarks?: string;
-}
-
-export interface DocumentAssignHolderInput {
-  holderId: string;
-  officeId?: string;
-  notes?: string;
 }
 
 export interface DocumentNumberSuggestion {

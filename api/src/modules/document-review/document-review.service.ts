@@ -7,10 +7,8 @@ import { FilterReviewsDto } from './dto/filter-reviews.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
 
 const ACTION_TO_STATUS: Partial<Record<ReviewActionKind, DocumentStatus>> = {
-  recommended: 'recommended',
   approved: 'approved',
   rejected: 'rejected',
-  returned: 'returned',
 };
 
 @Injectable()
@@ -33,7 +31,7 @@ export class DocumentReviewService {
 
       const next = ACTION_TO_STATUS[dto.action];
       if (next) {
-        if (doc.status === 'under_review' || doc.status === 'recommended') {
+        if (doc.status === 'received') {
           await tx.document.update({
             where: { id: dto.documentId },
             data: { status: next },

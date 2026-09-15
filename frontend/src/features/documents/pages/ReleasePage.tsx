@@ -4,8 +4,6 @@ import {
   PackageOpen,
   CheckCircle2,
   Building2,
-  User as UserIcon,
-  Calendar,
   Send,
   Eye,
   Paperclip,
@@ -21,7 +19,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/hooks/useToast';
 import { usePagination } from '@/hooks/usePagination';
@@ -29,7 +26,6 @@ import { useDocuments } from '@/features/documents/hooks/useDocuments';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
 import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { useOfficeLookup } from '@/hooks/useLookups';
-import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
 import { DOCUMENT_TYPE_LABELS } from '@/constants';
 import { formatDate, formatRelative } from '@/lib/utils';
 
@@ -38,14 +34,10 @@ export function ReleasePage() {
   const { hasPermission } = useAuth();
   const { items: documents } = useDocuments({ pageSize: 100 });
   const transition = useDocumentTransition();
-  const { users: routingUsers } = useRoutingOptions();
   const officeById = useOfficeLookup();
   const [tab, setTab] = useState('ready');
   const [releaseModal, setReleaseModal] = useState<string | null>(null);
-  const [recipient, setRecipient] = useState('');
-  const [recipientType, setRecipientType] = useState('user');
   const [remarks, setRemarks] = useState('');
-  const [notifyRecipient, setNotifyRecipient] = useState(true);
 
   const readyToRelease = useMemo(() => documents.filter(d => d.status === 'approved'), [documents]);
   const released = useMemo(() => documents.filter(d => d.status === 'released' || d.status === 'archived'), [documents]);
@@ -61,31 +53,23 @@ export function ReleasePage() {
 
   const handleRelease = (docId: string) => {
     setReleaseModal(docId);
-    setRecipient('');
     setRemarks('');
-    setNotifyRecipient(true);
   };
 
   const submitRelease = () => {
-    if (!recipient) {
-      toast.error('Recipient required', 'Please specify who will receive this document.');
-      return;
-    }
     if (!releaseModal) return;
     void transition.transition(releaseModal, {
       toStatus: 'released',
       remarks: remarks.trim() || undefined,
     }).then(updated => {
       if (updated) {
-        toast.success('Document released', 'The document has been released and the recipient notified.');
+        toast.success('Document released', 'The document has been marked as released.');
         setReleaseModal(null);
       } else {
         toast.error('Release failed', transition.error ?? 'Please retry.');
       }
     });
   };
-
-  const recipientOptions = routingUsers;
 
   return (
     <div className="space-y-6">
@@ -290,23 +274,6 @@ export function ReleasePage() {
                 <p className="text-xs text-slate-500">Document</p>
                 <p className="text-sm font-semibold text-slate-900">{doc.trackingNumber} · {doc.title}</p>
               </div>
-              <Select
-                label="Recipient Type"
-                value={recipientType}
-                onChange={e => setRecipientType(e.target.value)}
-                options={[
-                  { value: 'user', label: 'Internal User' },
-                  { value: 'office', label: 'External Office / Organization' },
-                ]}
-              />
-              <Select
-                label="Recipient"
-                required
-                placeholder={recipientType === 'user' ? 'Choose user…' : 'Enter organization name…'}
-                value={recipient}
-                onChange={e => setRecipient(e.target.value)}
-                options={recipientType === 'user' ? recipientOptions.map(u => ({ value: u.id, label: u.position ? `${u.fullName} (${u.position})` : u.fullName })) : []}
-              />
               <Textarea
                 label="Release Remarks"
                 rows={3}
@@ -314,15 +281,6 @@ export function ReleasePage() {
                 onChange={e => setRemarks(e.target.value)}
                 placeholder="Optional release notes…"
               />
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={notifyRecipient}
-                  onChange={e => setNotifyRecipient(e.target.checked)}
-                  className="rounded border-slate-300"
-                />
-                <span className="text-sm text-slate-700">Send email notification to recipient</span>
-              </label>
             </div>
           );
         })()}

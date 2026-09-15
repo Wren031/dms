@@ -2,9 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Inbox,
-  Send,
-  Eye,
-  Calendar,
   Building2,
   AlertCircle,
   CheckCircle2,
@@ -30,7 +27,6 @@ import {
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/ui/Pagination';
 import { formatDate, formatRelative, cn } from '@/lib/utils';
-import type { Document } from '@/types';
 
 export function InboxPage() {
   const user = useCurrentUser();
@@ -54,9 +50,8 @@ export function InboxPage() {
 
   const counts = useMemo(() => {
     return {
-      pending: myInbox.filter(d => ['received', 'routed', 'assigned'].includes(d.status)).length,
-      reviewing: myInbox.filter(d => ['under_review', 'recommended'].includes(d.status)).length,
-      completed: myInbox.filter(d => ['approved', 'released', 'archived'].includes(d.status)).length,
+      pending: myInbox.filter(d => d.status === 'received').length,
+      completed: myInbox.filter(d => ['approved', 'released', 'archived', 'rejected'].includes(d.status)).length,
       all: myInbox.length,
     };
   }, [myInbox]);
@@ -64,9 +59,8 @@ export function InboxPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return myInbox.filter(d => {
-      if (tab === 'pending' && !['received', 'routed', 'assigned'].includes(d.status)) return false;
-      if (tab === 'reviewing' && !['under_review', 'recommended'].includes(d.status)) return false;
-      if (tab === 'completed' && !['approved', 'released', 'archived'].includes(d.status)) return false;
+      if (tab === 'pending' && d.status !== 'received') return false;
+      if (tab === 'completed' && !['approved', 'released', 'archived', 'rejected'].includes(d.status)) return false;
       if (priorityFilter !== 'all' && d.priority !== priorityFilter) return false;
       if (q) {
         const haystack = `${d.trackingNumber} ${d.title} ${d.senderName ?? ''}`.toLowerCase();
@@ -103,8 +97,8 @@ export function InboxPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <SmallStat icon={<Clock className="w-4 h-4" />} label="Pending" value={counts.pending} accent="amber" />
-        <SmallStat icon={<Eye className="w-4 h-4" />} label="Under Review" value={counts.reviewing} accent="indigo" />
         <SmallStat icon={<CheckCircle2 className="w-4 h-4" />} label="Completed" value={counts.completed} accent="emerald" />
+        <SmallStat icon={<Inbox className="w-4 h-4" />} label="All" value={counts.all} accent="indigo" />
         <SmallStat icon={<AlertCircle className="w-4 h-4" />} label="Overdue" value={overdueCount} accent="rose" />
       </div>
 
@@ -115,7 +109,6 @@ export function InboxPage() {
             onChange={setTab}
             items={[
               { id: 'pending', label: 'Pending', count: counts.pending },
-              { id: 'reviewing', label: 'Under Review', count: counts.reviewing },
               { id: 'completed', label: 'Completed', count: counts.completed },
               { id: 'all', label: 'All', count: counts.all },
             ]}

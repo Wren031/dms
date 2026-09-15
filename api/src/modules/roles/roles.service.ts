@@ -51,8 +51,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
   SYSTEM_ADMIN: PERMISSION_CATALOG.slice(),
   OFFICE_ADMIN: [
     'dashboard.view',
-    'documents.view', 'documents.edit', 'documents.route',
-    'documents.approve', 'documents.reject', 'documents.return',
+    'documents.view', 'documents.edit',
+    'documents.approve', 'documents.reject',
     'documents.release', 'documents.archive', 'documents.track',
     'users.view', 'users.create', 'users.edit',
     'offices.view', 'offices.edit',
@@ -67,7 +67,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
   ],
   DOCUMENT_OFFICER: [
     'dashboard.view',
-    'documents.view', 'documents.receive', 'documents.review', 'documents.recommend',
+    'documents.view', 'documents.receive',
     'documents.track',
     'notifications.view',
   ],
@@ -81,7 +81,7 @@ const ROLE_DEFINITIONS: Record<Role, { name: string; description: string }> = {
   OFFICE_ADMIN: {
     name: 'Office Administrator',
     description:
-      'Manages documents and users within their authorized office, including document assignments and routing.',
+      'Approves, rejects, releases, and archives documents within their authorized office.',
   },
   DOCUMENT_ENCODER: {
     name: 'Document Encoder',
@@ -91,7 +91,7 @@ const ROLE_DEFINITIONS: Record<Role, { name: string; description: string }> = {
   DOCUMENT_OFFICER: {
     name: 'Document Officer',
     description:
-      'Receives incoming documents, acknowledges receipt, reviews documents, adds actions/comments/remarks, and makes recommendations.',
+      'Receives incoming documents and acknowledges receipt with user, office, date, and time.',
   },
 };
 

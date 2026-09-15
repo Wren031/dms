@@ -61,20 +61,12 @@ export const navigation: NavItem[] = [
     section: 'workspace',
   },
   {
-    id: 'routing',
-    label: 'Routing',
-    to: '/routing',
-    icon: 'Send',
-    section: 'workspace',
-    roles: ['system_admin', 'office_admin'],
-  },
-  {
-    id: 'review',
-    label: 'Review & Action',
+    id: 'approval',
+    label: 'Approval',
     to: '/review',
     icon: 'ClipboardCheck',
     section: 'workspace',
-    roles: ['system_admin', 'office_admin', 'document_officer'],
+    roles: ['system_admin', 'office_admin'],
   },
   {
     id: 'release',

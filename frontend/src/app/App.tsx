@@ -15,8 +15,7 @@ import { DocumentDetailPage } from '@/features/documents/pages/DocumentDetailPag
 import { DocumentRegistrationPage } from '@/features/documents/pages/DocumentRegistrationPage';
 import { InboxPage } from '@/features/documents/pages/InboxPage';
 import { OutboxPage } from '@/features/documents/pages/OutboxPage';
-import { RoutingPage } from '@/features/documents/pages/RoutingPage';
-import { ReviewPage } from '@/features/documents/pages/ReviewPage';
+import { ApprovalPage } from '@/features/documents/pages/ApprovalPage';
 import { ReleasePage } from '@/features/documents/pages/ReleasePage';
 import { TrackingPage } from '@/features/documents/pages/TrackingPage';
 import { ArchivePage } from '@/features/documents/pages/ArchivePage';
@@ -75,18 +74,10 @@ export function App() {
                 />
                 <Route path="/outbox" element={<OutboxPage />} />
                 <Route
-                  path="/routing"
-                  element={
-                    <ProtectedRoute roles={['system_admin', 'office_admin']}>
-                      <RoutingPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
                   path="/review"
                   element={
-                    <ProtectedRoute roles={['system_admin', 'office_admin', 'document_officer']}>
-                      <ReviewPage />
+                    <ProtectedRoute roles={['system_admin', 'office_admin']}>
+                      <ApprovalPage />
                     </ProtectedRoute>
                   }
                 />

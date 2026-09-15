@@ -25,7 +25,6 @@ import { EmployeesModule } from './modules/employees/employees.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { DocumentTypesModule } from './modules/document-types/document-types.module';
 import { DocumentAttachmentsModule } from './modules/document-attachments/document-attachments.module';
-import { DocumentRoutingModule } from './modules/document-routing/document-routing.module';
 import { DocumentReviewModule } from './modules/document-review/document-review.module';
 import { DocumentReleaseModule } from './modules/document-release/document-release.module';
 import { DocumentTrackingModule } from './modules/document-tracking/document-tracking.module';
@@ -59,7 +58,6 @@ import { FormDraftsModule } from './modules/form-drafts/form-drafts.module';
     DocumentsModule,
     DocumentTypesModule,
     DocumentAttachmentsModule,
-    DocumentRoutingModule,
     DocumentReviewModule,
     DocumentReleaseModule,
     DocumentTrackingModule,

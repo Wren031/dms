@@ -5,70 +5,60 @@ import {
   Paperclip,
   Building2,
   Tag as TagIcon,
-  Send,
-  PackageOpen,
-  Archive as ArchiveIcon,
   Download,
   Eye,
   CheckCircle2,
   XCircle,
-  RotateCcw,
-  ThumbsUp,
-  AlertCircle,
+  PackageOpen,
+  Archive as ArchiveIcon,
   History as HistoryIcon,
-  Route as RouteIcon,
   ChevronDown,
   ChevronUp,
   Inbox,
+  AlertCircle,
+  ArrowRight,
+  Calendar,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge, PriorityBadge, ClassificationBadge, Tag } from '@/components/ui/StatusBadge';
 import { Avatar } from '@/components/ui/Avatar';
-import { Tabs } from '@/components/ui/Tabs';
 import { Modal } from '@/components/ui/Modal';
-import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Input';
-import { useOfficeLookup } from '@/hooks/useLookups';
-import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
-import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
+import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import {
   DOCUMENT_TYPE_LABELS,
   DOCUMENT_CLASSIFICATION_LABELS,
-  ROLE_LABELS,
+  DOCUMENT_STATUS_LABELS,
   canTransition,
 } from '@/constants';
 import { formatDate, formatRelative, cn } from '@/lib/utils';
-import { attachmentsService, documentsService } from '@/features/documents/services/documents.service';
+import { attachmentsService } from '@/features/documents/services/documents.service';
 import { useDocumentHistory } from '@/features/documents/hooks/useDocumentHistory';
-import { useDocumentTimeline } from '@/features/documents/hooks/useDocumentTimeline';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
 import { useDocumentDetail } from '@/features/documents/hooks/useDocumentDetail';
+import { DocumentTracker } from '@/features/documents/components/DocumentTracker';
 import type { DocumentStatus, Permission } from '@/types';
-import { DocumentJourneyView } from '@/features/documents/components/DocumentJourneyView';
-import type { DocumentDetail } from '@/features/documents/types/document';
+import type { DocumentDetail, DocumentPerson } from '@/features/documents/types/document';
 
-type ActionType = 'receive' | 'recommend' | 'approve' | 'reject' | 'return' | 'release' | 'archive';
+type ActionType = 'receive' | 'approve' | 'reject' | 'release' | 'archive';
 
 const ACTION_STATUS_MAP: Record<ActionType, DocumentStatus> = {
   receive: 'received',
-  recommend: 'recommended',
   approve: 'approved',
   reject: 'rejected',
-  return: 'returned',
   release: 'released',
   archive: 'archived',
 };
 
 const ACTION_PERMISSION: Record<ActionType, Permission> = {
   receive: 'documents.receive',
-  recommend: 'documents.recommend',
   approve: 'documents.approve',
   reject: 'documents.reject',
-  return: 'documents.return',
   release: 'documents.release',
   archive: 'documents.archive',
 };
@@ -83,23 +73,11 @@ const ACTION_META: Record<
     icon: <Inbox className="w-3.5 h-3.5" />,
     tone: 'primary',
   },
-  recommend: {
-    label: 'Recommend',
-    description: 'Add a recommendation for the final approver.',
-    icon: <ThumbsUp className="w-3.5 h-3.5" />,
-    tone: 'outline',
-  },
   approve: {
     label: 'Approve',
-    description: 'Final approval — the document can be released.',
+    description: 'Approve this document so it can be released.',
     icon: <CheckCircle2 className="w-3.5 h-3.5" />,
     tone: 'primary',
-  },
-  return: {
-    label: 'Return',
-    description: 'Return to the originating office for revision.',
-    icon: <RotateCcw className="w-3.5 h-3.5" />,
-    tone: 'outline',
   },
   reject: {
     label: 'Reject',
@@ -121,6 +99,35 @@ const ACTION_META: Record<
   },
 };
 
+const PRIMARY_BY_STATUS: Partial<Record<DocumentStatus, ActionType>> = {
+  registered: 'receive',
+  received: 'approve',
+  approved: 'release',
+  rejected: 'archive',
+  released: 'archive',
+};
+
+const DECISION_BY_STATUS: Partial<Record<DocumentStatus, ActionType[]>> = {
+  registered: ['receive'],
+  received: ['approve', 'reject'],
+};
+
+const TERMINAL_BY_STATUS: Partial<Record<DocumentStatus, ActionType[]>> = {
+  approved: ['release'],
+  rejected: ['archive'],
+  released: ['archive'],
+};
+
+const TERMINAL_STATUSES: DocumentStatus[] = ['rejected', 'released', 'archived'];
+
+function colorForId(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  return ['bg-brand-600', 'bg-emerald-600', 'bg-rose-600', 'bg-indigo-600', 'bg-blue-600', 'bg-amber-600'][
+    Math.abs(hash) % 6
+  ];
+}
+
 export function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -129,28 +136,17 @@ export function DocumentDetailPage() {
   const toast = useToast();
   const confirm = useConfirm();
 
-  // Load custom hooks at the top level
-  const { offices = [], loading: officesLoading } = useOffices();
-  const { document: doc, loading: documentLoading, refresh } = useDocumentDetail(id);
+  const { document: doc, loading: documentLoading, refresh, downloadAttachment } = useDocumentDetail(id);
   const { history } = useDocumentHistory(id);
-  const { timeline } = useDocumentTimeline(id);
   const transition = useDocumentTransition();
-  const { users: routingUsers } = useRoutingOptions();
   const officeById = useOfficeLookup();
+  const userById = useUserLookup();
 
-  const [tab, setTab] = useState<'routing' | 'audit'>('routing');
   const [actionModal, setActionModal] = useState<ActionType | null>(null);
   const [remarks, setRemarks] = useState('');
-  const [routeOffice, setRouteOffice] = useState('');
-  const [routeUser, setRouteUser] = useState('');
-  const [routeInstructions, setRouteInstructions] = useState('');
-  const [routeModal, setRouteModal] = useState(false);
-  const [assignModal, setAssignModal] = useState(false);
-  const [assignUserId, setAssignUserId] = useState('');
-  const [assignNotes, setAssignNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(true);
 
-  if (documentLoading || officesLoading) {
+  if (documentLoading) {
     return <div className="py-20 text-center text-sm text-slate-500">Loading document…</div>;
   }
 
@@ -165,120 +161,19 @@ export function DocumentDetailPage() {
     );
   }
 
-  // Derive target office dynamically from offices
-  const officeFromDirectory = offices.find(item => item.id === doc.currentOfficeId);
-  const officeUser = routingUsers.find(u => u.officeId === doc.currentOfficeId);
-  const office = officeFromDirectory
-    ?? (doc.currentOfficeId === user?.officeId
-      ? { id: user.officeId, name: user.officeName ?? 'Current office', code: user.officeCode ?? user.officeId, type: 'unit' as const }
-      : null)
-    ?? (officeUser?.officeName
-      ? { id: doc.currentOfficeId, name: officeUser.officeName, code: '', type: 'unit' as const }
-      : null);
-
-  const holderPerson = doc.currentHolder
-    ?? (doc.currentHolderId ? routingUsers.find(u => u.id === doc.currentHolderId) ?? null : null);
-  const holder = holderPerson ? { ...holderPerson, avatarColor: 'bg-brand-600' } as unknown as import('@/types').User : null;
-  const originator = officeById(doc.originatingOfficeId);
-  const encoder = doc.encodedBy ? { ...doc.encodedBy, avatarColor: 'bg-brand-600' } as unknown as import('@/types').User : null;
-  const receiver = doc.receivedBy ? { ...doc.receivedBy, avatarColor: 'bg-emerald-600' } as unknown as import('@/types').User : null;
-
   const isOverdue =
     doc.dueDate &&
     new Date(doc.dueDate).getTime() < Date.now() &&
-    !['released', 'archived', 'rejected'].includes(doc.status);
+    !TERMINAL_STATUSES.includes(doc.status);
 
-  const decisionActions: ActionType[] = [
-    ...(hasPermission('documents.receive') && canTransition(doc.status, 'received')
-      ? (['receive'] as ActionType[])
-      : []),
-    ...(doc.status === 'under_review' || doc.status === 'recommended'
-      ? (['recommend', 'approve', 'return', 'reject'] as ActionType[]).filter(
-          action =>
-            hasPermission(ACTION_PERMISSION[action]) &&
-            canTransition(doc.status, ACTION_STATUS_MAP[action]),
-        )
-      : []),
-  ];
-  const terminalActions: ActionType[] = [];
-  if (
-    doc.status === 'approved' &&
-    hasPermission('documents.release') &&
-    canTransition(doc.status, 'released')
-  ) {
-    terminalActions.push('release');
-  }
-  if (
-    doc.status === 'released' &&
-    hasPermission('documents.archive') &&
-    canTransition(doc.status, 'archived')
-  ) {
-    terminalActions.push('archive');
-  }
-  const canRoute =
-    hasPermission('documents.route') &&
-    canTransition(doc.status, 'routed') &&
-    (user?.role === 'system_admin' || doc.currentOfficeId === user?.officeId);
-  const canAssign =
-    doc.status === 'routed' &&
-    hasPermission('documents.route') &&
-    (user?.role === 'system_admin' || doc.currentOfficeId === user?.officeId);
-  const canStartReview =
-    (doc.status === 'assigned' || doc.status === 'returned') &&
-    hasPermission('documents.review');
-  const canDownload = doc.attachments.length > 0;
-  const legacyDocument = doc as unknown as import('@/types').Document;
-  const legacyRouting = doc.routingSteps.map(step => ({
-    ...step,
-    fromUserId: step.fromUserId ?? undefined,
-    toUserId: step.toUserId ?? undefined,
-    instructions: step.instructions ?? '',
-    remarks: step.remarks ?? undefined,
-  })) as unknown as import('@/types').RoutingStep[];
-  const legacyLogs = timeline.map(entry => ({
-    id: entry.id,
-    actorId: entry.actorId ?? '',
-    actorName:
-      (entry.actorId ? routingUsers.find(u => u.id === entry.actorId)?.fullName : null) ??
-      'System',
-    action:
-      typeof entry.event === 'string'
-        ? entry.event
-            .split('.')
-            .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-            .join(' ')
-        : 'Status transition',
-    module: 'Documents',
-    description:
-      (entry.payload && typeof entry.payload === 'object' && 'to' in entry.payload
-        ? `Document moved to ${String((entry.payload as { to?: string }).to ?? '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`
-        : 'Status update recorded') +
-      (typeof entry.event === 'string' && entry.event === 'status.transition'
-        ? ' — status transition'
-        : ''),
-    targetId: doc.id,
-    targetType: 'document',
-    ipAddress: '',
-    userAgent: '',
-    createdAt: entry.occurredAt,
-  })) as import('@/types').AuditLog[];
+  const allowed = (action: ActionType): boolean =>
+    hasPermission(ACTION_PERMISSION[action]) && canTransition(doc.status, ACTION_STATUS_MAP[action]);
 
-  const statusAction: ActionType | null =
-    doc.status === 'registered'
-      ? 'receive'
-      : doc.status === 'under_review' || doc.status === 'recommended'
-        ? 'approve'
-        : doc.status === 'approved'
-          ? 'release'
-          : doc.status === 'released'
-            ? 'archive'
-            : null;
-  const primaryAction: ActionType | null =
-    statusAction &&
-    hasPermission(ACTION_PERMISSION[statusAction]) &&
-    canTransition(doc.status, ACTION_STATUS_MAP[statusAction])
-      ? statusAction
-      : null;
+  const decisionActions = (DECISION_BY_STATUS[doc.status] ?? []).filter(allowed);
+  const terminalActions = (TERMINAL_BY_STATUS[doc.status] ?? []).filter(allowed);
+  const primaryStatus = PRIMARY_BY_STATUS[doc.status];
+  const primaryAction: ActionType | null = primaryStatus && allowed(primaryStatus) ? primaryStatus : null;
+  const isTerminal = TERMINAL_STATUSES.includes(doc.status);
 
   const openAction = (action: ActionType) => {
     if (action === 'reject' || action === 'archive') {
@@ -299,7 +194,7 @@ export function DocumentDetailPage() {
   };
 
   const submitAction = async () => {
-    if (!actionModal || !user) return;
+    if (!actionModal) return;
     const newStatus = ACTION_STATUS_MAP[actionModal];
     const updated = await transition.transition(doc.id, {
       toStatus: newStatus,
@@ -310,86 +205,15 @@ export function DocumentDetailPage() {
       return;
     }
     await refresh();
-    toast.success(
-      'Action recorded',
-      `Document has been ${actionModal === 'recommend' ? 'recommended' : actionModal === 'return' ? 'returned' : `${actionModal}d`}.`,
-    );
+    toast.success('Action recorded', `Document has been ${actionMarker(actionModal)}.`);
     setActionModal(null);
     setRemarks('');
   };
 
-  const submitRoute = async () => {
-    if (!routeOffice || !user) {
-      toast.error('Target office required', 'Please select an office to route this document to.');
-      return;
-    }
-    const updated = await transition.transition(doc.id, {
-      toStatus: 'routed',
-      currentOfficeId: routeOffice,
-      currentHolderId: routeUser || undefined,
-      remarks: routeInstructions || remarks || 'Forwarded for action',
-    });
-    if (!updated) {
-      toast.error('Routing failed', transition.error ?? 'Please retry.');
-      return;
-    }
-    await refresh();
-    toast.success('Document routed', `Forwarded to ${officeById(routeOffice)?.code}.`);
-    setRouteModal(false);
-    setRouteOffice('');
-    setRouteUser('');
-    setRouteInstructions('');
-    setRemarks('');
-  };
-
-  const officeUsers = routeOffice
-    ? routingUsers.filter(u => u.officeId === routeOffice)
-    : [];
-
-  const currentOfficeUsers = routingUsers.filter(u => u.officeId === doc.currentOfficeId);
-
-  const startReview = async () => {
-    setSubmitting(true);
-    const updated = await transition.transition(doc.id, {
-      toStatus: 'under_review',
-      remarks: 'Review started',
-    });
-    setSubmitting(false);
-    if (!updated) {
-      toast.error('Action failed', transition.error ?? 'Please retry.');
-      return;
-    }
-    await refresh();
-    toast.success('Review started', 'Document is now under review.');
-  };
-
-  const submitAssign = async () => {
-    if (!assignUserId) {
-      toast.error('Select a holder', 'Please choose the person to assign this document to.');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await documentsService.assignHolder(doc.id, {
-        holderId: assignUserId,
-        officeId: doc.currentOfficeId ?? undefined,
-        notes: assignNotes.trim() || 'Document assigned to holder',
-      });
-      window.dispatchEvent(new Event('documents:invalidate'));
-      await refresh();
-      toast.success(
-        'Document assigned',
-        `Assigned to ${routingUsers.find(u => u.id === assignUserId)?.fullName ?? 'holder'}.`,
-      );
-      setAssignModal(false);
-      setAssignUserId('');
-      setAssignNotes('');
-    } catch (err) {
-      toast.error('Assignment failed', err instanceof Error ? err.message : 'Please retry.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const canDownload = doc.attachments.length > 0;
+  const office = officeById(doc.currentOfficeId);
+  const holderName = doc.currentHolder?.fullName ?? (doc.currentHolderId ? userById(doc.currentHolderId)?.fullName ?? null : null);
+  const holderPosition = doc.currentHolder?.position ?? (doc.currentHolderId ? userById(doc.currentHolderId)?.position ?? null : null);
 
   return (
     <div className="space-y-6">
@@ -402,9 +226,10 @@ export function DocumentDetailPage() {
       </Link>
 
       <DocumentHero
-        document={legacyDocument}
-        holder={holder}
-        office={office}
+        document={doc}
+        holderName={holderName}
+        holderPosition={holderPosition}
+        office={office ? `${office.code} ${office.name}` : null}
         isOverdue={!!isOverdue}
         primaryAction={primaryAction}
         onPrimaryAction={() => primaryAction && openAction(primaryAction)}
@@ -413,45 +238,33 @@ export function DocumentDetailPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
-          <DocumentJourneyView
-            document={legacyDocument}
-            routingSteps={legacyRouting}
-            auditLogs={legacyLogs}
-          />
+          <DocumentTracker document={doc} />
+          <HistoryPanel document={doc} history={history} userById={userById} />
         </div>
 
         <aside className="lg:col-span-4 space-y-6">
           <DocumentActions
             decisionActions={decisionActions}
             terminalActions={terminalActions}
-            canRoute={canRoute}
-            canAssign={canAssign}
-            canStartReview={canStartReview}
+            open={actionsOpen}
+            onToggle={() => setActionsOpen(o => !o)}
             onAction={openAction}
-            onRoute={() => setRouteModal(true)}
-            onAssign={() => setAssignModal(true)}
-            onStartReview={startReview}
           />
           <DocumentInfoSidebar
             document={doc}
-            originator={originator ?? null}
-            encoder={encoder ?? null}
-            receiver={receiver ?? null}
-            holder={holder ?? null}
+            office={office}
             isOverdue={!!isOverdue}
+            onViewAttachment={(att) => {
+              if (att.mimeType.toLowerCase() === 'application/pdf') {
+                window.open(attachmentsService.previewUrl(att.id), '_blank', 'noopener,noreferrer');
+              } else {
+                void downloadAttachment(att.id);
+              }
+            }}
+            onDownloadAttachment={(attId) => void downloadAttachment(attId)}
           />
         </aside>
       </div>
-
-      <HistoryTabs
-        tab={tab}
-        onTabChange={setTab}
-        routing={legacyRouting}
-        logs={legacyLogs}
-        offices={offices}
-        users={routingUsers}
-        officeById={officeById}
-      />
 
       <Modal
         open={!!actionModal}
@@ -467,8 +280,13 @@ export function DocumentDetailPage() {
             <Button
               variant={actionModal === 'reject' ? 'danger' : 'primary'}
               onClick={submitAction}
+              disabled={transition.saving}
             >
-              {actionModal ? `Confirm ${ACTION_META[actionModal].label.toLowerCase()}` : ''}
+              {transition.saving
+                ? 'Saving…'
+                : actionModal
+                  ? `Confirm ${ACTION_META[actionModal].label.toLowerCase()}`
+                  : ''}
             </Button>
           </>
         }
@@ -480,21 +298,12 @@ export function DocumentDetailPage() {
               {doc.trackingNumber} · {doc.title}
             </p>
             <p className="text-xs text-slate-500 mt-1">
-              Current office: {office?.name} ({office?.code}) · Status:{' '}
-              {doc.status.replace(/_/g, ' ')}
+              Current office: {office ? `${office.code} ${office.name}` : '—'} · Status:{' '}
+              {DOCUMENT_STATUS_LABELS[doc.status]}
             </p>
           </div>
-          {actionModal === 'return' && (
-            <Select
-              label="Return to"
-              options={offices.map(o => ({
-                value: o.id,
-                label: `${o.code} — ${o.name}`,
-              }))}
-            />
-          )}
           <Textarea
-            label="Remarks"
+            label={actionModal === 'reject' ? 'Rejection reason' : 'Remarks'}
             required
             rows={4}
             value={remarks}
@@ -503,120 +312,30 @@ export function DocumentDetailPage() {
           />
         </div>
       </Modal>
-
-      <Modal
-        open={routeModal}
-        onClose={() => setRouteModal(false)}
-        title="Route Document"
-        description="Forward this document to another office for action"
-        size="md"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setRouteModal(false)}>
-              Cancel
-            </Button>
-            <Button leftIcon={<Send className="w-4 h-4" />} onClick={submitRoute}>
-              Route Document
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
-            <p className="text-xs text-slate-500">Document</p>
-            <p className="text-sm font-semibold text-slate-900">
-              {doc.trackingNumber} · {doc.title}
-            </p>
-            <p className="text-xs text-slate-500 mt-1">
-              From: {office?.name} ({office?.code})
-            </p>
-          </div>
-          <Select
-            label="Target Office"
-            required
-            placeholder="Choose target office…"
-            value={routeOffice}
-            onChange={e => {
-              setRouteOffice(e.target.value);
-              setRouteUser('');
-            }}
-            options={offices
-              .filter(o => o.id !== doc.currentOfficeId)
-              .map(o => ({ value: o.id, label: `${o.code} — ${o.name}` }))}
-          />
-          <Select
-            label="Assign To (Optional)"
-            placeholder={routeOffice ? 'Choose officer…' : 'Select office first'}
-            value={routeUser}
-            onChange={e => setRouteUser(e.target.value)}
-            options={officeUsers.map(u => ({
-              value: u.id,
-              label: u.position ? `${u.fullName} (${u.position})` : u.fullName,
-            }))}
-            disabled={!routeOffice}
-          />
-          <Textarea
-            label="Routing Instructions"
-            rows={3}
-            value={routeInstructions}
-            onChange={e => setRouteInstructions(e.target.value)}
-            placeholder="Provide instructions for the receiving office…"
-          />
-        </div>
-      </Modal>
-
-      <Modal
-        open={assignModal}
-        onClose={() => setAssignModal(false)}
-        title="Assign Document"
-        description="Assign this document to a holder in your office"
-        size="md"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setAssignModal(false)}>
-              Cancel
-            </Button>
-            <Button leftIcon={<Inbox className="w-4 h-4" />} onClick={submitAssign} disabled={submitting}>
-              {submitting ? 'Assigning…' : 'Assign Document'}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
-            <p className="text-xs text-slate-500">Document</p>
-            <p className="text-sm font-semibold text-slate-900">
-              {doc.trackingNumber} · {doc.title}
-            </p>
-          </div>
-          <Select
-            label="Assign To"
-            required
-            placeholder="Choose holder…"
-            value={assignUserId}
-            onChange={e => setAssignUserId(e.target.value)}
-            options={currentOfficeUsers.map(u => ({
-              value: u.id,
-              label: u.position ? `${u.fullName} (${u.position})` : u.fullName,
-            }))}
-          />
-          <Textarea
-            label="Assignment Notes"
-            rows={3}
-            value={assignNotes}
-            onChange={e => setAssignNotes(e.target.value)}
-            placeholder="Optional instructions for the assigned holder…"
-          />
-        </div>
-      </Modal>
     </div>
   );
 }
 
+function actionMarker(action: ActionType): string {
+  switch (action) {
+    case 'reject':
+      return 'rejected';
+    case 'receive':
+      return 'received';
+    case 'approve':
+      return 'approved';
+    case 'release':
+      return 'released';
+    case 'archive':
+      return 'archived';
+  }
+}
+
 interface DocumentHeroProps {
-  document: import('@/types').Document;
-  holder: import('@/types').User | null | undefined;
-  office: { id: string; name: string; code: string } | null | undefined;
+  document: DocumentDetail;
+  holderName: string | null;
+  holderPosition: string | null;
+  office: string | null;
   isOverdue: boolean;
   primaryAction: ActionType | null;
   onPrimaryAction: () => void;
@@ -625,14 +344,16 @@ interface DocumentHeroProps {
 
 function DocumentHero({
   document: d,
-  holder,
+  holderName,
+  holderPosition,
   office,
   isOverdue,
   primaryAction,
   onPrimaryAction,
   canDownload,
 }: DocumentHeroProps) {
-  const isTerminal = ['released', 'archived', 'rejected'].includes(d.status);
+  const isTerminal = TERMINAL_STATUSES.includes(d.status);
+  const showAttachmentBar = true;
   return (
     <header className="space-y-4">
       <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap text-xs text-slate-500">
@@ -682,30 +403,18 @@ function DocumentHero({
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5 px-5 sm:px-6 py-4 border-t border-slate-100">
           <div className="min-w-0">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-              Office
-            </p>
-            <p className="text-sm font-semibold text-slate-900 truncate">
-              {office ? `${office.code} ${office.name}` : '—'}
-            </p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Office</p>
+            <p className="text-sm font-semibold text-slate-900 truncate">{office ?? '—'}</p>
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-              Holder
-            </p>
-            {holder ? (
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Holder</p>
+            {holderName ? (
               <div className="flex items-center gap-2 min-w-0">
-                <Avatar
-                  name={holder.fullName}
-                  color={holder.avatarColor}
-                  size="xs"
-                />
+                <Avatar name={holderName} color="bg-brand-600" size="xs" />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900 truncate">
-                    {holder.fullName}
-                  </p>
+                  <p className="text-sm font-semibold text-slate-900 truncate">{holderName}</p>
                   <p className="text-[11px] text-slate-500 truncate">
-                    {ROLE_LABELS[holder.role] ?? (holder as unknown as { position?: string | null }).position ?? ''}
+                    {holderPosition ?? (d.receivedBy ? 'Received' : '')}
                   </p>
                 </div>
               </div>
@@ -722,21 +431,21 @@ function DocumentHero({
             </p>
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-              Due
-            </p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Due</p>
             <p className={cn('text-sm font-semibold', isOverdue ? 'text-rose-700' : 'text-slate-900')}>
               {d.dueDate ? formatDate(d.dueDate) : 'No deadline'}
             </p>
           </div>
         </div>
 
-        {(canDownload || (primaryAction && !isTerminal)) && (
+        {showAttachmentBar && (
           <div className="flex flex-col-reverse gap-3 border-t border-slate-100 px-5 sm:px-6 py-3.5 sm:flex-row sm:items-center sm:justify-between">
             <p className="hidden sm:block text-xs text-slate-500">
               {primaryAction && !isTerminal
                 ? `Next step: ${ACTION_META[primaryAction].label} this document.`
-                : 'No further actions available.'}
+                : isTerminal
+                  ? 'This document has reached the end of its lifecycle.'
+                  : 'No further actions available.'}
             </p>
             <div className="flex items-center gap-2 sm:justify-end">
               {canDownload && (
@@ -765,29 +474,19 @@ function DocumentHero({
 interface DocumentActionsProps {
   decisionActions: ActionType[];
   terminalActions: ActionType[];
-  canRoute: boolean;
-  canAssign: boolean;
-  canStartReview: boolean;
+  open: boolean;
+  onToggle: () => void;
   onAction: (action: ActionType) => void;
-  onRoute: () => void;
-  onAssign: () => void;
-  onStartReview: () => void;
 }
 
 function DocumentActions({
   decisionActions,
   terminalActions,
-  canRoute,
-  canAssign,
-  canStartReview,
+  open,
+  onToggle,
   onAction,
-  onRoute,
-  onAssign,
-  onStartReview,
 }: DocumentActionsProps) {
-  const [open, setOpen] = useState(true);
-  const hasAny =
-    decisionActions.length > 0 || terminalActions.length > 0 || canRoute || canAssign || canStartReview;
+  const hasAny = decisionActions.length > 0 || terminalActions.length > 0;
   if (!hasAny) {
     return (
       <Card>
@@ -802,17 +501,13 @@ function DocumentActions({
     <Card padded={false}>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={onToggle}
         aria-expanded={open}
         className="group w-full px-5 py-3.5 flex items-center justify-between gap-2 text-left"
       >
         <span className="text-sm font-semibold text-slate-900">Actions</span>
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors group-hover:bg-slate-200 group-hover:text-slate-700">
-          {open ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
+          {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </span>
       </button>
       {open && (
@@ -844,49 +539,6 @@ function DocumentActions({
                     </Button>
                   );
                 })}
-              </div>
-            </div>
-          )}
-          {(canRoute || canAssign || canStartReview) && (
-            <div>
-              <p className="text-[10px] uppercase tracking-widest font-semibold text-slate-400 mb-2.5">
-                Workflow
-              </p>
-              <div className="space-y-2">
-                {canAssign && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<Inbox className="w-3.5 h-3.5" />}
-                    onClick={onAssign}
-                    fullWidth
-                  >
-                    Assign to holder
-                  </Button>
-                )}
-                {canStartReview && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="shadow-sm"
-                    leftIcon={<Eye className="w-3.5 h-3.5" />}
-                    onClick={onStartReview}
-                    fullWidth
-                  >
-                    Start review
-                  </Button>
-                )}
-                {canRoute && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<Send className="w-3.5 h-3.5" />}
-                    onClick={onRoute}
-                    fullWidth
-                  >
-                    Route to another office
-                  </Button>
-                )}
               </div>
             </div>
           )}
@@ -923,37 +575,19 @@ function DocumentActions({
 
 interface DocumentInfoSidebarProps {
   document: DocumentDetail;
-  originator: { code: string; name: string } | null | undefined;
-  encoder: import('@/types').User | null | undefined;
-  receiver: import('@/types').User | null | undefined;
-  holder: import('@/types').User | null | undefined;
+  office: { code: string; name: string } | undefined;
   isOverdue: boolean;
+  onViewAttachment: (att: { id: string; fileName: string; mimeType: string }) => void;
+  onDownloadAttachment: (id: string) => void;
 }
 
 function DocumentInfoSidebar({
   document: d,
-  originator,
-  encoder,
-  receiver,
-  holder,
+  office,
   isOverdue,
+  onViewAttachment,
+  onDownloadAttachment,
 }: DocumentInfoSidebarProps) {
-  const downloadAttachment = async (attachmentId: string) => {
-    try {
-      const url = attachmentsService.downloadUrl(attachmentId);
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch {
-      // Keep detail view usable if download link fails
-    }
-  };
-  const handleViewAttachment = (att: { id: string; fileName: string; mimeType: string }) => {
-    if (att.mimeType.toLowerCase() === 'application/pdf') {
-      const url = attachmentsService.previewUrl(att.id);
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } else {
-      void downloadAttachment(att.id);
-    }
-  };
   return (
     <>
       <Card padded={false}>
@@ -961,12 +595,21 @@ function DocumentInfoSidebar({
           <h3 className="text-sm font-semibold text-slate-900">People</h3>
         </div>
         <ul className="divide-y divide-slate-100">
-          <PersonLine label="Encoded by" user={encoder} />
-          <PersonLine label="Received by" user={receiver} />
-          <PersonLine label="Current holder" user={holder} />
-          <PersonLine
+          <PersonLine label="Encoded by" person={d.encodedBy} />
+          <PersonLine label="Received by" person={d.receivedBy} />
+          <PersonLine label="Approved by" person={d.approvedBy} />
+          <PersonLine label="Released by" person={d.releasedBy} />
+          <InfoLine
+            label="Holder"
+            value={d.currentHolder?.fullName ?? d.encodedBy?.fullName ?? 'Unassigned'}
+          />
+          <InfoLine
             label="Originating office"
-            text={originator ? `${originator.code} — ${originator.name}` : (d.originatingOfficeName ?? '—')}
+            value={office?.code && office?.name ? `${office.code} — ${office.name}` : (d.originatingOfficeName ?? '—')}
+          />
+          <InfoLine
+            label="Current office"
+            value={office?.code && office?.name ? `${office.code} — ${office.name}` : '—'}
           />
         </ul>
       </Card>
@@ -1012,10 +655,7 @@ function DocumentInfoSidebar({
         ) : (
           <ul className="divide-y divide-slate-100">
             {d.attachments.map(att => (
-              <li
-                key={att.id}
-                className="flex items-center gap-2.5 px-5 py-2.5 hover:bg-slate-50"
-              >
+              <li key={att.id} className="flex items-center gap-2.5 px-5 py-2.5 hover:bg-slate-50">
                 <div className="w-7 h-7 rounded bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
                   <Paperclip className="w-3.5 h-3.5" />
                 </div>
@@ -1028,7 +668,7 @@ function DocumentInfoSidebar({
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleViewAttachment(att)}
+                  onClick={() => onViewAttachment(att)}
                   className="p-1.5 text-slate-400 hover:text-slate-700 rounded"
                   aria-label="View Attachment"
                   title="View Attachment"
@@ -1036,8 +676,11 @@ function DocumentInfoSidebar({
                   <Eye className="w-3.5 h-3.5" />
                 </button>
                 <button
+                  type="button"
+                  onClick={() => onDownloadAttachment(att.id)}
                   className="p-1.5 text-slate-400 hover:text-slate-700 rounded"
                   aria-label="Download"
+                  title="Download Attachment"
                 >
                   <Download className="w-3.5 h-3.5" />
                 </button>
@@ -1063,34 +706,14 @@ function DocumentInfoSidebar({
   );
 }
 
-function PersonLine({
-  label,
-  user,
-  text,
-}: {
-  label: string;
-  user?: import('@/types').User | null;
-  text?: string;
-}) {
-  if (text) {
-    return (
-      <li className="px-5 py-2.5 flex items-center justify-between gap-3">
-        <span className="text-xs text-slate-500">{label}</span>
-        <span className="text-sm font-medium text-slate-900 truncate text-right">{text}</span>
-      </li>
-    );
-  }
+function PersonLine({ label, person }: { label: string; person: DocumentPerson | null }) {
   return (
     <li className="px-5 py-2.5 flex items-center gap-3">
-      <Avatar
-        name={user?.fullName ?? '—'}
-        color={user?.avatarColor ?? 'bg-slate-400'}
-        size="sm"
-      />
+      <Avatar name={person?.fullName ?? '—'} color={person ? colorForId(person.id) : 'bg-slate-400'} size="sm" />
       <div className="flex-1 min-w-0">
         <p className="text-xs text-slate-500">{label}</p>
         <p className="text-sm font-medium text-slate-900 truncate">
-          {user?.fullName ?? 'Unassigned'}
+          {person?.fullName ?? 'Unassigned'}
         </p>
       </div>
     </li>
@@ -1106,156 +729,91 @@ function InfoLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-interface HistoryTabsProps {
-  tab: 'routing' | 'audit';
-  onTabChange: (t: 'routing' | 'audit') => void;
-  routing: import('@/types').RoutingStep[];
-  logs: import('@/types').AuditLog[];
-  offices: import('@/features/system-admin/offices/types/office').Office[];
-  users: import('@/features/system-admin/users/types/user').RoutingUserOption[];
-  officeById: (id: string | null | undefined) =>
-    | import('@/features/system-admin/offices/types/office').Office
-    | undefined;
+interface HistoryPanelProps {
+  document: DocumentDetail;
+  history: import('@/features/documents/types/document').DocumentHistoryEntry[];
+  userById: (id: string | null | undefined) => import('@/hooks/useLookups').LookupUser | undefined;
 }
 
-const ROUTING_STEP_STYLES = {
-  pending: 'bg-slate-100 text-slate-700',
-  received: 'bg-sky-100 text-sky-700',
-  in_progress: 'bg-amber-100 text-amber-700',
-  completed: 'bg-emerald-100 text-emerald-700',
-  returned: 'bg-rose-100 text-rose-700',
-} as const;
-
-function RoutingStepStatus({ status }: { status: import('@/types').RoutingStep['status'] }) {
-  const label = status.replace(/_/g, ' ');
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-        ROUTING_STEP_STYLES[status]
-      )}
-    >
-      {label}
-    </span>
-  );
-}
-
-function HistoryTabs({ tab, onTabChange, routing, logs, offices, users, officeById }: HistoryTabsProps) {
-  const officeName = (id?: string | null) => {
-    if (!id) return '—';
-    const office = offices.find(o => o.id === id) ?? officeById(id);
-    return office ? `${office.code} ${office.name}` : id.slice(0, 8);
-  };
-  const userName = (id?: string | null) => {
-    if (!id) return null;
-    const user = users.find(u => u.id === id);
-    return user ? user.fullName : null;
-  };
-
-  const sortedRouting = [...routing].sort((a, b) => a.sequence - b.sequence);
-  const sortedLogs = [...logs].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+function HistoryPanel({ document, history, userById }: HistoryPanelProps) {
+  const sorted = [...history].sort(
+    (a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
   );
 
   return (
     <Card padded={false}>
-      <div className="px-5 pt-4">
-        <Tabs
-          value={tab}
-          onChange={id => onTabChange(id as 'routing' | 'audit')}
-          items={[
-            {
-              id: 'routing',
-              label: 'Routing History',
-              icon: <RouteIcon className="w-4 h-4" />,
-              count: sortedRouting.length,
-            },
-            {
-              id: 'audit',
-              label: 'Audit History',
-              icon: <HistoryIcon className="w-4 h-4" />,
-              count: sortedLogs.length,
-            },
-          ]}
-        />
+      <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-md bg-brand-50 text-brand-700 border border-brand-200 flex items-center justify-center">
+          <HistoryIcon className="w-4 h-4" />
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-slate-900">Status History</h2>
+          <p className="text-xs text-slate-500">
+            Complete chronological record of this document's lifecycle. History is immutable.
+          </p>
+        </div>
       </div>
 
-      <div className="p-5">
-        {tab === 'routing' && (
-          <div className="space-y-3">
-            {sortedRouting.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-6">No routing history yet.</p>
-            ) : (
-              sortedRouting.map((step, index) => (
-                <div
-                  key={step.id}
-                  className="flex items-start gap-3 rounded-md border border-slate-200 p-3.5"
-                >
-                  <div className="flex flex-col items-center shrink-0">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-50 text-[11px] font-semibold text-brand-700">
-                      {step.sequence}
-                    </span>
-                    {index < sortedRouting.length - 1 && (
-                      <span className="mt-1 w-px flex-1 bg-slate-200" />
+      <div className="px-5 py-5">
+        {sorted.length === 0 ? (
+          <EmptyState
+            icon={<HistoryIcon className="w-6 h-6" />}
+            title="No history yet"
+            description="Status transitions will appear here as the document moves through the workflow."
+          />
+        ) : (
+          <ol className="relative">
+            <span aria-hidden className="absolute left-[15px] top-2 bottom-2 w-px bg-slate-200" />
+            {sorted.map(entry => {
+              const actor = userById(entry.actorId);
+              return (
+                <li key={entry.id} className="relative pl-12 pb-5 last:pb-0">
+                  <span className="absolute left-0 top-0.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-slate-200 bg-white text-slate-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </span>
+                  <div className="rounded-md border border-slate-200 p-3.5 sm:p-4">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap text-sm">
+                          <span className="font-semibold text-slate-900">
+                            {entry.fromStatus ? statusLabel(entry.fromStatus) : 'Created'}
+                          </span>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="font-semibold text-brand-700">
+                            {statusLabel(entry.toStatus)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Status change
+                          {actor ? ` · by ${actor.fullName}` : ''}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs text-slate-700 font-medium inline-flex items-center gap-1.5">
+                          <Calendar className="w-3 h-3 text-slate-400" />
+                          {formatDate(entry.occurredAt, true)}
+                        </p>
+                      </div>
+                    </div>
+                    {entry.remarks && entry.remarks !== `${entry.toStatus} recorded` && (
+                      <div className="mt-2.5 p-2.5 rounded-md bg-slate-50 border border-slate-200">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-0.5">
+                          Remarks
+                        </p>
+                        <p className="text-sm text-slate-700 leading-relaxed">{entry.remarks}</p>
+                      </div>
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-slate-900">
-                        {officeName(step.fromOfficeId)}
-                        <span className="mx-1.5 text-slate-400">→</span>
-                        {officeName(step.toOfficeId)}
-                      </span>
-                      <RoutingStepStatus status={step.status} />
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                      <span>
-                        {formatDate(step.completedAt ?? step.receivedAt ?? undefined, true)}
-                      </span>
-                      {userName(step.toUserId) && <span>Assigned to {userName(step.toUserId)}</span>}
-                      {userName(step.fromUserId) && <span>By {userName(step.fromUserId)}</span>}
-                    </div>
-                    {(step.instructions || step.remarks) && (
-                      <p className="mt-1.5 text-sm text-slate-600">
-                        {step.instructions || step.remarks}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {tab === 'audit' && (
-          <div className="space-y-3">
-            {sortedLogs.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-6">No audit history yet.</p>
-            ) : (
-              sortedLogs.map(log => (
-                <div
-                  key={log.id}
-                  className="flex items-start gap-3 rounded-md border border-slate-200 p-3.5"
-                >
-                  <Avatar name={log.actorName} color="bg-slate-400" size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-slate-900">
-                        {log.action || 'Event'}
-                      </span>
-                      <span className="text-xs text-slate-500">{formatDate(log.createdAt, true)}</span>
-                    </div>
-                    <p className="text-sm text-slate-600">{log.description}</p>
-                    {log.actorName && (
-                      <p className="mt-0.5 text-xs text-slate-500">By {log.actorName}</p>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                </li>
+              );
+            })}
+          </ol>
         )}
       </div>
     </Card>
   );
+}
+
+function statusLabel(status: DocumentStatus): string {
+  return DOCUMENT_STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
 }

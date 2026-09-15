@@ -33,33 +33,25 @@ import type { NotificationItem } from '@/features/notifications/types/notificati
 
 const PENDING_STATUSES = new Set<DocumentStatus>([
   'registered',
-    'received',
-    'routed',
-    'assigned',
-    'under_review',
-    'recommended',
+  'received',
   'approved',
+  'rejected',
   'released',
-  'returned',
 ]);
 
 function getActionForStatus(status: DocumentStatus): string | null {
   switch (status) {
     case 'registered': return 'Receive & log';
-    case 'received': return 'Classify & assign';
-    case 'routed': return 'Route to office';
-    case 'assigned': return 'Begin review';
-    case 'under_review': return 'Review & recommend';
-    case 'recommended': return 'Approve / Reject / Return';
+    case 'received': return 'Approve / Reject';
     case 'approved': return 'Release';
+    case 'rejected': return 'Archive';
     case 'released': return 'Archive';
-    case 'returned': return 'Correct & resubmit';
     default: return null;
   }
 }
 
 function getActionToneForStatus(status: DocumentStatus): 'slate' | 'amber' {
-  if (status === 'returned') return 'amber';
+  if (status === 'rejected') return 'amber';
   return 'slate';
 }
 
@@ -84,7 +76,7 @@ export function DashboardPage() {
   const stats = useMemo(() => {
     const total = documents.length;
     const inProgress = documents.filter(d =>
-      ['registered', 'received', 'routed', 'assigned', 'under_review', 'recommended'].includes(d.status)
+      ['registered', 'received', 'approved'].includes(d.status)
     ).length;
     const completed = documents.filter(d => d.status === 'released' || d.status === 'archived').length;
     const overdue = documents.filter(d => {
@@ -123,8 +115,8 @@ export function DashboardPage() {
 
   const statusDistribution = useMemo(() => {
     const counts: Record<DocumentStatus, number> = {
-      registered: 0, received: 0, routed: 0, assigned: 0, under_review: 0, recommended: 0,
-      approved: 0, rejected: 0, returned: 0, released: 0, archived: 0,
+      registered: 0, received: 0,
+      approved: 0, rejected: 0, released: 0, archived: 0,
     };
     documents.forEach(d => { counts[d.status as DocumentStatus]++; });
     return counts;
@@ -132,12 +124,12 @@ export function DashboardPage() {
 
   const activeStatuses = useMemo(() => {
     const active: DocumentStatus[] = [
-'registered',
-    'received',
-    'routed',
-    'assigned',
-    'under_review',
-    'recommended', 'approved',
+      'registered',
+      'received',
+      'approved',
+      'rejected',
+      'released',
+      'archived',
     ];
     return active.map(s => ({ status: s, count: statusDistribution[s] }));
   }, [statusDistribution]);
@@ -152,10 +144,9 @@ export function DashboardPage() {
   const workflowSteps = [
     'registered',
     'received',
-    'routed',
-    'assigned',
-    'under_review',
-    'recommended', 'approved', 'released', 'archived',
+    'approved',
+    'released',
+    'archived',
   ] as const;
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });

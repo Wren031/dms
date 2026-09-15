@@ -11,6 +11,4 @@ export { useDocumentHistory } from '@/features/documents/hooks/useDocumentHistor
 export type { UseDocumentHistoryReturn } from '@/features/documents/hooks/useDocumentHistory';
 export { useDocumentTimeline } from '@/features/documents/hooks/useDocumentTimeline';
 export type { UseDocumentTimelineReturn } from '@/features/documents/hooks/useDocumentTimeline';
-export { useDocumentRouting } from '@/features/documents/hooks/useDocumentRouting';
-export type { UseDocumentRoutingReturn, RoutingStep } from '@/features/documents/hooks/useDocumentRouting';
 export { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';

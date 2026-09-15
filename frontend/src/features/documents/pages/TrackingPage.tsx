@@ -25,10 +25,10 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Separator } from '@/components/ui/separator';
 import { StatusBadge, PriorityBadge } from '@/components/ui/StatusBadge';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
-import { useDocumentRouting } from '@/features/documents/hooks/useDocumentRouting';
 import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
 import {
   ALL_DOCUMENT_STATUSES,
+  ALLOWED_TRANSITIONS,
   DOCUMENT_STATUS_LABELS,
   DOCUMENT_WORKFLOW,
 } from '@/constants';
@@ -49,7 +49,6 @@ const TERMINAL_COMPLETE_STATUSES = ['released', 'archived', 'rejected'];
 
 function lifecycleProgress(status: string): number {
   if (TERMINAL_COMPLETE_STATUSES.includes(status)) return 100;
-  if (status === 'returned') return Math.round((5 / DOCUMENT_WORKFLOW.length) * 100);
   const idx = DOCUMENT_WORKFLOW.indexOf(status as DocumentStatus);
   if (idx < 0) return 0;
   return Math.min(Math.round(((idx + 1) / DOCUMENT_WORKFLOW.length) * 100), 99);
@@ -58,7 +57,6 @@ function lifecycleProgress(status: string): number {
 export function TrackingPage() {
   const toast = useToast();
   const { items: documents } = useDocuments({ pageSize: 100 });
-  const { steps: routingSteps } = useDocumentRouting(undefined);
   const officeById = useOfficeLookup();
   const userById = useUserLookup();
   const [search, setSearch] = useState(DEFAULT_FILTERS.search);
@@ -84,7 +82,7 @@ export function TrackingPage() {
 
   const stats = useMemo(() => {
     const active = documents.filter(d =>
-      ['registered', 'received', 'routed', 'assigned', 'under_review', 'recommended'].includes(d.status)
+      ['registered', 'received', 'approved'].includes(d.status)
     ).length;
     const completed = documents.filter(d => d.status === 'released' || d.status === 'archived').length;
     const overdue = documents.filter(d => {
@@ -240,21 +238,14 @@ function StatCard({
 function DocumentCard({ doc }: { doc: DocumentListItem }) {
   const officeById = useOfficeLookup();
   const userById = useUserLookup();
-  const { steps } = useDocumentRouting(doc.id);
   const office = officeById(doc.currentOfficeId);
   const holder = doc.currentHolderId ? userById(doc.currentHolderId) : null;
-  const totalSteps = steps.length;
   const progress = lifecycleProgress(doc.status);
-  const inProgressStep = steps.find(s => s.status === 'in_progress');
+  const isTerminal = TERMINAL_COMPLETE_STATUSES.includes(doc.status);
+  const nextStatus = (ALLOWED_TRANSITIONS[doc.status] ?? [])[0];
   const isOverdue = doc.dueDate &&
-    doc.status !== 'released' && doc.status !== 'archived' && doc.status !== 'rejected' &&
+    !isTerminal &&
     new Date(doc.dueDate).getTime() < new Date().getTime();
-  const currentStop = inProgressStep ? officeById(inProgressStep.toOfficeId) : office;
-  const nextStop = inProgressStep
-    ? officeById(inProgressStep.toOfficeId)
-    : steps.filter(s => s.status === 'pending')[0]
-      ? officeById(steps.filter(s => s.status === 'pending')[0].toOfficeId)
-      : null;
 
   return (
     <Link
@@ -328,15 +319,15 @@ function DocumentCard({ doc }: { doc: DocumentListItem }) {
         </div>
         <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <ArrowRight className="w-3 h-3 shrink-0" />
-          <span className="truncate">{currentStop?.code ?? '—'}</span>
+          <span className="truncate">{office?.code ?? '—'}</span>
           <span className="text-slate-300">to</span>
           <span className="font-medium text-foreground truncate">
-            {nextStop?.code ?? (progress === 100 ? 'Complete' : '—')}
+            {isTerminal ? 'Complete' : nextStatus ? DOCUMENT_STATUS_LABELS[nextStatus] : '—'}
           </span>
         </div>
-        {totalSteps === 0 && (
+        {!nextStatus && !isTerminal && (
           <p className="mt-2 text-[11px] italic text-muted-foreground">
-            {DOCUMENT_STATUS_LABELS[doc.status]} · No routing steps recorded yet.
+            {DOCUMENT_STATUS_LABELS[doc.status]} · No further steps recorded for this document.
           </p>
         )}
       </div>

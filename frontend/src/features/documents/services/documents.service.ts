@@ -1,7 +1,6 @@
 import { API_BASE_URL } from '@/lib/apiConfig';
 import { apiFetch, readCookie } from '@/lib/apiClient';
 import type {
-  DocumentAssignHolderInput,
   DocumentCreateInput,
   DocumentDetail,
   DocumentFilters,
@@ -138,26 +137,12 @@ export const documentsService = {
     });
   },
 
-  assignHolder(id: string, payload: DocumentAssignHolderInput): Promise<DocumentListItem> {
-    return request<DocumentListItem>(`/documents/${id}/assign-holder`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  },
-
   getHistory(id: string): Promise<DocumentHistoryEntry[]> {
     return request<DocumentHistoryEntry[]>(`/documents/${id}/history`);
   },
 
   getTimeline(id: string): Promise<DocumentTimelineEntry[]> {
     return request<DocumentTimelineEntry[]>(`/documents/${id}/timeline`);
-  },
-};
-
-export const routingService = {
-  listSteps(documentId?: string): Promise<unknown[]> {
-    const query = documentId ? `?documentId=${documentId}` : '';
-    return request<unknown[]>(`/document-routing${query}`);
   },
 };
 

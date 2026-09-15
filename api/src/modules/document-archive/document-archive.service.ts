@@ -13,7 +13,7 @@ export class DocumentArchiveService {
     const doc = await this.prisma.document.findUnique({ where: { id: dto.documentId } });
     if (!doc) throw new NotFoundException('Document not found');
 
-    const allowed = ['released', 'rejected', 'returned', 'approved'];
+    const allowed = ['released', 'rejected'];
     if (!allowed.includes(doc.status)) {
       throw new BadRequestException(
         `Cannot archive document in status ${doc.status}`,

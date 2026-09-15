@@ -79,13 +79,13 @@ export function OutboxPage() {
 
   const counts = useMemo(() => {
     const inProgress = myOutbox.filter(d =>
-['registered', 'received', 'routed', 'assigned', 'under_review', 'recommended'].includes(d.status)
+      ['registered', 'received', 'approved'].includes(d.status)
     ).length;
     const completed = myOutbox.filter(d =>
-      ['approved', 'released', 'archived'].includes(d.status)
+      ['released', 'archived'].includes(d.status)
     ).length;
     const actionRequired = myOutbox.filter(d =>
-      ['returned', 'rejected'].includes(d.status)
+      d.status === 'rejected'
     ).length;
     return {
       all: myOutbox.length,
@@ -98,11 +98,11 @@ export function OutboxPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return myOutbox.filter(d => {
-      if (tab === 'active' && !['registered', 'received', 'routed', 'assigned', 'under_review', 'recommended'].includes(d.status))
+      if (tab === 'active' && !['registered', 'received', 'approved'].includes(d.status))
         return false;
-      if (tab === 'completed' && !['approved', 'released', 'archived'].includes(d.status))
+      if (tab === 'completed' && !['released', 'archived'].includes(d.status))
         return false;
-      if (tab === 'action' && !['returned', 'rejected'].includes(d.status))
+      if (tab === 'action' && d.status !== 'rejected')
         return false;
       if (statusFilter !== 'all' && d.status !== statusFilter) return false;
       if (typeFilter !== 'all' && d.type !== typeFilter) return false;

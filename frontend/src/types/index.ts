@@ -82,13 +82,8 @@ export interface Office {
 export type DocumentStatus =
   | 'registered'
   | 'received'
-  | 'routed'
-  | 'assigned'
-  | 'under_review'
-  | 'recommended'
   | 'approved'
   | 'rejected'
-  | 'returned'
   | 'released'
   | 'archived';
 

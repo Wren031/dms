@@ -19,6 +19,5 @@ export type {
   DocumentCreateInput,
   DocumentUpdateInput,
   DocumentTransitionInput,
-  DocumentAssignHolderInput,
   DocumentNumberSuggestion,
 } from '@/features/documents/types/document';
