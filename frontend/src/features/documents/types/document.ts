@@ -8,6 +8,8 @@ export type DocumentStatus =
   | 'released'
   | 'archived';
 
+export type RecipientStatus = 'pending' | 'received';
+
 export type DocumentPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type DocumentSource = 'internal' | 'external';
 export type DocumentClassification = 'public' | 'internal' | 'confidential' | 'restricted';
@@ -93,7 +95,12 @@ export interface DocumentRecipient {
   id: string;
   officeId: string;
   office: DocumentRecipientOffice;
+  status: RecipientStatus;
+  receivedById: string | null;
+  receivedAt: string | null;
+  remarks: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface DocumentListItem {
@@ -200,6 +207,8 @@ export interface DocumentFilters {
   currentHolderId?: string;
   encodedById?: string;
   receivedById?: string;
+  recipientOfficeId?: string;
+  recipientStatus?: RecipientStatus;
   dateFrom?: string;
   dateTo?: string;
   sortBy?: DocumentSortBy;
@@ -228,13 +237,20 @@ export interface DocumentCreateInput {
   recipientOfficeIds?: string[];
   currentOfficeId: string;
   currentHolderId?: string;
-  receivedById?: string;
-  dateReceived?: string;
   dueDate?: string;
   tags?: string[];
 }
 
 export type DocumentUpdateInput = Partial<DocumentCreateInput>;
+
+export interface DocumentReceiveInput {
+  remarks?: string;
+}
+
+export interface DocumentReceiveResult {
+  recipient: DocumentRecipient;
+  documentStatus: DocumentStatus;
+}
 
 export interface DocumentTransitionInput {
   toStatus: DocumentStatus;

@@ -11,11 +11,14 @@ import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { FilterDocumentsDto } from './dto/filter-documents.dto';
 import { TransitionDocumentDto } from './dto/transition-document.dto';
+import { ReceiveDocumentDto } from './dto/receive-document.dto';
 import { PaginatedResult } from '../../common/dto/pagination.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 const ALLOWED_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
-  registered: ['received'],
+  // 'received' is NOT a manual transition: documents become received only
+  // when every designated recipient office has received (per-office action).
+  registered: [],
   received: ['approved', 'rejected'],
   approved: ['released'],
   rejected: ['archived'],
@@ -158,6 +161,13 @@ export class DocumentsService {
       }
     }
 
+    // Materialize the recipient offices: "All Offices" creates a receiving
+    // record for every active office so each office tracks its own status.
+    const effectiveRecipientOfficeIds = await this.resolveRecipientOfficeIds(
+      destinationsAllOffices,
+      recipientOfficeIds,
+    );
+
     return this.prisma.$transaction(async (tx) => {
       try {
         const doc = await tx.document.create({
@@ -178,11 +188,9 @@ export class DocumentsService {
             currentHolderId: dto.currentHolderId ?? null,
             destinationsAllOffices,
             encodedById,
-            receivedById: dto.receivedById,
-            dateReceived: dto.dateReceived ? new Date(dto.dateReceived) : null,
             dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-            recipients: recipientOfficeIds.length
-              ? { create: recipientOfficeIds.map((officeId) => ({ officeId })) }
+            recipients: effectiveRecipientOfficeIds.length
+              ? { create: effectiveRecipientOfficeIds.map((officeId) => ({ officeId })) }
               : undefined,
           },
         });
@@ -205,7 +213,7 @@ export class DocumentsService {
               documentNumber,
               classification: dto.classification,
               destinationsAllOffices,
-              recipientOfficeIds,
+              recipientOfficeIds: effectiveRecipientOfficeIds,
             } as Prisma.InputJsonValue,
           },
         });
@@ -226,6 +234,25 @@ export class DocumentsService {
     });
   }
 
+  /**
+   * Resolve the offices a document is destined for. When sent to all offices,
+   * materialize one receiving record per ACTIVE office so each office tracks
+   * its own receiving status independently.
+   */
+  private async resolveRecipientOfficeIds(
+    destinationsAllOffices: boolean,
+    recipientOfficeIds: string[],
+  ): Promise<string[]> {
+    if (destinationsAllOffices) {
+      const offices = await this.prisma.office.findMany({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      return offices.map((office) => office.id);
+    }
+    return recipientOfficeIds;
+  }
+
   async findAll(filter: FilterDocumentsDto): Promise<PaginatedResult<DocumentListItem>> {
     const {
       page,
@@ -242,6 +269,8 @@ export class DocumentsService {
       currentHolderId,
       encodedById,
       receivedById,
+      recipientOfficeId,
+      recipientStatus,
       dateFrom,
       dateTo,
       sortBy,
@@ -270,6 +299,14 @@ export class DocumentsService {
     if (currentHolderId) where.currentHolderId = currentHolderId;
     if (encodedById) where.encodedById = encodedById;
     if (receivedById) where.receivedById = receivedById;
+    if (recipientOfficeId) {
+      where.recipients = {
+        some: {
+          officeId: recipientOfficeId,
+          ...(recipientStatus ? { status: recipientStatus } : {}),
+        },
+      };
+    }
     if (dateFrom || dateTo) {
       where.createdAt = {};
       if (dateFrom) where.createdAt.gte = new Date(dateFrom);
@@ -351,10 +388,15 @@ export class DocumentsService {
   }
 
   /**
-   * OFFICE_ADMIN may only act on documents currently held by their own office.
-   * SYSTEM_ADMIN is a superuser and bypasses this check.
+   * OFFICE_ADMIN may only act on documents their own office may act on:
+   * the document is currently held by their office, OR their office has
+   * already received the document (per-office receiving). SYSTEM_ADMIN is a
+   * superuser and bypasses this check.
    */
-  private async assertOfficeOwnership(actorId: string, doc: { currentOfficeId: string | null }): Promise<void> {
+  private async assertOfficeOwnership(
+    actorId: string,
+    doc: { id: string; currentOfficeId: string | null },
+  ): Promise<void> {
     const actor = await this.prisma.user.findUnique({
       where: { id: actorId },
       select: { role: true, employee: { select: { officeId: true } } },
@@ -362,7 +404,16 @@ export class DocumentsService {
     if (!actor) throw new NotFoundException('Actor not found');
     if (actor.role === Role.OFFICE_ADMIN) {
       const officeId = actor.employee?.officeId;
-      if (!officeId || doc.currentOfficeId !== officeId) {
+      if (!officeId) {
+        throw new ForbiddenException(
+          'You can only manage documents assigned to your own office',
+        );
+      }
+      if (doc.currentOfficeId === officeId) return;
+      const received = await this.prisma.documentRecipient.count({
+        where: { documentId: doc.id, officeId, status: 'received' },
+      });
+      if (received === 0) {
         throw new ForbiddenException(
           'You can only manage documents assigned to your own office',
         );
@@ -394,12 +445,17 @@ export class DocumentsService {
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const finalAllOffices =
-        destinationsAllOffices !== undefined
-          ? destinationsAllOffices
-          : recipientOfficeIds !== undefined && recipientOfficeIds.length === 0;
+    const finalAllOffices =
+      destinationsAllOffices !== undefined
+        ? destinationsAllOffices
+        : recipientOfficeIds !== undefined && recipientOfficeIds.length === 0;
 
+    const nextRecipientIds =
+      recipientOfficeIds !== undefined || destinationsAllOffices !== undefined
+        ? await this.resolveRecipientOfficeIds(finalAllOffices, recipientOfficeIds ?? [])
+        : null;
+
+    return this.prisma.$transaction(async (tx) => {
       const doc = await tx.document.update({
         where: { id },
         data: {
@@ -411,13 +467,12 @@ export class DocumentsService {
         },
       });
 
-      if (recipientOfficeIds !== undefined || destinationsAllOffices !== undefined) {
-        // Replace the recipient set with the provided list (or clear when all-offices).
-        const ids = finalAllOffices ? [] : (recipientOfficeIds ?? []);
+      if (nextRecipientIds !== null) {
+        // Replace the recipient set with the resolved (materialized) list.
         await tx.documentRecipient.deleteMany({ where: { documentId: id } });
-        if (ids.length > 0) {
+        if (nextRecipientIds.length > 0) {
           await tx.documentRecipient.createMany({
-            data: ids.map((officeId) => ({ documentId: id, officeId })),
+            data: nextRecipientIds.map((officeId) => ({ documentId: id, officeId })),
           });
         }
       }
@@ -473,22 +528,14 @@ export class DocumentsService {
 
     await this.assertOfficeOwnership(actorId, doc);
 
-    // Receiving a document brings it into the receiver's own office.
-    const effectiveCurrentOfficeId =
-      dto.currentOfficeId ??
-      (dto.toStatus === 'received' ? actor.employee?.officeId ?? undefined : undefined);
-
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const updated = await tx.document.update({
         where: { id },
         data: {
           status: dto.toStatus,
-          currentOfficeId: effectiveCurrentOfficeId ?? doc.currentOfficeId,
+          currentOfficeId: dto.currentOfficeId ?? doc.currentOfficeId,
           currentHolderId: dto.currentHolderId ?? doc.currentHolderId,
-          ...(dto.toStatus === 'received'
-            ? { receivedById: actorId, dateReceived: now }
-            : {}),
           ...(dto.toStatus === 'approved'
             ? { approvedById: actorId, approvedAt: now, approvedRemarks: dto.remarks }
             : {}),
@@ -542,9 +589,6 @@ export class DocumentsService {
       // Notifications (outside the transaction; never blocks the workflow)
       const title = `${doc.trackingNumber} · ${doc.title}`;
       switch (dto.toStatus) {
-        case 'received':
-          this.notify(doc.encodedById, 'Document received', `${title} was received by the office.`);
-          break;
         case 'approved':
           this.notify(doc.encodedById, 'Document approved', `${title} was approved.`);
           break;
@@ -559,6 +603,151 @@ export class DocumentsService {
       }
       return updated;
     });
+  }
+
+  /**
+   * Per-office receiving action. Only a user belonging to a designated
+   * recipient office may receive the document for that office. Each office's
+   * receiving status is tracked independently; the document itself is
+   * auto-advanced to 'received' once every designated office has received it.
+   */
+  async receive(id: string, actorId: string, dto: ReceiveDocumentDto): Promise<unknown> {
+    const doc = await this.prisma.document.findUnique({ where: { id } });
+    if (!doc) throw new NotFoundException('Document not found');
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { role: true, employee: { select: { officeId: true } } },
+    });
+    if (!actor) throw new NotFoundException('Actor not found');
+
+    const permittedRoles: Role[] = [Role.SYSTEM_ADMIN, Role.DOCUMENT_OFFICER];
+    if (!permittedRoles.includes(actor.role)) {
+      throw new ForbiddenException(
+        'Your role is not permitted to receive documents',
+      );
+    }
+
+    // Enforce the persisted permission (SYSTEM_ADMIN bypasses, matching the
+    // superuser convention used across the module).
+    if (actor.role !== Role.SYSTEM_ADMIN) {
+      const granted = await this.prisma.rolePermission.count({
+        where: { role: actor.role, permission: 'documents.receive' },
+      });
+      if (granted === 0) {
+        throw new ForbiddenException(
+          'Your role does not have permission to receive documents',
+        );
+      }
+    }
+
+    if (doc.encodedById === actorId) {
+      throw new ForbiddenException(
+        'The registrar cannot receive a document they registered. Another authorized user must receive it.',
+      );
+    }
+
+    const officeId = actor.employee?.officeId;
+    if (!officeId) {
+      throw new BadRequestException('Authenticated user has no assigned office');
+    }
+
+    if (['released', 'archived', 'rejected'].includes(doc.status)) {
+      throw new BadRequestException(
+        'Cannot receive a document that has already been finalized',
+      );
+    }
+
+    const recipient = await this.prisma.documentRecipient.findUnique({
+      where: { documentId_officeId: { documentId: id, officeId } },
+    });
+    if (!recipient) {
+      throw new ForbiddenException(
+        'Your office is not a designated recipient of this document',
+      );
+    }
+    if (recipient.status === 'received') {
+      throw new BadRequestException(
+        'Your office has already received this document',
+      );
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const updated = await tx.documentRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          status: 'received',
+          receivedById: actorId,
+          receivedAt: now,
+          remarks: dto.remarks?.trim() ? dto.remarks.trim() : null,
+        },
+        include: { office: { select: { id: true, name: true, code: true } } },
+      });
+
+      await tx.documentTracking.create({
+        data: {
+          documentId: id,
+          actorId,
+          event: 'recipient.received',
+          payload: {
+            officeId,
+            remarks: dto.remarks ?? null,
+          } as Prisma.InputJsonValue,
+        },
+      });
+
+      // Auto-advance the document once every designated office has received.
+      const pendingCount = await tx.documentRecipient.count({
+        where: { documentId: id, status: 'pending' },
+      });
+      let advanced = false;
+      if (pendingCount === 0 && doc.status === 'registered') {
+        await tx.document.update({
+          where: { id },
+          data: { status: 'received', receivedById: actorId, dateReceived: now },
+        });
+        await tx.documentHistory.create({
+          data: {
+            documentId: id,
+            fromStatus: 'registered',
+            toStatus: 'received',
+            actorId,
+            remarks: 'All recipient offices have received the document',
+          },
+        });
+        await tx.documentTracking.create({
+          data: {
+            documentId: id,
+            actorId,
+            event: 'status.transition',
+            payload: {
+              from: 'registered',
+              to: 'received',
+              automatic: true,
+            } as Prisma.InputJsonValue,
+          },
+        });
+        advanced = true;
+      }
+
+      return { recipient: updated, advanced, officeName: updated.office.name };
+    });
+
+    // Notifications (outside the transaction; never blocks the workflow).
+    const title = `${doc.trackingNumber} · ${doc.title}`;
+    this.notify(
+      doc.encodedById,
+      'Document received',
+      result.advanced
+        ? `${title} was received by all designated offices.`
+        : `${title} was received by ${result.officeName}.`,
+    );
+
+    return {
+      recipient: result.recipient,
+      documentStatus: result.advanced ? 'received' : doc.status,
+    };
   }
 
   async getHistory(id: string): Promise<DocumentHistoryEntry[]> {

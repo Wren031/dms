@@ -45,7 +45,8 @@ export function ApprovalPage() {
         : documents.filter(d =>
             d.currentHolderId === user.id ||
             d.receivedById === user.id ||
-            d.currentOfficeId === user.officeId
+            d.currentOfficeId === user.officeId ||
+            d.recipients.some(r => r.officeId === user.officeId && r.status === 'received')
           ),
     [documents, user.id, user.officeId, user.role],
   );

@@ -40,8 +40,10 @@ import { formatDate, formatRelative, cn } from '@/lib/utils';
 import { attachmentsService } from '@/features/documents/services/documents.service';
 import { useDocumentHistory } from '@/features/documents/hooks/useDocumentHistory';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
+import { useDocumentReceive } from '@/features/documents/hooks/useDocumentReceive';
 import { useDocumentDetail } from '@/features/documents/hooks/useDocumentDetail';
 import { DocumentTracker } from '@/features/documents/components/DocumentTracker';
+import { RecipientTracking } from '@/features/documents/components/RecipientTracking';
 import type { DocumentStatus, Permission } from '@/types';
 import type { DocumentDetail, DocumentPerson } from '@/features/documents/types/document';
 
@@ -69,7 +71,7 @@ const ACTION_META: Record<
 > = {
   receive: {
     label: 'Receive',
-    description: 'Receive this document into your office to begin processing.',
+    description: 'Acknowledge receipt for your office. Other recipient offices are unaffected.',
     icon: <Inbox className="w-3.5 h-3.5" />,
     tone: 'primary',
   },
@@ -139,6 +141,7 @@ export function DocumentDetailPage() {
   const { document: doc, loading: documentLoading, refresh, downloadAttachment } = useDocumentDetail(id);
   const { history } = useDocumentHistory(id);
   const transition = useDocumentTransition();
+  const receiveAction = useDocumentReceive();
   const officeById = useOfficeLookup();
   const userById = useUserLookup();
 
@@ -169,11 +172,26 @@ export function DocumentDetailPage() {
   const allowed = (action: ActionType): boolean =>
     hasPermission(ACTION_PERMISSION[action]) && canTransition(doc.status, ACTION_STATUS_MAP[action]);
 
-  const decisionActions = (DECISION_BY_STATUS[doc.status] ?? []).filter(allowed);
+  const isTerminal = TERMINAL_STATUSES.includes(doc.status);
+
+  // Per-office receiving: the actor's own office must be a designated
+  // recipient that has not yet received the document.
+  const myRecipient = doc.recipients.find(r => r.officeId === user.officeId);
+  const receiveAvailable =
+    myRecipient?.status === 'pending' &&
+    allowed('receive') &&
+    !isTerminal &&
+    doc.encodedById !== user.id;
+
+  const decisionActions = (DECISION_BY_STATUS[doc.status] ?? []).filter(
+    a => allowed(a) && (a !== 'receive' || receiveAvailable)
+  );
   const terminalActions = (TERMINAL_BY_STATUS[doc.status] ?? []).filter(allowed);
   const primaryStatus = PRIMARY_BY_STATUS[doc.status];
-  const primaryAction: ActionType | null = primaryStatus && allowed(primaryStatus) ? primaryStatus : null;
-  const isTerminal = TERMINAL_STATUSES.includes(doc.status);
+  const primaryAction: ActionType | null =
+    primaryStatus && allowed(primaryStatus) && (primaryStatus !== 'receive' || receiveAvailable)
+      ? primaryStatus
+      : null;
 
   const openAction = (action: ActionType) => {
     if (action === 'reject' || action === 'archive') {
@@ -195,6 +213,20 @@ export function DocumentDetailPage() {
 
   const submitAction = async () => {
     if (!actionModal) return;
+    if (actionModal === 'receive') {
+      const result = await receiveAction.receive(doc.id, {
+        remarks: remarks.trim() || undefined,
+      });
+      if (!result) {
+        toast.error('Action failed', receiveAction.error ?? 'Please retry.');
+        return;
+      }
+      await refresh();
+      toast.success('Document received', `Receipt recorded for your office.`);
+      setActionModal(null);
+      setRemarks('');
+      return;
+    }
     const newStatus = ACTION_STATUS_MAP[actionModal];
     const updated = await transition.transition(doc.id, {
       toStatus: newStatus,
@@ -239,6 +271,7 @@ export function DocumentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
           <DocumentTracker document={doc} />
+          <RecipientTracking document={doc} userById={userById} />
           <HistoryPanel document={doc} history={history} userById={userById} />
         </div>
 
@@ -303,12 +336,22 @@ export function DocumentDetailPage() {
             </p>
           </div>
           <Textarea
-            label={actionModal === 'reject' ? 'Rejection reason' : 'Remarks'}
-            required
+            label={
+              actionModal === 'receive'
+                ? 'Remarks (optional)'
+                : actionModal === 'reject'
+                  ? 'Rejection reason'
+                  : 'Remarks'
+            }
+            required={actionModal !== 'receive'}
             rows={4}
             value={remarks}
             onChange={e => setRemarks(e.target.value)}
-            placeholder="Provide context for this action…"
+            placeholder={
+              actionModal === 'receive'
+                ? 'Optional note about this receipt…'
+                : 'Provide context for this action…'
+            }
           />
         </div>
       </Modal>

@@ -97,7 +97,8 @@ export function DashboardPage() {
       .filter(d =>
         d.currentHolderId === user.id ||
         d.receivedById === user.id ||
-        d.currentOfficeId === user.officeId
+        d.currentOfficeId === user.officeId ||
+        d.recipients.some(r => r.officeId === user.officeId && r.status === 'received')
       )
       .filter(d => PENDING_STATUSES.has(d.status))
       .sort((a, b) => {

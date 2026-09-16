@@ -12,6 +12,7 @@ import {
   DocumentPriority,
   DocumentSource,
   DocumentStatus,
+  RecipientStatus,
 } from '@prisma/client';
 import { PaginationDto, SortOrder } from '../../../common/dto/pagination.dto';
 
@@ -65,6 +66,14 @@ export class FilterDocumentsDto extends PaginationDto {
   @IsOptional()
   @IsUUID()
   receivedById?: string;
+
+  @IsOptional()
+  @IsUUID()
+  recipientOfficeId?: string;
+
+  @IsOptional()
+  @IsEnum(RecipientStatus)
+  recipientStatus?: RecipientStatus;
 
   @IsOptional()
   @IsDateString()

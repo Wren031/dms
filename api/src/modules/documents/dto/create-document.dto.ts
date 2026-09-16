@@ -86,14 +86,6 @@ export class CreateDocumentDto {
   currentHolderId?: string;
 
   @IsOptional()
-  @IsUUID()
-  receivedById?: string;
-
-  @IsOptional()
-  @IsDateString()
-  dateReceived?: string;
-
-  @IsOptional()
   @IsDateString()
   dueDate?: string;
 }

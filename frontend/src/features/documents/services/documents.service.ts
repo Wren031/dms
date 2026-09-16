@@ -8,6 +8,8 @@ import type {
   DocumentListItem,
   DocumentListResponse,
   DocumentNumberSuggestion,
+  DocumentReceiveInput,
+  DocumentReceiveResult,
   DocumentTimelineEntry,
   DocumentTransitionInput,
   DocumentUpdateInput,
@@ -67,6 +69,8 @@ function buildQuery(filters?: DocumentFilters): string {
   if (filters.currentHolderId) params.set('currentHolderId', filters.currentHolderId);
   if (filters.encodedById) params.set('encodedById', filters.encodedById);
   if (filters.receivedById) params.set('receivedById', filters.receivedById);
+  if (filters.recipientOfficeId) params.set('recipientOfficeId', filters.recipientOfficeId);
+  if (filters.recipientStatus) params.set('recipientStatus', filters.recipientStatus);
   if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
   if (filters.dateTo) params.set('dateTo', filters.dateTo);
   if (filters.sortBy) params.set('sortBy', filters.sortBy);
@@ -132,6 +136,13 @@ export const documentsService = {
 
   transition(id: string, payload: DocumentTransitionInput): Promise<DocumentListItem> {
     return request<DocumentListItem>(`/documents/${id}/transition`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  receive(id: string, payload: DocumentReceiveInput): Promise<DocumentReceiveResult> {
+    return request<DocumentReceiveResult>(`/documents/${id}/receive`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });

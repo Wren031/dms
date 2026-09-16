@@ -17,50 +17,53 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
-import { useCurrentUser } from '@/features/authentication/hooks/useAuth';
+import { Modal } from '@/components/ui/Modal';
+import { Textarea } from '@/components/ui/Input';
+import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
-import { useOfficeLookup, useUserLookup } from '@/hooks/useLookups';
+import { useDocumentReceive } from '@/features/documents/hooks/useDocumentReceive';
+import { useOfficeLookup } from '@/hooks/useLookups';
+import { useToast } from '@/hooks/useToast';
 import {
-  DOCUMENT_STATUS_LABELS,
   DOCUMENT_TYPE_LABELS,
 } from '@/constants';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/ui/Pagination';
 import { formatDate, formatRelative, cn } from '@/lib/utils';
+import type { DocumentListItem } from '@/features/documents/types/document';
+
+type InboxTab = 'pending' | 'received' | 'all';
+
+const FINALIZED_STATUSES = ['released', 'archived', 'rejected'];
 
 export function InboxPage() {
   const user = useCurrentUser();
+  const { hasPermission } = useAuth();
+  const toast = useToast();
+  const receiveAction = useDocumentReceive();
   const { items: documents } = useDocuments({
-    currentOfficeId: user.officeId,
+    ...(user.officeId ? { recipientOfficeId: user.officeId } : {}),
     pageSize: 100,
   });
-  const [tab, setTab] = useState('pending');
+  const [tab, setTabState] = useState<InboxTab>('pending');
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
+  const [receivingDoc, setReceivingDoc] = useState<DocumentListItem | null>(null);
+  const [remarks, setRemarks] = useState('');
   const officeById = useOfficeLookup();
-  const userById = useUserLookup();
 
-  const myInbox = useMemo(() => {
-    return documents.filter(d =>
-      d.currentHolderId === user.id ||
-      d.receivedById === user.id ||
-      d.currentOfficeId === user.officeId
-    );
-  }, [documents, user.id, user.officeId]);
+  const canReceive =
+    hasPermission('documents.receive') && !!user.officeId;
 
-  const counts = useMemo(() => {
-    return {
-      pending: myInbox.filter(d => d.status === 'received').length,
-      completed: myInbox.filter(d => ['approved', 'released', 'archived', 'rejected'].includes(d.status)).length,
-      all: myInbox.length,
-    };
-  }, [myInbox]);
+  const recipientOf = (d: DocumentListItem) =>
+    d.recipients.find(r => r.officeId === user.officeId);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return myInbox.filter(d => {
-      if (tab === 'pending' && d.status !== 'received') return false;
-      if (tab === 'completed' && !['approved', 'released', 'archived', 'rejected'].includes(d.status)) return false;
+    return documents.filter(d => {
+      const status = recipientOf(d)?.status;
+      if (tab === 'pending' && status !== 'pending') return false;
+      if (tab === 'received' && status !== 'received') return false;
       if (priorityFilter !== 'all' && d.priority !== priorityFilter) return false;
       if (q) {
         const haystack = `${d.trackingNumber} ${d.title} ${d.senderName ?? ''}`.toLowerCase();
@@ -68,7 +71,7 @@ export function InboxPage() {
       }
       return true;
     });
-  }, [myInbox, tab, search, priorityFilter]);
+  }, [documents, tab, search, priorityFilter, user.officeId]);
 
   const pagination = usePagination({ totalItems: filtered.length, initialPageSize: 10 });
   const paged = useMemo(
@@ -76,18 +79,47 @@ export function InboxPage() {
     [filtered, pagination.start, pagination.end]
   );
 
-  const overdueCount = useMemo(() => {
-    return myInbox.filter(d =>
-      d.dueDate && new Date(d.dueDate).getTime() < new Date().getTime() &&
-      !['released', 'archived', 'rejected', 'approved'].includes(d.status)
+  const setTab = (next: InboxTab) => {
+    setTabState(next);
+    pagination.reset();
+  };
+
+  const counts = useMemo(() => {
+    const pending = documents.filter(
+      d => recipientOf(d)?.status === 'pending' && !FINALIZED_STATUSES.includes(d.status)
     ).length;
-  }, [myInbox]);
+    const received = documents.filter(d => recipientOf(d)?.status === 'received').length;
+    return { pending, received, all: documents.length };
+  }, [documents, user.officeId]);
+
+  const overdueCount = useMemo(() => {
+    return documents.filter(d =>
+      recipientOf(d)?.status === 'pending' &&
+      !FINALIZED_STATUSES.includes(d.status) &&
+      d.dueDate &&
+      new Date(d.dueDate).getTime() < new Date().getTime()
+    ).length;
+  }, [documents, user.officeId]);
+
+  const confirmReceive = async () => {
+    if (!receivingDoc) return;
+    const result = await receiveAction.receive(receivingDoc.id, {
+      remarks: remarks.trim() || undefined,
+    });
+    if (!result) {
+      toast.error('Action failed', receiveAction.error ?? 'Please retry.');
+      return;
+    }
+    toast.success('Document received', `Receipt recorded for your office.`);
+    setReceivingDoc(null);
+    setRemarks('');
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Inbox"
-        description="Documents received or currently held by your office"
+        description="Documents routed to your office for receiving"
         actions={
           <Link to="/documents">
             <Button variant="outline">All Documents</Button>
@@ -96,8 +128,8 @@ export function InboxPage() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <SmallStat icon={<Clock className="w-4 h-4" />} label="Pending" value={counts.pending} accent="amber" />
-        <SmallStat icon={<CheckCircle2 className="w-4 h-4" />} label="Completed" value={counts.completed} accent="emerald" />
+        <SmallStat icon={<Clock className="w-4 h-4" />} label="Awaiting Receipt" value={counts.pending} accent="amber" />
+        <SmallStat icon={<CheckCircle2 className="w-4 h-4" />} label="Received" value={counts.received} accent="emerald" />
         <SmallStat icon={<Inbox className="w-4 h-4" />} label="All" value={counts.all} accent="indigo" />
         <SmallStat icon={<AlertCircle className="w-4 h-4" />} label="Overdue" value={overdueCount} accent="rose" />
       </div>
@@ -106,10 +138,10 @@ export function InboxPage() {
         <div className="px-5 pt-4 border-b border-slate-200">
           <Tabs
             value={tab}
-            onChange={setTab}
+            onChange={v => setTab(v as InboxTab)}
             items={[
-              { id: 'pending', label: 'Pending', count: counts.pending },
-              { id: 'completed', label: 'Completed', count: counts.completed },
+              { id: 'pending', label: 'Awaiting Receipt', count: counts.pending },
+              { id: 'received', label: 'Received', count: counts.received },
               { id: 'all', label: 'All', count: counts.all },
             ]}
           />
@@ -193,14 +225,20 @@ export function InboxPage() {
             },
             {
               key: 'received',
-              header: 'Received',
-              width: '130px',
-              cell: d => (
-                <div className="text-xs">
-                  <p className="text-slate-700">{d.dateReceived ? formatDate(d.dateReceived) : '—'}</p>
-                  <p className="text-slate-400 text-[10px]">{formatRelative(d.dateReceived ?? d.createdAt)}</p>
-                </div>
-              ),
+              header: 'Received by My Office',
+              width: '150px',
+              cell: d => {
+                const rec = recipientOf(d);
+                if (!rec || rec.status !== 'received') {
+                  return <Badge variant="amber" size="sm">Not yet received</Badge>;
+                }
+                return (
+                  <div className="text-xs">
+                    <p className="text-slate-700">{rec.receivedAt ? formatDate(rec.receivedAt) : '—'}</p>
+                    <p className="text-slate-400 text-[10px]">{rec.receivedAt ? formatRelative(rec.receivedAt) : ''}</p>
+                  </div>
+                );
+              },
             },
             {
               key: 'due',
@@ -208,7 +246,7 @@ export function InboxPage() {
               width: '130px',
               cell: d => {
                 if (!d.dueDate) return <span className="text-xs text-slate-400">—</span>;
-                const overdue = new Date(d.dueDate).getTime() < new Date().getTime() && !['released', 'archived', 'approved'].includes(d.status);
+                const overdue = new Date(d.dueDate).getTime() < new Date().getTime() && !FINALIZED_STATUSES.includes(d.status);
                 return (
                   <div className="text-xs">
                     <p className={cn('font-medium', overdue ? 'text-rose-700' : 'text-slate-700')}>
@@ -227,6 +265,30 @@ export function InboxPage() {
               width: '150px',
               cell: d => <StatusBadge status={d.status} />,
             },
+            {
+              key: 'action',
+              header: '',
+              width: '140px',
+              cell: d => {
+                const rec = recipientOf(d);
+                const canAct =
+                  canReceive &&
+                  rec?.status === 'pending' &&
+                  !FINALIZED_STATUSES.includes(d.status) &&
+                  d.encodedById !== user.id;
+                if (!canAct) return null;
+                return (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    leftIcon={<Inbox className="w-3.5 h-3.5" />}
+                    onClick={() => { setRemarks(''); setReceivingDoc(d); }}
+                  >
+                    Receive
+                  </Button>
+                );
+              },
+            },
           ]}
         />
 
@@ -243,6 +305,47 @@ export function InboxPage() {
           />
         </div>
       </Card>
+
+      <Modal
+        open={!!receivingDoc}
+        onClose={() => setReceivingDoc(null)}
+        title="Receive Document"
+        description="Acknowledge receipt for your office. Other recipient offices remain unaffected."
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setReceivingDoc(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={confirmReceive}
+              disabled={receiveAction.saving}
+            >
+              {receiveAction.saving ? 'Receiving…' : 'Confirm Receive'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
+            <p className="text-xs text-slate-500">Document</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {receivingDoc?.trackingNumber} · {receivingDoc?.title}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              {user.officeName ?? 'Your office'} · {user.officeCode ?? ''}
+            </p>
+          </div>
+          <Textarea
+            label="Remarks (optional)"
+            rows={4}
+            value={remarks}
+            onChange={e => setRemarks(e.target.value)}
+            placeholder="Optional note about this receipt…"
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

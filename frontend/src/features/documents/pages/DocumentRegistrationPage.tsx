@@ -63,7 +63,6 @@ interface FormState {
   recipientOfficeIds: string[];
   assignedUserId: string;
   description: string;
-  dateReceived: string;
   dueDate: string;
   tagsInput: string;
 }
@@ -85,7 +84,6 @@ const INITIAL_STATE: FormState = {
   recipientOfficeIds: [],
   assignedUserId: '',
   description: '',
-  dateReceived: new Date().toISOString().slice(0, 10),
   dueDate: '',
   tagsInput: '',
 };
@@ -267,12 +265,12 @@ export function DocumentRegistrationPage() {
       return 'Description must be at least 10 characters';
     if (field === 'senderName' && form.source === 'external' && !value.trim())
       return 'Sender name is required for external documents';
-    if (field === 'dateReceived' && !value) return 'Date received is required';
     if (field === 'dueDate' && value) {
       const due = new Date(value).getTime();
-      const recv = new Date(form.dateReceived).getTime();
-      if (Number.isNaN(due) || Number.isNaN(recv)) return undefined;
-      if (due < recv) return 'Due date must be on or after date received';
+      if (Number.isNaN(due)) return undefined;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (due < today.getTime()) return 'Due date must be on or after today';
     }
     return undefined;
   };
@@ -417,8 +415,6 @@ export function DocumentRegistrationPage() {
       recipientOfficeIds: destinationsAllOffices ? [] : form.recipientOfficeIds,
       currentOfficeId: user.officeId,
       currentHolderId: form.assignedUserId || user.id,
-      receivedById: user.id,
-      dateReceived: form.dateReceived || undefined,
       dueDate: form.dueDate || undefined,
       tags,
     });
@@ -470,7 +466,6 @@ export function DocumentRegistrationPage() {
     { key: 'recipients', ok: form.allOffices || form.recipientOfficeIds.length > 0, label: 'Receiving / destination offices set' },
     { key: 'source', ok: form.source === 'internal' || !!form.senderName.trim(), label: 'Source / sender specified' },
     { key: 'description', ok: !!form.description.trim() && form.description.trim().length >= 10, label: 'Description is detailed' },
-    { key: 'dateReceived', ok: !!form.dateReceived, label: 'Date received is set' },
   ];
   const checklistDone = checklist.filter(item => item.ok).length;
   const completionPercent = Math.round((checklistDone / checklist.length) * 100);
@@ -913,16 +908,6 @@ export function DocumentRegistrationPage() {
             description="Dates that govern this record"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                type="date"
-                label="Date Received"
-                required
-                value={form.dateReceived}
-                onChange={e => setField('dateReceived', e.target.value)}
-                onBlur={() => markTouched('dateReceived')}
-                error={errors.dateReceived}
-                leftIcon={<Calendar className="w-4 h-4" />}
-              />
               <Input
                 type="date"
                 label="Due Date"

@@ -111,6 +111,11 @@ enum FormDraftStatus {
   SUBMITTED
 }
 
+enum RecipientStatus {
+  pending
+  received
+}
+
 // =====================================================
 // Auth
 // =====================================================
@@ -392,18 +397,24 @@ model DocumentHistory {
   @@index([documentId])
 }
 
-// Receiving / Destination offices for a document (informational only).
-// Independent from DocumentRoutingStep — does not drive the routing workflow.
+// Receiving / Destination offices for a document.
+// Per-office receiving status tracked here (independent of DocumentRoutingStep).
 model DocumentRecipient {
-  id         String   @id @default(uuid())
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  officeId   String
-  office     Office   @relation(fields: [officeId], references: [id])
-  createdAt  DateTime @default(now())
+  id           String          @id @default(uuid())
+  documentId   String
+  document     Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  officeId     String
+  office       Office          @relation(fields: [officeId], references: [id])
+  status       RecipientStatus @default(pending)
+  receivedById String?
+  receivedAt   DateTime?
+  remarks      String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
   @@unique([documentId, officeId])
   @@index([officeId])
+  @@index([status])
 }
 
 // =====================================================

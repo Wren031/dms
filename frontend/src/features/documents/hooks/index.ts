@@ -7,6 +7,8 @@ export { useRegisterDocument } from '@/features/documents/hooks/useRegisterDocum
 export type { UseRegisterDocumentReturn } from '@/features/documents/hooks/useRegisterDocument';
 export { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
 export type { UseDocumentTransitionReturn } from '@/features/documents/hooks/useDocumentTransition';
+export { useDocumentReceive } from '@/features/documents/hooks/useDocumentReceive';
+export type { UseDocumentReceiveReturn } from '@/features/documents/hooks/useDocumentReceive';
 export { useDocumentHistory } from '@/features/documents/hooks/useDocumentHistory';
 export type { UseDocumentHistoryReturn } from '@/features/documents/hooks/useDocumentHistory';
 export { useDocumentTimeline } from '@/features/documents/hooks/useDocumentTimeline';
