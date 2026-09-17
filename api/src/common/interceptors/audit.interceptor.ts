@@ -66,6 +66,8 @@ export class AuditInterceptor implements NestInterceptor {
               result && typeof result === 'object' && 'data' in (result as object)
                 ? (result as { data: { id?: string } }).data?.id
                 : undefined,
+            actorRole: user.role,
+            actorOfficeId: user.employee?.officeId ?? null,
           };
 
           // Best-effort write; failures here MUST NOT roll back business writes,

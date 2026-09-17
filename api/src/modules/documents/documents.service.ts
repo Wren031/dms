@@ -697,12 +697,11 @@ export class DocumentsService {
         },
       });
 
-      // Auto-advance the document once every designated office has received.
-      const pendingCount = await tx.documentRecipient.count({
-        where: { documentId: id, status: 'pending' },
-      });
+      // Auto-advance the document once at least one recipient office has
+      // received it. Per-recipient receiving continues independently after
+      // this point — other offices can still mark themselves as received.
       let advanced = false;
-      if (pendingCount === 0 && doc.status === 'registered') {
+      if (doc.status === 'registered') {
         await tx.document.update({
           where: { id },
           data: { status: 'received', receivedById: actorId, dateReceived: now },
@@ -713,7 +712,7 @@ export class DocumentsService {
             fromStatus: 'registered',
             toStatus: 'received',
             actorId,
-            remarks: 'All recipient offices have received the document',
+            remarks: 'Document received by at least one recipient office',
           },
         });
         await tx.documentTracking.create({
@@ -740,7 +739,7 @@ export class DocumentsService {
       doc.encodedById,
       'Document received',
       result.advanced
-        ? `${title} was received by all designated offices.`
+        ? `${title} was received by ${result.officeName}. Approval and release can now proceed.`
         : `${title} was received by ${result.officeName}.`,
     );
 

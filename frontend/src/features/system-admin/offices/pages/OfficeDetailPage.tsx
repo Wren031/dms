@@ -11,7 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Card, CardHeader } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { useToast } from '@/hooks/useToast';

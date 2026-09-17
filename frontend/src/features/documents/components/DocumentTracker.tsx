@@ -117,7 +117,7 @@ export function DocumentTracker({ document }: DocumentTrackerProps) {
       {
         status: 'received',
         label: 'Received',
-        description: 'Document was received and acknowledged by the receiving office.',
+        description: 'Document was received and acknowledged by at least one recipient office.',
         icon: STEP_ICON.received,
         timestamp: document.dateReceived,
         person: document.receivedBy,
@@ -216,7 +216,7 @@ export function DocumentTracker({ document }: DocumentTrackerProps) {
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-slate-900">Workflow Tracker</h2>
           <p className="text-xs text-slate-500">
-            Fixed lifecycle: Registered → Received → Approved → Released.
+            Fixed lifecycle: Registered → Received (by ≥1 office) → Approved → Released.
           </p>
         </div>
         {showProgress && (
