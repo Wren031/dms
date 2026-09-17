@@ -5,14 +5,11 @@ export interface Office {
   name: string;
   code: string;
   type: OfficeType;
-  parentId: string | null;
   headName: string | null;
   description: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  parent?: Pick<Office, 'id' | 'name' | 'code' | 'type'> | null;
-  children?: Office[];
   _count?: { employees: number };
 }
 
@@ -27,7 +24,6 @@ export interface CreateOfficeInput {
   name: string;
   code: string;
   type: OfficeType;
-  parentId?: string | null;
   headName?: string | null;
   description?: string | null;
   isActive?: boolean;

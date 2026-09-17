@@ -73,7 +73,6 @@ export interface Office {
   name: string;
   code: string;
   type: 'main' | 'division' | 'unit';
-  parentId: string | null;
   head: string;
   description: string;
   createdAt: string;

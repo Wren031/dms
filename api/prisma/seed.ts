@@ -131,14 +131,12 @@ async function seedOffices() {
     update: {
       name: ROOT_OFFICE.name,
       type: ROOT_OFFICE.type,
-      parentId: null,
       isActive: true,
     },
     create: {
       code: ROOT_OFFICE.code,
       name: ROOT_OFFICE.name,
       type: ROOT_OFFICE.type,
-      parentId: null,
       isActive: true,
     },
   });
@@ -150,20 +148,18 @@ async function seedOffices() {
       update: {
         name: division.name,
         type: 'division',
-        parentId: root.id,
         isActive: true,
       },
       create: {
         code: division.code,
         name: division.name,
         type: 'division',
-        parentId: root.id,
         isActive: true,
       },
     });
   }
   console.log(
-    `\u2714 Division offices seeded: ${DIVISION_OFFICES.length} (under ${ROOT_OFFICE.code})`,
+    `\u2714 Division offices seeded: ${DIVISION_OFFICES.length} (type: division)`,
   );
 
   return root;

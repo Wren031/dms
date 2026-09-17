@@ -183,9 +183,6 @@ model Office {
   name        String
   code        String     @unique
   type        OfficeType
-  parentId    String?
-  parent      Office?    @relation("OfficeTree", fields: [parentId], references: [id])
-  children    Office[]   @relation("OfficeTree")
   headName    String?
   description String?
   isActive    Boolean    @default(true)
@@ -193,8 +190,6 @@ model Office {
   documentRecipients DocumentRecipient[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-
-  @@index([parentId])
 }
 
 model Employee {

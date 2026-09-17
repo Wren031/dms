@@ -7,12 +7,11 @@ import {
   Edit2,
   Trash2,
   MoreVertical,
-  ChevronRight,
   Filter as FilterIcon,
   X as XIcon,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Card, CardHeader } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -28,7 +27,6 @@ import { useSearch } from '@/hooks/useSearch';
 import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
 import { OfficeFormModal } from '@/features/system-admin/offices/components/OfficeFormModal';
-import { OfficeHierarchyTree } from '@/features/system-admin/offices/components/OfficeHierarchyTree';
 import { OfficeStatCard } from '@/features/system-admin/offices/components/OfficeStatCard';
 import type { Office, OfficeType } from '@/features/system-admin/offices/types/office';
 import { ApiError } from '@/features/system-admin/offices/services/office.service';
@@ -167,12 +165,9 @@ export function OfficesPage() {
     }
   };
 
-  const findById = (id: string | null | undefined) =>
-    id ? offices.find(o => o.id === id) ?? null : null;
-
   const modalOffice = modal.kind === 'edit' ? modal.office : undefined;
-  const modalLoading = modal.kind === 'create' ? creating : updating;
-  const modalError = modal.kind === 'closed' ? null : actionError;
+const modalLoading = modal.kind === 'create' ? creating : updating;
+const modalError = modal.kind === 'closed' ? null : actionError;
 
   const showEmptyState = filtered.length === 0 && !loading;
   const hasAnyOffices = offices.length > 0;
@@ -181,7 +176,7 @@ export function OfficesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Offices"
-        description="Manage the organizational structure and office hierarchy"
+        description="Manage the organizational structure"
         actions={
           hasPermission('offices.create') ? (
             <Button leftIcon={<PlusCircle className="w-4 h-4" />} onClick={handleCreate}>
@@ -198,8 +193,8 @@ export function OfficesPage() {
         <OfficeStatCard label="Units" value={stats.unit} accent="emerald" icon={<Building2 className="w-5 h-5" />} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-        <Card className="lg:col-span-2" padded={false}>
+      <div className="space-y-4 sm:space-y-6">
+        <Card padded={false}>
           <div className="px-4 sm:px-6 py-4 border-b border-border bg-muted/40">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-2 min-w-0">
@@ -302,7 +297,6 @@ export function OfficesPage() {
                 key: 'name',
                 header: 'Office',
                 cell: o => {
-                  const parent = findById(o.parentId);
                   return (
                     <div>
                       <button
@@ -320,13 +314,6 @@ export function OfficesPage() {
                           <Badge variant="slate" size="sm">Inactive</Badge>
                         )}
                       </div>
-                      {parent && (
-                        <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-                          Under <span className="font-medium">{parent.code}</span>
-                          <ChevronRight className="w-3 h-3" />
-                          {parent.name}
-                        </p>
-                      )}
                     </div>
                   );
                 },
@@ -414,18 +401,12 @@ export function OfficesPage() {
             </div>
           )}
         </Card>
-
-        <Card>
-          <CardHeader title="Organizational Hierarchy" description="Office structure overview" />
-          <OfficeHierarchyTree offices={offices} />
-        </Card>
       </div>
 
       <OfficeFormModal
         open={modal.kind !== 'closed'}
         mode={modal.kind === 'edit' ? 'edit' : 'create'}
         initial={modalOffice}
-        parentOptions={offices}
         loading={modalLoading}
         errorMessage={modalError}
         onClose={closeModal}

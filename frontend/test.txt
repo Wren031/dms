@@ -1,24 +1,31 @@
-System Administrator
-{
-    "emailOrUsername": "admin",
-    "password": "Admin@123"
-}
+POST http://localhost:3000/auth/login
 
-Document Encoder
-{
-    "emailOrUsername": "exampledata.exampledata",
-    "password": "Password123"
-}
-
-Office Administrator 
+encoder
 
 {
-    "emailOrUsername": "office.administrator",
-    "password": "Password123"
+    "emailOrUsername": "encoder.doe",
+    "password": "encoder123"
 }
 
-Document Officer 
 {
-    "emailOrUsername": "documentofficer.officer",
-    "password": "Password123"
+    
+system_admin
+    "emailOrUsername": "admin@city.gov",
+    "password": "admin123"
 }
+
+office_admin
+{
+    "emailOrUsername": "office.doe",
+    "password": "office123"
+
+    "carl.doe"
+    "a4BpnLBWtkQ2"
+}
+
+document_officer
+{
+    "emailOrUsername": "document.doe",
+    "password": "document123"
+}
+

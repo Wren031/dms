@@ -26,19 +26,6 @@ interface UseOfficesReturn {
   clearActionError: () => void;
 }
 
-function flattenTree(nodes: Office[], acc: Office[] = []): Office[] {
-  for (const node of nodes) {
-    acc.push({
-      ...node,
-      children: undefined,
-    });
-    if (node.children?.length) {
-      flattenTree(node.children, acc);
-    }
-  }
-  return acc;
-}
-
 function toMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;
@@ -61,14 +48,12 @@ export function useOffices(): UseOfficesReturn {
     setLoading(true);
     setError(null);
     try {
-      const tree = await officeService.getTree();
-      setOffices(flattenTree(tree));
+      setOffices(await officeService.listAll());
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         try {
-          const tree = await officeService.getTree();
-          setOffices(flattenTree(tree));
+          setOffices(await officeService.listAll());
           return;
         } catch (retryErr) {
           setError(toMessage(retryErr, 'Failed to load offices.'));
@@ -172,9 +157,9 @@ export function useOfficeDirectory(): {
 
   useEffect(() => {
     let active = true;
-    officeService.getTree()
-      .then(tree => {
-        if (active) setOffices(flattenTree(tree));
+    officeService.listAll()
+      .then(list => {
+        if (active) setOffices(list);
       })
       .catch(err => {
         if (active) setError(toMessage(err, 'Failed to load offices.'));

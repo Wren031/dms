@@ -44,12 +44,6 @@ export class OfficesController {
   }
 
   @SkipThrottle()
-  @Get('tree')
-  findTree() {
-    return this.officesService.findTree();
-  }
-
-  @SkipThrottle()
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.officesService.findOne(id);

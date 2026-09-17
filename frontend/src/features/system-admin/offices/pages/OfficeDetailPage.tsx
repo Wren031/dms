@@ -4,9 +4,7 @@ import {
   ArrowLeft,
   Building2,
   FileText,
-  Network,
   Calendar,
-  ChevronRight,
   Edit2,
   Trash2,
 } from 'lucide-react';
@@ -17,7 +15,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useToast } from '@/hooks/useToast';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useAuth } from '@/features/authentication/hooks/useAuth';
-import { useOffices } from '@/features/system-admin/offices/hooks/useOffices';
 import { officeService, ApiError } from '@/features/system-admin/offices/services/office.service';
 import { OfficeFormModal } from '@/features/system-admin/offices/components/OfficeFormModal';
 import type {
@@ -40,7 +37,6 @@ export function OfficeDetailPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { hasPermission } = useAuth();
-  const { offices } = useOffices();
 
   const [office, setOffice] = useState<Office | null>(null);
   const [loading, setLoading] = useState(true);
@@ -154,8 +150,6 @@ export function OfficeDetailPage() {
     );
   }
 
-  const parent = office.parent ?? null;
-  const children = office.children ?? [];
   const employees: OfficeEmployee[] = Array.isArray(
     (office as unknown as { employees?: OfficeEmployee[] }).employees,
   )
@@ -245,27 +239,9 @@ export function OfficeDetailPage() {
           </div>
         </div>
 
-        <div className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-4">
+        <div className="p-5 grid grid-cols-2 gap-x-6 gap-y-4">
           <MetaField label="Office Head" value={headName} />
-          <MetaField
-            label="Reports To"
-            value={
-              parent ? (
-                <Link
-                  to={`/offices/${parent.id}`}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-900 hover:text-brand-700"
-                >
-                  <span className="font-mono text-[11px] text-slate-500">{parent.code}</span>
-                  <span className="truncate">{parent.name}</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                </Link>
-              ) : (
-                <span className="text-sm text-slate-500">Top-level office</span>
-              )
-            }
-          />
           <MetaField label="Employees" value={<span className="tabular-nums">{employees.length}</span>} />
-          <MetaField label="Sub-offices" value={<span className="tabular-nums">{children.length}</span>} />
         </div>
 
         {office.description && (
@@ -305,35 +281,6 @@ export function OfficeDetailPage() {
               </ul>
             )}
           </Card>
-
-          {children.length > 0 && (
-            <Card padded={false}>
-              <div className="px-5 py-3.5 border-b border-slate-200 flex items-baseline justify-between">
-                <h3 className="text-sm font-semibold text-slate-900">Sub-offices</h3>
-                <span className="text-xs text-slate-500 tabular-nums">{children.length}</span>
-              </div>
-              <ul className="divide-y divide-slate-100">
-                {children.map(child => (
-                  <li key={child.id}>
-                    <Link
-                      to={`/offices/${child.id}`}
-                      className="group flex items-center gap-3 px-5 py-3 hover:bg-slate-50"
-                    >
-                      <Building2 className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="font-mono text-[11px] text-slate-500 shrink-0">
-                        {child.code}
-                      </span>
-                      <span className="text-sm font-medium text-slate-900 truncate flex-1">
-                        {child.name}
-                      </span>
-                      <span className="text-xs text-slate-500">{child.type}</span>
-                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
         </div>
 
         <aside className="lg:col-span-4 space-y-6">
@@ -352,28 +299,11 @@ export function OfficeDetailPage() {
 
           <Card padded={false}>
             <div className="px-5 py-3.5 border-b border-slate-200">
-              <h3 className="text-sm font-semibold text-slate-900">Hierarchy</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Details</h3>
             </div>
             <dl className="px-5 py-4 divide-y divide-slate-100 text-sm">
               <Row label="Type" value={<span className="capitalize">{office.type}</span>} />
               <Row label="Code" value={<span className="font-mono">{office.code}</span>} />
-              <Row
-                label="Reports To"
-                value={
-                  parent ? (
-                    <Link
-                      to={`/offices/${parent.id}`}
-                      className="inline-flex items-center gap-1.5 text-slate-900 hover:text-brand-700"
-                    >
-                      <span className="font-mono text-[11px] text-slate-500">{parent.code}</span>
-                      <span className="truncate">{parent.name}</span>
-                    </Link>
-                  ) : (
-                    <span className="text-slate-500">Top-level office</span>
-                  )
-                }
-              />
-              <Row label="Sub-offices" value={<span className="tabular-nums">{children.length}</span>} />
               <Row label="Created" value={formatDate(office.createdAt)} />
             </dl>
           </Card>
@@ -383,7 +313,6 @@ export function OfficeDetailPage() {
               <h3 className="text-sm font-semibold text-slate-900">Snapshot</h3>
             </div>
             <ul className="px-5 py-4 space-y-2 text-xs">
-              <SnapshotRow icon={<Network className="w-3.5 h-3.5" />} label="Sub-offices" value={children.length} />
               <SnapshotRow icon={<Calendar className="w-3.5 h-3.5" />} label="Created" value={formatDate(office.createdAt)} />
               <SnapshotRow icon={<FileText className="w-3.5 h-3.5" />} label="Documents" value="—" />
             </ul>
@@ -406,7 +335,6 @@ export function OfficeDetailPage() {
         open={editOpen}
         mode="edit"
         initial={office}
-        parentOptions={offices}
         loading={editLoading}
         errorMessage={editError}
         onClose={() => {

@@ -49,8 +49,19 @@ export const officeService = {
     return request<OfficeListResponse>(`/offices${buildQuery(filters)}`);
   },
 
-  getTree(): Promise<Office[]> {
-    return request<Office[]>('/offices/tree');
+  async listAll(): Promise<Office[]> {
+    const pageSize = 200;
+    let page = 1;
+    const all: Office[] = [];
+    for (;;) {
+      const res = await request<OfficeListResponse>(
+        `/offices?page=${page}&pageSize=${pageSize}`,
+      );
+      all.push(...res.items);
+      if (all.length >= res.total || res.items.length === 0) break;
+      page += 1;
+    }
+    return all;
   },
 
   getById(id: string): Promise<Office> {

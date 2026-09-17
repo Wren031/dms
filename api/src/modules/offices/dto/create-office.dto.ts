@@ -1,4 +1,4 @@
-import { IsBoolean, IsEnum, IsOptional, IsString, IsUUID, Length } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, Length } from 'class-validator';
 import { OfficeType } from '@prisma/client';
 
 export class CreateOfficeDto {
@@ -12,10 +12,6 @@ export class CreateOfficeDto {
 
   @IsEnum(OfficeType)
   type!: OfficeType;
-
-  @IsOptional()
-  @IsUUID()
-  parentId?: string;
 
   @IsOptional()
   @IsString()

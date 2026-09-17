@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Building2, Lock, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Input, Textarea } from '@/components/ui/Input';
@@ -19,7 +19,6 @@ interface OfficeFormModalProps {
   open: boolean;
   mode: 'create' | 'edit';
   initial?: Office;
-  parentOptions: Office[];
   loading: boolean;
   errorMessage: string | null;
   onClose: () => void;
@@ -30,7 +29,6 @@ interface FormState {
   name: string;
   code: string;
   type: OfficeType;
-  parentId: string;
   headName: string;
   description: string;
   isActive: boolean;
@@ -40,7 +38,6 @@ const EMPTY_FORM: FormState = {
   name: '',
   code: '',
   type: 'division',
-  parentId: '',
   headName: '',
   description: '',
   isActive: true,
@@ -65,7 +62,6 @@ function toFormState(office?: Office): FormState {
     name: office.name,
     code: office.code,
     type: office.type,
-    parentId: office.parentId ?? '',
     headName: office.headName ?? '',
     description: office.description ?? '',
     isActive: office.isActive,
@@ -76,7 +72,6 @@ export function OfficeFormModal({
   open,
   mode,
   initial,
-  parentOptions,
   loading,
   errorMessage,
   onClose,
@@ -120,12 +115,10 @@ export function OfficeFormModal({
 
   const handleNameChange = (name: string) => {
     const entry = OFFICE_DIRECTORY.find(e => e.name === name);
-    const matched = parentOptions.find(o => o.name === name);
     updateForm({
       ...formRef.current,
       name,
       code: entry?.code ?? formRef.current.code,
-      parentId: matched?.parentId ?? '',
     });
   };
 
@@ -137,15 +130,10 @@ export function OfficeFormModal({
       name: form.name.trim(),
       code: form.code.trim().toUpperCase(),
       type: form.type,
-      parentId: form.parentId || null,
       headName: form.headName.trim() || null,
       description: form.description.trim() || null,
       isActive: form.isActive,
     };
-
-    if (mode === 'create' && form.type === 'main') {
-      payload.parentId = null;
-    }
 
     await onSubmit(payload);
     if (mode === 'create') {
@@ -163,13 +151,6 @@ export function OfficeFormModal({
     mode === 'create'
       ? 'Create a new office in the organizational structure'
       : 'Update the details for this office';
-
-  const parentDisplayName = useMemo(() => {
-    if (!form.parentId) return '';
-    const found = parentOptions.find(o => o.id === form.parentId);
-    if (found?.name) return found.name;
-    return initial?.parent?.name ?? '';
-  }, [form.parentId, parentOptions, initial]);
 
   return (
     <Modal
@@ -270,15 +251,6 @@ export function OfficeFormModal({
             }
             options={TYPE_OPTIONS}
             disabled={loading}
-          />
-          <Input
-            label="Parent Office"
-            name="parentId"
-            value={parentDisplayName}
-            readOnly
-            leftIcon={<Lock className="w-4 h-4" />}
-            placeholder="No Parent Office"
-            hint={form.type === 'main' ? 'Main offices cannot have a parent' : 'Derived from the selected office.'}
           />
           <Input
             label="Office Head"
