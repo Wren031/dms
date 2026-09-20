@@ -55,7 +55,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
   office_admin: [
     'dashboard.view',
-    'documents.view', 'documents.edit',
+    'documents.view', 'documents.edit', 'documents.delete',
     'documents.approve', 'documents.reject',
     'documents.release', 'documents.archive', 'documents.track',
     'users.view', 'users.create', 'users.edit',

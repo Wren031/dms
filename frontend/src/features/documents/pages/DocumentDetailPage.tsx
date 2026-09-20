@@ -18,6 +18,7 @@ import {
   AlertCircle,
   ArrowRight,
   Calendar,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -41,6 +42,7 @@ import { attachmentsService } from '@/features/documents/services/documents.serv
 import { useDocumentHistory } from '@/features/documents/hooks/useDocumentHistory';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
 import { useDocumentReceive } from '@/features/documents/hooks/useDocumentReceive';
+import { useDocumentDelete } from '@/features/documents/hooks/useDocumentDelete';
 import { useDocumentDetail } from '@/features/documents/hooks/useDocumentDetail';
 import { DocumentTracker } from '@/features/documents/components/DocumentTracker';
 import { RecipientTracking } from '@/features/documents/components/RecipientTracking';
@@ -142,6 +144,7 @@ export function DocumentDetailPage() {
   const { history } = useDocumentHistory(id);
   const transition = useDocumentTransition();
   const receiveAction = useDocumentReceive();
+  const documentDelete = useDocumentDelete();
   const officeById = useOfficeLookup();
   const userById = useUserLookup();
 
@@ -243,6 +246,29 @@ export function DocumentDetailPage() {
   };
 
   const canDownload = doc.attachments.length > 0;
+  const canDeleteDocument =
+    hasPermission('documents.delete') &&
+    (user.role === 'system_admin' ||
+      doc.currentOfficeId === user.officeId ||
+      doc.recipients.some(r => r.officeId === user.officeId && r.status === 'received'));
+
+  const handleDeleteDocument = async () => {
+    const ok = await confirm({
+      title: 'Delete Document',
+      description: `Delete ${doc.trackingNumber} · ${doc.title}? It will be hidden from all lists and workflows. This cannot be undone through the interface.`,
+      confirmText: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    const deleted = await documentDelete.remove(doc.id);
+    if (deleted) {
+      toast.success('Document deleted', `${doc.trackingNumber} has been removed.`);
+      navigate('/documents');
+    } else {
+      toast.error('Could not delete document', documentDelete.error ?? 'Please retry.');
+    }
+  };
+
   const office = officeById(doc.currentOfficeId);
   const holderName = doc.currentHolder?.fullName ?? (doc.currentHolderId ? userById(doc.currentHolderId)?.fullName ?? null : null);
   const holderPosition = doc.currentHolder?.position ?? (doc.currentHolderId ? userById(doc.currentHolderId)?.position ?? null : null);
@@ -266,6 +292,8 @@ export function DocumentDetailPage() {
         primaryAction={primaryAction}
         onPrimaryAction={() => primaryAction && openAction(primaryAction)}
         canDownload={canDownload}
+        canDelete={canDeleteDocument}
+        onDelete={handleDeleteDocument}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -383,6 +411,8 @@ interface DocumentHeroProps {
   primaryAction: ActionType | null;
   onPrimaryAction: () => void;
   canDownload: boolean;
+  canDelete: boolean;
+  onDelete: () => void;
 }
 
 function DocumentHero({
@@ -394,6 +424,8 @@ function DocumentHero({
   primaryAction,
   onPrimaryAction,
   canDownload,
+  canDelete,
+  onDelete,
 }: DocumentHeroProps) {
   const isTerminal = TERMINAL_STATUSES.includes(d.status);
   const showAttachmentBar = true;
@@ -491,6 +523,16 @@ function DocumentHero({
                   : 'No further actions available.'}
             </p>
             <div className="flex items-center gap-2 sm:justify-end">
+              {canDelete && (
+                <Button
+                  variant="danger"
+                  size="md"
+                  leftIcon={<Trash2 className="w-4 h-4" />}
+                  onClick={onDelete}
+                >
+                  Delete Document
+                </Button>
+              )}
               {canDownload && (
                 <Button variant="outline" size="md" leftIcon={<Download className="w-4 h-4" />}>
                   Download

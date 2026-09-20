@@ -20,4 +20,6 @@ export type {
   DocumentUpdateInput,
   DocumentTransitionInput,
   DocumentNumberSuggestion,
+  DocumentNumberAvailability,
+  DocumentNumberAvailabilityExisting,
 } from '@/features/documents/types/document';

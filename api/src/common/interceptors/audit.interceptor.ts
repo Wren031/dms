@@ -66,6 +66,10 @@ export class AuditInterceptor implements NestInterceptor {
               result && typeof result === 'object' && 'data' in (result as object)
                 ? (result as { data: { id?: string } }).data?.id
                 : undefined,
+            deletedCount:
+              result && typeof result === 'object' && 'deletedCount' in (result as object)
+                ? (result as { deletedCount?: number }).deletedCount
+                : undefined,
             actorRole: user.role,
             actorOfficeId: user.employee?.officeId ?? null,
           };
@@ -174,6 +178,15 @@ export class AuditInterceptor implements NestInterceptor {
         return `Document registered (${String(body.title ?? 'untitled')})`;
       case 'document.transition':
         return `Transitioned ${fromStatus ?? '?'} → ${toStatus ?? '?'}`;
+      case 'document.delete':
+        return `Document deleted`;
+      case 'document.delete-all': {
+        const count =
+          result && typeof result === 'object' && 'deletedCount' in (result as object)
+            ? (result as { deletedCount?: number }).deletedCount
+            : undefined;
+        return `All documents deleted (${count ?? 'unknown'} affected)`;
+      }
       case 'document.assign-holder':
         return `Holder assigned (${String(body.holderId ?? body.holder ?? '') || 'unset'})`;
       case 'review.create':

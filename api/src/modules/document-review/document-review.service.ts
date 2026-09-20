@@ -16,7 +16,7 @@ export class DocumentReviewService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateReviewDto, reviewerId: string): Promise<unknown> {
-    const doc = await this.prisma.document.findUnique({ where: { id: dto.documentId } });
+    const doc = await this.prisma.document.findFirst({ where: { id: dto.documentId, deletedAt: null } });
     if (!doc) throw new NotFoundException('Document not found');
 
     return this.prisma.$transaction(async (tx) => {

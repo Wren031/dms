@@ -17,8 +17,10 @@ import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { FilterDocumentsDto } from './dto/filter-documents.dto';
+import { CheckDocumentNumberDto } from './dto/check-document-number.dto';
 import { TransitionDocumentDto } from './dto/transition-document.dto';
 import { ReceiveDocumentDto } from './dto/receive-document.dto';
+import { DeleteAllDocumentsDto } from './dto/delete-all-documents.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -58,6 +60,15 @@ export class DocumentsController {
   }
 
   @SkipThrottle()
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
+  @Get('check-document-number')
+  checkDocumentNumber(@Query() query: CheckDocumentNumberDto) {
+    return this.documentsService.checkDocumentNumberAvailability(
+      query.documentNumber,
+    );
+  }
+
+  @SkipThrottle()
   @Permissions('documents.view')
   @Get(':id')
   findOne(@Param('id', new ParseUUIDPipe()) id: string) {
@@ -77,11 +88,20 @@ export class DocumentsController {
 
   @Roles(ROLES.SYSTEM_ADMIN)
   @Permissions('documents.delete')
+  @Audit('document.delete-all', 'documents', 'Document')
+  @Delete()
+  @HttpCode(HttpStatus.OK)
+  removeAll(@Body() dto: DeleteAllDocumentsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.documentsService.removeAll(user.id);
+  }
+
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Permissions('documents.delete')
   @Audit('document.delete', 'documents', 'Document')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.documentsService.remove(id);
+  remove(@Param('id', new ParseUUIDPipe()) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.documentsService.remove(id, user.id);
   }
 
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_OFFICER)

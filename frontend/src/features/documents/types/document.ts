@@ -262,3 +262,15 @@ export interface DocumentTransitionInput {
 export interface DocumentNumberSuggestion {
   suggestion: string;
 }
+
+export interface DocumentNumberAvailabilityExisting {
+  id: string;
+  trackingNumber: string;
+  originatingOfficeCode: string | null;
+  originatingOfficeName: string | null;
+}
+
+export interface DocumentNumberAvailability {
+  available: boolean;
+  existing: DocumentNumberAvailabilityExisting | null;
+}

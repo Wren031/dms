@@ -8,6 +8,7 @@ import type {
   DocumentListItem,
   DocumentListResponse,
   DocumentNumberSuggestion,
+  DocumentNumberAvailability,
   DocumentReceiveInput,
   DocumentReceiveResult,
   DocumentTimelineEntry,
@@ -116,6 +117,16 @@ export const documentsService = {
     return request<DocumentNumberSuggestion>(`/documents/document-number-suggestion/${officeId}`);
   },
 
+  checkDocumentNumberAvailability(
+    documentNumber: string,
+    init?: RequestInit,
+  ): Promise<DocumentNumberAvailability> {
+    return request<DocumentNumberAvailability>(
+      `/documents/check-document-number?documentNumber=${encodeURIComponent(documentNumber)}`,
+      init,
+    );
+  },
+
   register(payload: DocumentCreateInput): Promise<DocumentListItem> {
     return request<DocumentListItem>('/documents', {
       method: 'POST',
@@ -132,6 +143,13 @@ export const documentsService = {
 
   remove(id: string): Promise<{ id: string }> {
     return request<{ id: string }>(`/documents/${id}`, { method: 'DELETE' });
+  },
+
+  removeAll(): Promise<{ deletedCount: number }> {
+    return request<{ deletedCount: number }>('/documents', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmation: 'DELETE ALL DOCUMENTS' }),
+    });
   },
 
   transition(id: string, payload: DocumentTransitionInput): Promise<DocumentListItem> {

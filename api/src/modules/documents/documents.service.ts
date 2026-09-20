@@ -223,11 +223,7 @@ export class DocumentsService {
           err instanceof Prisma.PrismaClientKnownRequestError &&
           err.code === 'P2002'
         ) {
-          throw new ConflictException(
-            useManualOrigin
-              ? `Document number '${documentNumber}' is already used.`
-              : `Document number '${documentNumber}' is already used in this originating office.`,
-          );
+          throw await this.buildDocumentNumberConflict(documentNumber);
         }
         throw err;
       }
@@ -277,7 +273,7 @@ export class DocumentsService {
       order,
     } = filter;
 
-    const where: Prisma.DocumentWhereInput = {};
+    const where: Prisma.DocumentWhereInput = { deletedAt: null };
     if (search) {
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
@@ -345,6 +341,7 @@ export class DocumentsService {
       },
     });
     if (!doc) throw new NotFoundException('Document not found');
+    if (doc.deletedAt) throw new NotFoundException('Document not found');
     const ids = Array.from(new Set([doc.encodedById, doc.receivedById, doc.approvedById, doc.releasedById, doc.currentHolderId].filter((value): value is string => !!value)));
     const users = ids.length
       ? await this.prisma.user.findMany({
@@ -424,6 +421,12 @@ export class DocumentsService {
   async update(id: string, dto: UpdateDocumentDto): Promise<unknown> {
     const { recipientOfficeIds, destinationsAllOffices, ...rest } = dto;
 
+    const existing = await this.prisma.document.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Document not found');
+
     if (
       destinationsAllOffices !== undefined &&
       recipientOfficeIds !== undefined &&
@@ -481,9 +484,34 @@ export class DocumentsService {
     }).then(() => this.findOne(id));
   }
 
-  async remove(id: string): Promise<{ id: string }> {
-    await this.prisma.document.delete({ where: { id } });
-    return { id };
+  async remove(id: string, actorId: string): Promise<{ id: string; deleted: boolean }> {
+    const doc = await this.prisma.document.findUnique({ where: { id } });
+    if (!doc || doc.deletedAt) throw new NotFoundException('Document not found');
+
+    // OFFICE_ADMIN may only delete documents their own office may act on
+    // (held by their office or already received by their office).
+    await this.assertOfficeOwnership(actorId, doc);
+
+    await this.prisma.document.update({
+      where: { id },
+      data: { deletedAt: new Date(), deletedById: actorId },
+    });
+
+    return { id, deleted: true };
+  }
+
+  /**
+   * Soft-deletes every active document. Restricted to SYSTEM_ADMIN by the
+   * controller. Related records (recipients, routing, reviews, releases,
+   * trackings, archives, history, attachments) are left intact — they remain
+   * attached to the hidden document, so no orphaned records are created.
+   */
+  async removeAll(actorId: string): Promise<{ deletedCount: number }> {
+    const result = await this.prisma.document.updateMany({
+      where: { deletedAt: null },
+      data: { deletedAt: new Date(), deletedById: actorId },
+    });
+    return { deletedCount: result.count };
   }
 
   async transition(
@@ -493,6 +521,7 @@ export class DocumentsService {
   ): Promise<unknown> {
     const doc = await this.prisma.document.findUnique({ where: { id } });
     if (!doc) throw new NotFoundException('Document not found');
+    if (doc.deletedAt) throw new NotFoundException('Document not found');
 
     const allowed = ALLOWED_TRANSITIONS[doc.status] ?? [];
     if (!allowed.includes(dto.toStatus)) {
@@ -614,6 +643,7 @@ export class DocumentsService {
   async receive(id: string, actorId: string, dto: ReceiveDocumentDto): Promise<unknown> {
     const doc = await this.prisma.document.findUnique({ where: { id } });
     if (!doc) throw new NotFoundException('Document not found');
+    if (doc.deletedAt) throw new NotFoundException('Document not found');
 
     const actor = await this.prisma.user.findUnique({
       where: { id: actorId },
@@ -763,6 +793,79 @@ export class DocumentsService {
     });
   }
 
+  private async findExistingDocumentByNumber(documentNumber: string): Promise<{
+    id: string;
+    trackingNumber: string;
+    originatingOfficeCode: string | null;
+    originatingOfficeName: string | null;
+  } | null> {
+    const existing = await this.prisma.document.findFirst({
+      where: { documentNumber, deletedAt: null },
+      select: {
+        id: true,
+        trackingNumber: true,
+        originatingOfficeId: true,
+        originatingOfficeName: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!existing) return null;
+
+    let originatingOfficeCode: string | null = null;
+    if (existing.originatingOfficeId) {
+      const office = await this.prisma.office.findUnique({
+        where: { id: existing.originatingOfficeId },
+        select: { code: true },
+      });
+      originatingOfficeCode = office?.code ?? null;
+    }
+
+    return {
+      id: existing.id,
+      trackingNumber: existing.trackingNumber,
+      originatingOfficeCode,
+      originatingOfficeName: existing.originatingOfficeName,
+    };
+  }
+
+  private async buildDocumentNumberConflict(
+    documentNumber: string,
+  ): Promise<ConflictException> {
+    const existing = await this.findExistingDocumentByNumber(documentNumber);
+    if (!existing) {
+      return new ConflictException(
+        `Document number '${documentNumber}' is already used.`,
+      );
+    }
+    const officeLabel =
+      existing.originatingOfficeCode ?? existing.originatingOfficeName;
+    const message = officeLabel
+      ? `Document number '${documentNumber}' is already used by ${existing.trackingNumber} in originating office ${officeLabel}.`
+      : `Document number '${documentNumber}' is already used by ${existing.trackingNumber}.`;
+    return new ConflictException({
+      message,
+      existingId: existing.id,
+      existingTrackingNumber: existing.trackingNumber,
+      originatingOfficeCode: existing.originatingOfficeCode,
+      originatingOfficeName: existing.originatingOfficeName,
+    });
+  }
+
+  async checkDocumentNumberAvailability(documentNumber: string): Promise<{
+    available: boolean;
+    existing: {
+      id: string;
+      trackingNumber: string;
+      originatingOfficeCode: string | null;
+      originatingOfficeName: string | null;
+    } | null;
+  }> {
+    const existing = await this.findExistingDocumentByNumber(documentNumber);
+    return existing
+      ? { available: false, existing }
+      : { available: true, existing: null };
+  }
+
   async suggestDocumentNumber(officeId: string): Promise<string> {
     const office = await this.prisma.office.findUnique({ where: { id: officeId } });
     if (!office) {
@@ -774,6 +877,7 @@ export class DocumentsService {
       where: {
         originatingOfficeId: officeId,
         documentNumber: { startsWith: prefix },
+        deletedAt: null,
       },
       orderBy: { documentNumber: 'desc' },
       select: { documentNumber: true },
@@ -796,7 +900,7 @@ export class DocumentsService {
     const year = new Date().getFullYear();
     const prefix = `DMS-${year}-`;
     const last = await this.prisma.document.findFirst({
-      where: { trackingNumber: { startsWith: prefix } },
+      where: { trackingNumber: { startsWith: prefix }, deletedAt: null },
       orderBy: { trackingNumber: 'desc' },
       select: { trackingNumber: true },
     });
@@ -818,7 +922,7 @@ export class DocumentsService {
     const year = new Date().getFullYear();
     const prefix = `MAN-${year}-`;
     const last = await this.prisma.document.findFirst({
-      where: { documentNumber: { startsWith: prefix } },
+      where: { documentNumber: { startsWith: prefix }, deletedAt: null },
       orderBy: { documentNumber: 'desc' },
       select: { documentNumber: true },
     });

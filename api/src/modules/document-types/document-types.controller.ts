@@ -30,7 +30,7 @@ export class DocumentTypesController {
   @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() dto: CreateDocumentTypeDto) {
+  create(@Body() dto: CreateDocumentTypeDto) {  
     return this.documentTypesService.create(dto);
   }
 

@@ -33,7 +33,7 @@ export class DocumentAttachmentsService {
     file: UploadedFileStub,
     uploadedById: string,
   ): Promise<unknown> {
-    const doc = await this.prisma.document.findUnique({ where: { id: documentId } });
+    const doc = await this.prisma.document.findFirst({ where: { id: documentId, deletedAt: null } });
     if (!doc) throw new NotFoundException('Document not found');
 
     const storageKey = this.storage.buildStorageKey(documentId, file.originalname);

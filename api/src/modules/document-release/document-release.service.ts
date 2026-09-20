@@ -10,7 +10,7 @@ export class DocumentReleaseService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateReleaseDto, releasedById: string): Promise<unknown> {
-    const doc = await this.prisma.document.findUnique({ where: { id: dto.documentId } });
+    const doc = await this.prisma.document.findFirst({ where: { id: dto.documentId, deletedAt: null } });
     if (!doc) throw new NotFoundException('Document not found');
     if (doc.status !== 'approved') {
       throw new BadRequestException('Only approved documents can be released');

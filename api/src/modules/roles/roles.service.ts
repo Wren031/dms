@@ -51,7 +51,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, string[]> = {
   SYSTEM_ADMIN: PERMISSION_CATALOG.slice(),
   OFFICE_ADMIN: [
     'dashboard.view',
-    'documents.view', 'documents.edit',
+    'documents.view', 'documents.edit', 'documents.delete',
     'documents.approve', 'documents.reject',
     'documents.release', 'documents.archive', 'documents.track',
     'users.view', 'users.create', 'users.edit',

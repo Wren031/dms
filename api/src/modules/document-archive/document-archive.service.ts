@@ -10,7 +10,7 @@ export class DocumentArchiveService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateArchiveDto, archivedById: string): Promise<unknown> {
-    const doc = await this.prisma.document.findUnique({ where: { id: dto.documentId } });
+    const doc = await this.prisma.document.findFirst({ where: { id: dto.documentId, deletedAt: null } });
     if (!doc) throw new NotFoundException('Document not found');
 
     const allowed = ['released', 'rejected'];

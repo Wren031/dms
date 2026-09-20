@@ -12,6 +12,7 @@ import {
   Calendar,
   CheckCircle2,
   SlidersHorizontal,
+  Trash2,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -26,6 +27,8 @@ import { Dropdown } from '@/components/ui/Dropdown';
 import { useAuth, useCurrentUser } from '@/features/authentication/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { useDocuments } from '@/features/documents/hooks/useDocuments';
+import { useDocumentDelete } from '@/features/documents/hooks/useDocumentDelete';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useOfficeDirectory } from '@/features/system-admin/offices/hooks/useOffices';
 import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
 import {
@@ -63,6 +66,8 @@ export function DocumentsListPage() {
   const { items: allDocs, total, loading, error, setFilters } = useDocuments({ fetchAll: true });
   const { offices: officeDirectory } = useOfficeDirectory();
   const { users: routingUsers } = useRoutingOptions();
+  const documentDelete = useDocumentDelete();
+  const confirm = useConfirm();
   const holderNameById = useMemo(
     () => new Map(routingUsers.map(u => [u.id, u.fullName])),
     [routingUsers],
@@ -205,17 +210,74 @@ export function DocumentsListPage() {
     toast.success('Export complete', `${sorted.length} document${sorted.length === 1 ? '' : 's'} exported.`);
   };
 
+  const canDeleteDocument = (d: DocumentListItem): boolean => {
+    if (!hasPermission('documents.delete')) return false;
+    if (user.role === 'system_admin') return true;
+    return (
+      d.currentOfficeId === user.officeId ||
+      (d.recipients ?? []).some(r => r.officeId === user.officeId && r.status === 'received')
+    );
+  };
+
+  const handleDeleteDocument = async (d: DocumentListItem) => {
+    if (!canDeleteDocument(d)) return;
+    const ok = await confirm({
+      title: 'Delete Document',
+      description: `Delete ${d.trackingNumber} · ${d.title}? It will be hidden from all lists and workflows. This cannot be undone through the interface.`,
+      confirmText: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    const deleted = await documentDelete.remove(d.id);
+    if (deleted) {
+      toast.success('Document deleted', `${d.trackingNumber} has been removed.`);
+    } else {
+      toast.error('Could not delete document', documentDelete.error ?? 'Please retry.');
+    }
+    documentDelete.reset();
+  };
+
+  const handleDeleteAll = async () => {
+    const ok = await confirm({
+      title: 'Delete All Documents',
+      description: `This will delete all ${sorted.length} document${sorted.length === 1 ? '' : 's'} currently in the system. They will be hidden from every office and workflow, and this cannot be undone through the interface.`,
+      confirmText: 'Delete All',
+      variant: 'danger',
+      requireText: 'DELETE ALL DOCUMENTS',
+    });
+    if (!ok) return;
+    const count = await documentDelete.removeAll();
+    if (count !== null) {
+      toast.success('Documents deleted', `${count} document${count === 1 ? '' : 's'} deleted.`);
+    } else {
+      toast.error('Could not delete documents', documentDelete.error ?? 'Please retry.');
+    }
+    documentDelete.reset();
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Documents"
         description="Manage and track all documents in the system"
         actions={
-          hasPermission('documents.register') ? (
-            <Link to="/documents/register">
-              <Button leftIcon={<PlusCircle className="w-4 h-4" />}>Register Document</Button>
-            </Link>
-          ) : null
+          <div className="flex items-center gap-2">
+            {user.role === 'system_admin' && sorted.length > 0 && (
+              <Button
+                variant="danger"
+                onClick={handleDeleteAll}
+                leftIcon={<Trash2 className="w-4 h-4" />}
+                disabled={documentDelete.deleting}
+              >
+                Delete All Documents
+              </Button>
+            )}
+            {hasPermission('documents.register') ? (
+              <Link to="/documents/register">
+                <Button leftIcon={<PlusCircle className="w-4 h-4" />}>Register Document</Button>
+              </Link>
+            ) : null}
+          </div>
         }
       />
 
@@ -488,6 +550,18 @@ export function DocumentsListPage() {
                       icon: <Download className="w-4 h-4" />,
                       onClick: () => toast.info('Download started'),
                     },
+                    ...(canDeleteDocument(d)
+                      ? [
+                          {
+                            id: 'delete',
+                            label: 'Delete Document',
+                            icon: <Trash2 className="w-4 h-4" />,
+                            destructive: true,
+                            disabled: documentDelete.deleting,
+                            onClick: () => void handleDeleteDocument(d),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               ),

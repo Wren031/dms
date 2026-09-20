@@ -118,7 +118,7 @@ export class MailService {
       `Please log in at ${this.config.loginUrl} using these credentials and change your temporary password immediately after your first login.`,
     ].join('\n');
     const html = [
-      '<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;max-width:520px;margin:0 auto;">',
+      '<div style="font-familyp:Arial,Helvetica,sans-serif;color:#0f172a;max-width:520px;margin:0 auto;">',
       '<h2 style="color:#1d4ed8;">Your DMS Account Has Been Created</h2>',
       `<p>Dear ${firstName},</p>`,
       '<p>Your DMS account has been successfully created.</p>',

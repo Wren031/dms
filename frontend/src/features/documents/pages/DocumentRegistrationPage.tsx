@@ -42,6 +42,7 @@ import {
 import type { DocumentClassification } from '@/types';
 import { useDocumentTypes } from '@/features/system-admin/document-type/hooks/useDocumentTypes';
 import { useRegisterDocument } from '@/features/documents/hooks/useRegisterDocument';
+import { useDocumentNumberCheck } from '@/features/documents/hooks/useDocumentNumberCheck';
 import { attachmentsService } from '@/features/documents/services/documents.service';
 import { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
 import { useFormDraft } from '@/hooks/useFormDraft';
@@ -133,12 +134,18 @@ export function DocumentRegistrationPage() {
     ...defaultOrigin(user.officeId),
   }));
 
+  const [submitting, setSubmitting] = useState(false);
+
+  const docNumberCheck = useDocumentNumberCheck({
+    documentNumber: form.documentNumber,
+    enabled: !submitting,
+  });
+
   const [files, setFiles] = useState<File[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<keyof FormState, boolean>>(
     {} as Record<keyof FormState, boolean>
   );
-  const [submitting, setSubmitting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [recipientSearch, setRecipientSearch] = useState('');
   const [restoredAttachmentMeta, setRestoredAttachmentMeta] = useState<AttachmentMeta[]>([]);
@@ -394,6 +401,20 @@ export function DocumentRegistrationPage() {
       return;
     }
 
+    if (docNumberCheck.status === 'taken') {
+      setErrors(e => ({
+        ...e,
+        documentNumber:
+          docNumberCheck.message ?? 'This document number is already in use.',
+      }));
+      setTouched(t => ({ ...t, documentNumber: true }));
+      toast.error(
+        'Document number taken',
+        docNumberCheck.message ?? 'This number is already in use. Leave it blank to auto-generate.',
+      );
+      return;
+    }
+
     const originatingOfficeId = form.originMode === 'select' ? form.originatingOfficeId : undefined;
     const originatingOfficeName =
       form.originMode === 'manual' ? form.originatingOfficeName.trim() : undefined;
@@ -423,10 +444,14 @@ export function DocumentRegistrationPage() {
     if (!doc) {
       toast.error('Registration failed', registration.error ?? 'Please retry.');
       if (registration.status === 409) {
+        const conflict = registration.details as
+          | { existingTrackingNumber?: string }
+          | null;
         setErrors(e => ({
           ...e,
-          documentNumber:
-            'This number already exists. Leave it blank to auto-generate a unique number.',
+          documentNumber: conflict?.existingTrackingNumber
+            ? `This number is already used by ${conflict.existingTrackingNumber}. Leave it blank to auto-generate a unique number.`
+            : 'This number already exists. Leave it blank to auto-generate a unique number.',
         }));
         setTouched(t => ({ ...t, documentNumber: true }));
       }
@@ -651,8 +676,49 @@ export function DocumentRegistrationPage() {
                 onBlur={() => markTouched('documentNumber')}
                 leftIcon={<Hash className="w-4 h-4" />}
                 error={errors.documentNumber}
-                hint="The originating office's reference number, if available"
+                hint={
+                  docNumberCheck.status === 'idle'
+                    ? "The originating office's reference number, if available"
+                    : undefined
+                }
               />
+              {docNumberCheck.status === 'checking' && (
+                <p className="mt-1.5 text-xs text-slate-500 inline-flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-3 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+                  Checking availability…
+                </p>
+              )}
+              {docNumberCheck.status === 'available' && (
+                <p className="mt-1.5 text-xs text-emerald-600 inline-flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  This number is available.
+                </p>
+              )}
+              {docNumberCheck.status === 'taken' && (
+                <p className="mt-1.5 text-xs text-rose-600 inline-flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    Already used by{' '}
+                    {docNumberCheck.existing ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/documents/${docNumberCheck.existing!.id}`)}
+                        className="underline font-medium hover:text-rose-800"
+                      >
+                        {docNumberCheck.existing.trackingNumber}
+                      </button>
+                    ) : (
+                      'another document'
+                    )}
+                    . Leave it blank to auto-generate.
+                  </span>
+                </p>
+              )}
+              {docNumberCheck.status === 'error' && (
+                <p className="mt-1.5 text-xs text-slate-500">
+                  {docNumberCheck.message}
+                </p>
+              )}
               <Input
                 label="Tracking Number"
                 value="Auto-generated on submission"
