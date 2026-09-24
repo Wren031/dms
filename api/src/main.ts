@@ -30,6 +30,9 @@ async function bootstrap(): Promise<void> {
   // Cookies
   app.use(cookieParser());
 
+  // Global API version prefix
+  app.setGlobalPrefix('api/v1');
+
   // CORS with credentials
   app.enableCors({
     origin: cors.origin,

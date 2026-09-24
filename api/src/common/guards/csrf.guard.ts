@@ -7,16 +7,17 @@ import {
 import { timingSafeEqual } from 'crypto';
 import { Request } from 'express';
 import { COOKIE_NAMES, CSRF_HEADER } from '../constants/cookie.constants';
+import { API_PREFIX } from '../constants/api.constants';
 import { IS_PUBLIC_METADATA_KEY } from '../decorators/public.decorator';
 import { Reflector } from '@nestjs/core';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const SKIP_PATHS = [
-  '/auth/login',
-  '/auth/refresh',
-  '/auth/register',
-  '/auth/forgot-password',
-  '/auth/reset-password',
+  `${API_PREFIX}/auth/login`,
+  `${API_PREFIX}/auth/refresh`,
+  `${API_PREFIX}/auth/register`,
+  `${API_PREFIX}/auth/forgot-password`,
+  `${API_PREFIX}/auth/reset-password`,
 ];
 
 @Injectable()
