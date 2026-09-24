@@ -99,6 +99,9 @@ export interface DocumentRecipient {
   receivedById: string | null;
   receivedAt: string | null;
   remarks: string | null;
+  note: string | null;
+  noteById: string | null;
+  noteAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

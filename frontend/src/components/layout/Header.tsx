@@ -25,7 +25,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const { items: notifications, markRead } = useRecentNotifications(notifOpen);
-  const { unreadCount } = useUnreadNotifications(true);
+  const { unreadCount, setUnreadCount } = useUnreadNotifications(true);
 
   const roleItems = ALL_ROLES.map(role => ({
     id: role,
@@ -81,7 +81,9 @@ export function Header({ onMenuClick }: HeaderProps) {
           >
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full" />
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold leading-none inline-flex items-center justify-center border border-white">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
             )}
           </button>
 
@@ -109,7 +111,10 @@ export function Header({ onMenuClick }: HeaderProps) {
                         to={n.link || '/notifications'}
                         onClick={() => {
                           setNotifOpen(false);
-                          if (!n.read) markRead(n.id);
+                          if (!n.read) {
+                            markRead(n.id);
+                            setUnreadCount(c => Math.max(0, c - 1));
+                          }
                         }}
                         className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition-colors"
                       >

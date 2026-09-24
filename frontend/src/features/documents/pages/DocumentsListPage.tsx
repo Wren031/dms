@@ -42,7 +42,7 @@ import {
 import { usePagination } from '@/hooks/usePagination';
 import { useTableSort } from '@/hooks/useTableSort';
 import type { DocumentListItem } from '@/features/documents/types/document';
-import { formatDate, toCsv, downloadCsv, cn } from '@/lib/utils';
+import { formatDate, formatRelative, toCsv, downloadCsv, cn } from '@/lib/utils';
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -54,13 +54,17 @@ const DEFAULT_FILTERS = {
   source: 'all',
 };
 
+// Archived documents move to the Archive module; the main documents table
+// only shows active workflow statuses.
+const ACTIVE_STATUSES = ALL_DOCUMENT_STATUSES.filter(s => s !== 'archived');
+
 export function DocumentsListPage() {
   const user = useCurrentUser();
   const { hasPermission } = useAuth();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedStatus = searchParams.get('status');
-  const initialStatus = ALL_DOCUMENT_STATUSES.includes(requestedStatus as DocumentListItem['status'])
+  const initialStatus = ACTIVE_STATUSES.includes(requestedStatus as DocumentListItem['status'])
     ? requestedStatus!
     : DEFAULT_FILTERS.status;
   const { items: allDocs, total, loading, error, setFilters } = useDocuments({ fetchAll: true });
@@ -90,6 +94,7 @@ export function DocumentsListPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allDocs.filter(d => {
+      if (d.status === 'archived') return false;
       if (q) {
         const haystack = [
           d.trackingNumber,
@@ -324,7 +329,7 @@ export function DocumentsListPage() {
               onChange={e => { setStatusFilter(e.target.value); pagination.reset(); }}
               options={[
                 { value: 'all', label: 'All Status' },
-                ...ALL_DOCUMENT_STATUSES.map(s => ({ value: s, label: DOCUMENT_STATUS_LABELS[s] })),
+                ...ACTIVE_STATUSES.map(s => ({ value: s, label: DOCUMENT_STATUS_LABELS[s] })),
               ]}
             />
             <Select
@@ -513,14 +518,15 @@ export function DocumentsListPage() {
             {
               key: 'updatedAt',
               header: 'Updated',
-              width: '130px',
+              width: '165px',
               sortable: true,
               cell: d => (
                 <div className="text-xs">
-                  <p className="text-slate-700 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    {formatDate(d.updatedAt)}
+                  <p className="text-slate-700 flex items-center gap-1.5 whitespace-nowrap">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    {formatDate(d.updatedAt, true)}
                   </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{formatRelative(d.updatedAt)}</p>
                 </div>
               ),
             },

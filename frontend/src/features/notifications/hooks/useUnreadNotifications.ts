@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { notificationsService } from '@/features/notifications/services/notifications.service';
 
 export interface UseUnreadNotificationsReturn {
   unreadCount: number;
+  setUnreadCount: Dispatch<SetStateAction<number>>;
   loading: boolean;
 }
 
@@ -53,5 +55,5 @@ export function useUnreadNotifications(enabled: boolean): UseUnreadNotifications
     };
   }, [enabled]);
 
-  return { unreadCount, loading };
+  return { unreadCount, setUnreadCount, loading };
 }

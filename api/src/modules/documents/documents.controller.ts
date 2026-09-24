@@ -20,6 +20,7 @@ import { FilterDocumentsDto } from './dto/filter-documents.dto';
 import { CheckDocumentNumberDto } from './dto/check-document-number.dto';
 import { TransitionDocumentDto } from './dto/transition-document.dto';
 import { ReceiveDocumentDto } from './dto/receive-document.dto';
+import { SetRecipientNoteDto } from './dto/set-recipient-note.dto';
 import { DeleteAllDocumentsDto } from './dto/delete-all-documents.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -134,6 +135,31 @@ export class DocumentsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.documentsService.receive(id, user.id, dto);
+  }
+
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Audit('document.recipient-note.set', 'documents', 'Document')
+  @Post(':id/recipients/:officeId/note')
+  @HttpCode(HttpStatus.OK)
+  setRecipientNote(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('officeId', new ParseUUIDPipe()) officeId: string,
+    @Body() dto: SetRecipientNoteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.documentsService.setRecipientNote(id, officeId, user.id, dto.note);
+  }
+
+  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN)
+  @Audit('document.recipient-note.delete', 'documents', 'Document')
+  @Delete(':id/recipients/:officeId/note')
+  @HttpCode(HttpStatus.OK)
+  deleteRecipientNote(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('officeId', new ParseUUIDPipe()) officeId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.documentsService.deleteRecipientNote(id, officeId, user.id);
   }
 
   @SkipThrottle()

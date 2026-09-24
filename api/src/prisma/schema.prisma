@@ -407,12 +407,16 @@ model DocumentRecipient {
   receivedById String?
   receivedAt   DateTime?
   remarks      String?
+  note         String?
+  noteById     String?
+  noteAt       DateTime?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
   @@unique([documentId, officeId])
   @@index([officeId])
   @@index([status])
+  @@index([noteById])
 }
 
 // =====================================================

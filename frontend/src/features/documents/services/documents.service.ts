@@ -166,6 +166,30 @@ export const documentsService = {
     });
   },
 
+  setRecipientNote(
+    documentId: string,
+    officeId: string,
+    note: string,
+  ): Promise<DocumentRecipient> {
+    return request<DocumentRecipient>(
+      `/documents/${documentId}/recipients/${officeId}/note`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ note }),
+      },
+    );
+  },
+
+  deleteRecipientNote(
+    documentId: string,
+    officeId: string,
+  ): Promise<{ id: string; officeId: string; deleted: boolean }> {
+    return request<{ id: string; officeId: string; deleted: boolean }>(
+      `/documents/${documentId}/recipients/${officeId}/note`,
+      { method: 'DELETE' },
+    );
+  },
+
   getHistory(id: string): Promise<DocumentHistoryEntry[]> {
     return request<DocumentHistoryEntry[]>(`/documents/${id}/history`);
   },

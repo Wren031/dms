@@ -1,25 +1,60 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Building2,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
+  Pencil,
+  Plus,
+  StickyNote,
   User,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
+import { Textarea } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { formatDate, cn } from '@/lib/utils';
-import type { DocumentDetail } from '@/features/documents/types/document';
+import type {
+  DocumentDetail,
+  DocumentRecipient,
+} from '@/features/documents/types/document';
 import type { LookupUser } from '@/hooks/useLookups';
 
 interface RecipientTrackingProps {
   document: DocumentDetail;
   userById: (id: string | null | undefined) => LookupUser | undefined;
+  canManageNotes: boolean;
+  currentOfficeId?: string | null;
+  noteError: string | null;
+  onSetNote: (officeId: string, note: string) => Promise<boolean>;
+  onDeleteNote: (officeId: string) => Promise<boolean>;
 }
 
-export function RecipientTracking({ document: doc, userById }: RecipientTrackingProps) {
+export function RecipientTracking({
+  document: doc,
+  userById,
+  canManageNotes,
+  currentOfficeId,
+  noteError,
+  onSetNote,
+  onDeleteNote,
+}: RecipientTrackingProps) {
   const recipients = doc.recipients;
+  const confirm = useConfirm();
+
+  const [noteTarget, setNoteTarget] = useState<DocumentRecipient | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    setShowAll(false);
+  }, [doc.id]);
 
   const summary = useMemo(() => {
     const total = recipients.length;
@@ -28,6 +63,47 @@ export function RecipientTracking({ document: doc, userById }: RecipientTracking
     const progress = total > 0 ? Math.round((received / total) * 100) : 0;
     return { total, received, pending, progress };
   }, [recipients]);
+
+  const hasMore = recipients.length > 3;
+  const visibleRecipients = showAll ? recipients : recipients.slice(0, 3);
+
+  const canManageNote = (recipient: DocumentRecipient): boolean =>
+    canManageNotes ||
+    (recipient.status === 'received' && currentOfficeId === recipient.officeId);
+
+  const openNoteModal = (recipient: DocumentRecipient) => {
+    setNoteTarget(recipient);
+    setNoteDraft(recipient.note ?? '');
+  };
+
+  const closeNoteModal = () => {
+    setNoteTarget(null);
+    setNoteDraft('');
+    setNoteBusy(false);
+  };
+
+  const handleSaveNote = async () => {
+    if (!noteTarget || noteDraft.trim().length === 0) return;
+    setNoteBusy(true);
+    const success = await onSetNote(noteTarget.officeId, noteDraft);
+    setNoteBusy(false);
+    if (success) closeNoteModal();
+  };
+
+  const handleDeleteNote = async () => {
+    if (!noteTarget) return;
+    const ok = await confirm({
+      title: 'Delete Office Note',
+      description: `Remove the note for ${noteTarget.office.name}? This action cannot be undone.`,
+      confirmText: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setNoteBusy(true);
+    const success = await onDeleteNote(noteTarget.officeId);
+    setNoteBusy(false);
+    if (success) closeNoteModal();
+  };
 
   return (
     <Card padded={false}>
@@ -88,7 +164,7 @@ export function RecipientTracking({ document: doc, userById }: RecipientTracking
           </div>
 
           <Table
-            data={recipients}
+            data={visibleRecipients}
             keyExtractor={r => r.id}
             columns={[
               {
@@ -104,7 +180,7 @@ export function RecipientTracking({ document: doc, userById }: RecipientTracking
               {
                 key: 'status',
                 header: 'Receiving Status',
-                width: '140px',
+                width: '130px',
                 cell: r =>
                   r.status === 'received' ? (
                     <Badge variant="emerald" size="sm">Received</Badge>
@@ -115,7 +191,7 @@ export function RecipientTracking({ document: doc, userById }: RecipientTracking
               {
                 key: 'receivedBy',
                 header: 'Received By',
-                width: '180px',
+                width: '170px',
                 cell: r => {
                   if (r.status !== 'received' || !r.receivedById) {
                     return <span className="text-xs text-slate-400">—</span>;
@@ -132,7 +208,7 @@ export function RecipientTracking({ document: doc, userById }: RecipientTracking
               {
                 key: 'receivedAt',
                 header: 'Received Date & Time',
-                width: '170px',
+                width: '180px',
                 cell: r =>
                   r.status === 'received' && r.receivedAt ? (
                     <span className="text-xs text-slate-700">
@@ -152,11 +228,130 @@ export function RecipientTracking({ document: doc, userById }: RecipientTracking
                     <span className="text-xs text-slate-400">—</span>
                   ),
               },
+              {
+                key: 'note',
+                header: 'Office Note',
+                width: '240px',
+                cell: r => (
+                  <NoteCell
+                    recipient={r}
+                    canManage={canManageNote(r)}
+                    userById={userById}
+                    onEdit={() => openNoteModal(r)}
+                  />
+                ),
+              },
             ]}
           />
+          {hasMore && (
+            <div className="pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                fullWidth
+                rightIcon={showAll ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                onClick={() => setShowAll(s => !s)}
+              >
+                {showAll ? 'Show Less' : `Show All Offices (${recipients.length - 3} more)`}
+              </Button>
+            </div>
+          )}
         </div>
       )}
+
+      <Modal
+        open={noteTarget !== null}
+        onClose={closeNoteModal}
+        title={noteTarget?.note ? 'Edit Office Note' : 'Add Office Note'}
+        description={
+          noteTarget
+            ? `${noteTarget.office.code} — ${noteTarget.office.name} · ${doc.trackingNumber}`
+            : undefined
+        }
+        footer={
+          <>
+            <Button variant="outline" onClick={closeNoteModal} disabled={noteBusy}>
+              Cancel
+            </Button>
+            {noteTarget?.note && (
+              <Button variant="danger" onClick={handleDeleteNote} loading={noteBusy}>
+                Delete note
+              </Button>
+            )}
+            <Button
+              onClick={handleSaveNote}
+              loading={noteBusy}
+              disabled={noteDraft.trim().length === 0}
+            >
+              Save note
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Textarea
+            label="Office Note"
+            rows={4}
+            maxLength={2000}
+            value={noteDraft}
+            onChange={e => setNoteDraft(e.target.value)}
+            placeholder="Context for why this office has not yet received the document…"
+          />
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-slate-400">{noteDraft.length}/2000</p>
+            {noteError && <p className="text-xs text-rose-600 text-right">{noteError}</p>}
+          </div>
+        </div>
+      </Modal>
     </Card>
+  );
+}
+
+function NoteCell({
+  recipient,
+  canManage,
+  userById,
+  onEdit,
+}: {
+  recipient: DocumentRecipient;
+  canManage: boolean;
+  userById: (id: string | null | undefined) => LookupUser | undefined;
+  onEdit: () => void;
+}) {
+  if (!recipient.note) {
+    if (canManage) {
+      return (
+        <Button variant="outline" size="sm" leftIcon={<Plus className="w-3 h-3" />} onClick={onEdit}>
+          Add note
+        </Button>
+      );
+    }
+    return <span className="text-xs text-slate-400">—</span>;
+  }
+
+  const author = userById(recipient.noteById);
+  return (
+    <div className="min-w-0">
+      <p className="text-xs text-slate-600 line-clamp-2">{recipient.note}</p>
+      <div className="flex items-center gap-2 mt-1 flex-wrap">
+        <span className="text-[11px] text-slate-400 inline-flex items-center gap-1">
+          <StickyNote className="w-3 h-3" />
+          {author?.fullName ?? 'Unknown'}
+          {recipient.noteAt ? ` · ${formatDate(recipient.noteAt, true)}` : ''}
+        </span>
+        {canManage && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 hover:text-brand-800 transition-colors"
+            aria-label="Edit note"
+          >
+            <Pencil className="w-3 h-3" />
+            Edit
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

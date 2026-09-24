@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DocumentStatus, Prisma, Role } from '@prisma/client';
+import { DocumentStatus, Prisma, RecipientStatus, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -114,6 +114,44 @@ export class DocumentsService {
         link: 'documents',
       })
       .catch(() => undefined);
+  }
+
+  /**
+   * Send a document notification to every active user. Fire-and-forget:
+   * never blocks or fails the workflow once the note has been saved.
+   */
+  private async notifyAllActiveUsers(
+    title: string,
+    message: string,
+    link: string,
+  ): Promise<void> {
+    const users = await this.prisma.user.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true },
+    });
+    for (const user of users) {
+      void this.notifications
+        .create({ userId: user.id, type: 'document', title, message, link })
+        .catch(() => undefined);
+    }
+  }
+
+  private async recipientNoteAuthorName(userId: string): Promise<string> {
+    if (!userId) return 'Unknown';
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        employee: {
+          select: { firstName: true, middleName: true, lastName: true },
+        },
+      },
+    });
+    if (!user) return 'Unknown';
+    return (
+      [user.employee?.firstName, user.employee?.middleName, user.employee?.lastName]
+        .filter(Boolean)
+        .join(' ') || user.username || user.email || user.id
+    );
   }
 
   async create(dto: CreateDocumentDto, encodedById: string): Promise<unknown> {
@@ -790,6 +828,136 @@ export class DocumentsService {
     return this.prisma.documentTracking.findMany({
       where: { documentId: id },
       orderBy: { occurredAt: 'asc' },
+    });
+  }
+
+  /**
+   * Note management authorization, per recipient status:
+   *  - pending  -> only SYSTEM_ADMIN / OFFICE_ADMIN (existing rule)
+   *  - received -> the receiving office itself, or any admin
+   */
+  private async assertCanManageNote(
+    actorId: string,
+    officeId: string,
+    recipient: { status: RecipientStatus },
+  ): Promise<void> {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { role: true, employee: { select: { officeId: true } } },
+    });
+    if (!actor) throw new NotFoundException('Actor not found');
+
+    const isAdmin =
+      actor.role === Role.SYSTEM_ADMIN || actor.role === Role.OFFICE_ADMIN;
+    if (recipient.status === 'received') {
+      if (isAdmin || actor.employee?.officeId === officeId) return;
+      throw new ForbiddenException(
+        'Only the receiving office or an admin can manage notes for this office',
+      );
+    }
+    if (isAdmin) return;
+    throw new ForbiddenException(
+      'Only System Admin and Office Admin can manage pending office notes',
+    );
+  }
+
+  private async getRecipientForNote(
+    documentId: string,
+    officeId: string,
+  ): Promise<{
+    id: string;
+    status: RecipientStatus;
+    note: string | null;
+    receivedById: string | null;
+  }> {
+    const recipient = await this.prisma.documentRecipient.findUnique({
+      where: { documentId_officeId: { documentId, officeId } },
+      select: { id: true, status: true, note: true, receivedById: true },
+    });
+    if (!recipient) {
+      throw new NotFoundException(
+        'This office is not a designated recipient of the document',
+      );
+    }
+    return recipient;
+  }
+
+  async setRecipientNote(
+    documentId: string,
+    officeId: string,
+    actorId: string,
+    note: string,
+  ): Promise<unknown> {
+    const recipient = await this.getRecipientForNote(documentId, officeId);
+    await this.assertCanManageNote(actorId, officeId, recipient);
+
+    const doc = await this.prisma.document.findUnique({
+      where: { id: documentId },
+      select: { trackingNumber: true, title: true },
+    });
+    if (!doc) throw new NotFoundException('Document not found');
+
+    // For received offices, attribute the note to the user who received the
+    // document rather than the admin/office member who typed it.
+    const noteAuthorId =
+      recipient.status === 'received'
+        ? recipient.receivedById ?? actorId
+        : actorId;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.documentRecipient.update({
+        where: { id: recipient.id },
+        data: { note, noteById: noteAuthorId, noteAt: new Date() },
+        include: { office: { select: { id: true, name: true, code: true } } },
+      });
+      await tx.documentTracking.create({
+        data: {
+          documentId,
+          actorId,
+          event: recipient.note ? 'recipient.note.updated' : 'recipient.note.added',
+          payload: { officeId, note } as Prisma.InputJsonValue,
+        },
+      });
+      return row;
+    });
+
+    // Notifications only after the note was successfully saved. Never blocks
+    // the workflow, and is enforced server-side regardless of the client.
+    const authorName = await this.recipientNoteAuthorName(noteAuthorId);
+    const preview =
+      note.length > 140 ? `${note.slice(0, 137).trimEnd()}…` : note;
+    const message =
+      `${doc.trackingNumber} · ${doc.title} — note for ${updated.office.name}` +
+      ` (${updated.office.code}) by ${authorName}: "${preview}"`;
+    void this.notifyAllActiveUsers(
+      recipient.note ? 'Recipient note updated' : 'New recipient note',
+      message,
+      `documents/${documentId}`,
+    );
+    return updated;
+  }
+
+  async deleteRecipientNote(
+    documentId: string,
+    officeId: string,
+    actorId: string,
+  ): Promise<void> {
+    const recipient = await this.getRecipientForNote(documentId, officeId);
+    await this.assertCanManageNote(actorId, officeId, recipient);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.documentRecipient.update({
+        where: { id: recipient.id },
+        data: { note: null, noteById: null, noteAt: null },
+      });
+      await tx.documentTracking.create({
+        data: {
+          documentId,
+          actorId,
+          event: 'recipient.note.deleted',
+          payload: { officeId } as Prisma.InputJsonValue,
+        },
+      });
     });
   }
 

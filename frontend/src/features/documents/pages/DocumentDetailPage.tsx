@@ -43,6 +43,7 @@ import { useDocumentHistory } from '@/features/documents/hooks/useDocumentHistor
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
 import { useDocumentReceive } from '@/features/documents/hooks/useDocumentReceive';
 import { useDocumentDelete } from '@/features/documents/hooks/useDocumentDelete';
+import { useRecipientNote } from '@/features/documents/hooks/useRecipientNote';
 import { useDocumentDetail } from '@/features/documents/hooks/useDocumentDetail';
 import { DocumentTracker } from '@/features/documents/components/DocumentTracker';
 import { RecipientTracking } from '@/features/documents/components/RecipientTracking';
@@ -145,6 +146,7 @@ export function DocumentDetailPage() {
   const transition = useDocumentTransition();
   const receiveAction = useDocumentReceive();
   const documentDelete = useDocumentDelete();
+  const recipientNote = useRecipientNote();
   const officeById = useOfficeLookup();
   const userById = useUserLookup();
 
@@ -246,6 +248,24 @@ export function DocumentDetailPage() {
   };
 
   const canDownload = doc.attachments.length > 0;
+
+  const canManageNotes = user.role === 'system_admin' || user.role === 'office_admin';
+
+  const handleSetNote = async (officeId: string, note: string): Promise<boolean> => {
+    const updated = await recipientNote.setNote(doc.id, officeId, note);
+    if (!updated) return false;
+    await refresh();
+    toast.success('Note saved', 'The office note has been updated.');
+    return true;
+  };
+
+  const handleDeleteNote = async (officeId: string): Promise<boolean> => {
+    const ok = await recipientNote.deleteNote(doc.id, officeId);
+    if (!ok) return false;
+    await refresh();
+    toast.success('Note deleted', 'The office note has been removed.');
+    return true;
+  };
   const canDeleteDocument =
     hasPermission('documents.delete') &&
     (user.role === 'system_admin' ||
@@ -299,7 +319,15 @@ export function DocumentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
           <DocumentTracker document={doc} />
-          <RecipientTracking document={doc} userById={userById} />
+          <RecipientTracking
+            document={doc}
+            userById={userById}
+            canManageNotes={canManageNotes}
+            currentOfficeId={user.officeId}
+            noteError={recipientNote.error}
+            onSetNote={handleSetNote}
+            onDeleteNote={handleDeleteNote}
+          />
           <HistoryPanel document={doc} history={history} userById={userById} />
         </div>
 
@@ -538,16 +566,7 @@ function DocumentHero({
                   Download
                 </Button>
               )}
-              {primaryAction && !isTerminal && (
-                <Button
-                  size="md"
-                  className="shadow-sm"
-                  leftIcon={ACTION_META[primaryAction].icon}
-                  onClick={onPrimaryAction}
-                >
-                  {ACTION_META[primaryAction].label}
-                </Button>
-              )}
+
             </div>
           </div>
         )}
