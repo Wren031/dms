@@ -15,6 +15,7 @@ import type {
   DocumentTransitionInput,
   DocumentUpdateInput,
   DocumentAttachment,
+  DocumentRecipient,
 } from '@/features/documents/types/document';
 import type { DocumentType } from '@/types';
 

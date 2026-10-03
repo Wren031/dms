@@ -124,7 +124,11 @@ export function DocumentRegistrationPage() {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const toast = useToast();
-  const { items: documentTypes } = useDocumentTypes({ pageSize: 100, isActive: true });
+  const {
+    items: documentTypes,
+    loading: documentTypesLoading,
+    error: documentTypesError,
+  } = useDocumentTypes({ pageSize: 100, isActive: true });
   const registration = useRegisterDocument();
   const { offices, loading: officesLoading, error: officesError } = useOffices();
   const { users: routingUsers, loading: usersLoading, error: usersError } = useRoutingOptions();
@@ -262,7 +266,22 @@ export function DocumentRegistrationPage() {
     });
   }, [offices, officesLoading, routingUsers, user.officeId]);
 
+  // The document type options only arrive after the initial request, so pick the
+  // first active type instead of leaving the select on an implicit empty value.
+  // Re-deriving also repairs a restored draft whose type was deactivated.
+  useEffect(() => {
+    if (documentTypesLoading || documentTypes.length === 0) return;
+    setForm(previous => {
+      if (documentTypes.some(t => t.id === previous.type)) return previous;
+      return { ...previous, type: documentTypes[0].id };
+    });
+  }, [documentTypes, documentTypesLoading]);
+
   const validateField = (field: keyof FormState, value: string): string | undefined => {
+    if (field === 'type' && !value)
+      return documentTypes.length === 0
+        ? 'No active document types are configured. Contact an administrator.'
+        : 'Document type is required';
     if (field === 'title' && !value.trim()) return 'Title is required';
     if (field === 'title' && value.trim().length < 5)
       return 'Title must be at least 5 characters';
@@ -477,6 +496,7 @@ export function DocumentRegistrationPage() {
   };
 
   const requiredFieldsComplete =
+    !!form.type &&
     form.title.trim() &&
     !!getOriginValue(form) &&
     (form.allOffices || form.recipientOfficeIds.length > 0) &&
@@ -486,6 +506,7 @@ export function DocumentRegistrationPage() {
   const errorCount = Object.keys(errors).filter(k => errors[k as keyof FormState]).length;
 
   const checklist = [
+    { key: 'type', ok: !!form.type, label: 'Document type set' },
     { key: 'title', ok: !!form.title.trim() && form.title.trim().length >= 5, label: 'Title is filled' },
     { key: 'origin', ok: !!getOriginValue(form), label: 'Originating office specified' },
     { key: 'recipients', ok: form.allOffices || form.recipientOfficeIds.length > 0, label: 'Receiving / destination offices set' },
@@ -755,9 +776,26 @@ export function DocumentRegistrationPage() {
                 required
                 value={form.type}
                 onChange={e => setField('type', e.target.value)}
-                options={documentTypes.map(t => ({ value: t.id, label: t.name }))}
-                disabled={documentTypes.length === 0}
-                hint={documentTypes.length === 0 ? 'No active document types are configured.' : undefined}
+                onBlur={() => markTouched('type')}
+                error={errors.type}
+                options={[
+                  {
+                    value: '',
+                    label: documentTypesLoading
+                      ? 'Loading document types…'
+                      : documentTypes.length === 0
+                        ? 'No document types available'
+                        : 'Select a document type…',
+                  },
+                  ...documentTypes.map(t => ({ value: t.id, label: t.name })),
+                ]}
+                disabled={documentTypesLoading || documentTypes.length === 0}
+                hint={
+                  documentTypesError ??
+                  (documentTypes.length === 0 && !documentTypesLoading
+                    ? 'No active document types are configured.'
+                    : undefined)
+                }
               />
               <Select
                 label="Classification"

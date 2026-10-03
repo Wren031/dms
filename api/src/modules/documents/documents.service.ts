@@ -199,6 +199,14 @@ export class DocumentsService {
       }
     }
 
+    const documentType = await this.prisma.documentType.findUnique({
+      where: { id: dto.typeId },
+      select: { id: true },
+    });
+    if (!documentType) {
+      throw new BadRequestException('The selected document type does not exist.');
+    }
+
     // Materialize the recipient offices: "All Offices" creates a receiving
     // record for every active office so each office tracks its own status.
     const effectiveRecipientOfficeIds = await this.resolveRecipientOfficeIds(

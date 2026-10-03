@@ -56,7 +56,7 @@ const DEFAULT_FILTERS = {
 
 // Archived documents move to the Archive module; the main documents table
 // only shows active workflow statuses.
-const ACTIVE_STATUSES = ALL_DOCUMENT_STATUSES.filter(s => s !== 'archived');
+const ACTIVE_STATUSES: DocumentListItem['status'][] = ALL_DOCUMENT_STATUSES.filter(s => s !== 'archived');
 
 export function DocumentsListPage() {
   const user = useCurrentUser();
