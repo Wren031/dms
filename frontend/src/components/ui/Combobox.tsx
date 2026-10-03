@@ -63,6 +63,11 @@ export function Combobox({
     [options, value],
   );
 
+  // A value can legitimately fall outside `options` — e.g. an office saved before
+  // it was added to the directory constant. Fall back to the raw value so the
+  // field shows the real selection instead of rendering blank.
+  const displayValue = selected?.label ?? value;
+
   const filtered = useMemo(() => {
     const q = normalize(query);
     if (!q) return options;
@@ -179,11 +184,11 @@ export function Combobox({
             aria-controls={inputId ? `${inputId}-listbox` : undefined}
             disabled={disabled}
             readOnly={!searchable}
-            value={open && searchable ? query : selected?.label ?? ''}
+            value={open && searchable ? query : displayValue}
             placeholder={
               open && searchable
                 ? searchPlaceholder
-                : selected
+                : displayValue
                   ? undefined
                   : placeholder
             }

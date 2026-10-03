@@ -189,6 +189,7 @@ export interface OfficeDirectoryEntry {
 export const OFFICE_DIRECTORY: OfficeDirectoryEntry[] = [
   // City Government Offices
   { name: 'Office of the City Mayor', code: 'OCM', group: 'City Government Offices' },
+   { name: 'Information Technology Service Desk', code: 'ITSD', group: 'City Government Offices' },
   { name: 'Office of the City Vice Mayor', code: 'OCVM', group: 'City Government Offices' },
   { name: 'Sangguniang Panlungsod', code: 'SP', group: 'City Government Offices' },
   { name: "City Administrator's Office", code: 'ADMIN', group: 'City Government Offices' },
@@ -244,12 +245,3 @@ export const OFFICE_DIRECTORY: OfficeDirectoryEntry[] = [
   { name: 'National Irrigation Administration (NIA)', code: 'NIA', group: 'National Government Offices in Valencia City' },
   { name: 'National Food Authority (NFA)', code: 'NFA', group: 'National Government Offices in Valencia City' },
 ];
-
-export const OFFICE_DIRECTORY_GROUPS: { label: string; offices: string[] }[] = (() => {
-  const groups = new Map<string, string[]>();
-  for (const entry of OFFICE_DIRECTORY) {
-    if (!groups.has(entry.group)) groups.set(entry.group, []);
-    groups.get(entry.group)!.push(entry.name);
-  }
-  return Array.from(groups.entries()).map(([label, offices]) => ({ label, offices }));
-})();
