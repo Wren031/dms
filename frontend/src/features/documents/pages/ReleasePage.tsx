@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   PackageOpen,
@@ -21,8 +21,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Input';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/hooks/useToast';
-import { usePagination } from '@/hooks/usePagination';
-import { useDocuments } from '@/features/documents/hooks/useDocuments';
+import { useReleaseQueue } from '@/features/documents/hooks/useReleaseQueue';
+import type { DocumentListItem } from '@/features/documents/types/document';
 import { useDocumentTransition } from '@/features/documents/hooks/useDocumentTransition';
 import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { useOfficeLookup } from '@/hooks/useLookups';
@@ -32,39 +32,28 @@ import { formatDate, formatRelative } from '@/lib/utils';
 export function ReleasePage() {
   const toast = useToast();
   const { hasPermission } = useAuth();
-  const { items: documents } = useDocuments({ pageSize: 100 });
+  const queue = useReleaseQueue();
   const transition = useDocumentTransition();
   const officeById = useOfficeLookup();
-  const [tab, setTab] = useState('ready');
-  const [releaseModal, setReleaseModal] = useState<string | null>(null);
+  const [releaseTarget, setReleaseTarget] = useState<DocumentListItem | null>(null);
   const [remarks, setRemarks] = useState('');
 
-  const readyToRelease = useMemo(() => documents.filter(d => d.status === 'approved'), [documents]);
-  const released = useMemo(() => documents.filter(d => d.status === 'released' || d.status === 'archived'), [documents]);
+  const { tab, rows, counts, total, page, pageSize, totalPages, setTab, setPage, setPageSize } = queue;
 
-  const counts = {
-    ready: readyToRelease.length,
-    released: released.length,
-  };
-
-  const list = tab === 'ready' ? readyToRelease : released;
-  const pagination = usePagination({ totalItems: list.length, initialPageSize: 10 });
-  const paged = list.slice(pagination.start, pagination.end);
-
-  const handleRelease = (docId: string) => {
-    setReleaseModal(docId);
+  const handleRelease = (doc: DocumentListItem) => {
+    setReleaseTarget(doc);
     setRemarks('');
   };
 
   const submitRelease = () => {
-    if (!releaseModal) return;
-    void transition.transition(releaseModal, {
+    if (!releaseTarget) return;
+    void transition.transition(releaseTarget.id, {
       toStatus: 'released',
       remarks: remarks.trim() || undefined,
     }).then(updated => {
       if (updated) {
         toast.success('Document released', 'The document has been marked as released.');
-        setReleaseModal(null);
+        setReleaseTarget(null);
       } else {
         toast.error('Release failed', transition.error ?? 'Please retry.');
       }
@@ -136,7 +125,7 @@ export function ReleasePage() {
         </div>
 
         <Table
-          data={paged}
+          data={rows}
           keyExtractor={d => d.id}
           emptyState={
             <EmptyState
@@ -178,7 +167,7 @@ export function ReleasePage() {
               cell: d => (
                 <div className="flex items-center gap-1.5 text-xs text-slate-600">
                   <Paperclip className="w-3.5 h-3.5" />
-                  {d.attachments?.length ?? d.attachmentCount ?? 0}
+                  {d.attachmentCount ?? 0}
                 </div>
               ),
             },
@@ -223,7 +212,7 @@ export function ReleasePage() {
               align: 'right',
               cell: d => (
                 d.status === 'approved' && hasPermission('documents.release') ? (
-                  <Button size="sm" leftIcon={<Send className="w-3.5 h-3.5" />} onClick={() => handleRelease(d.id)}>
+                  <Button size="sm" leftIcon={<Send className="w-3.5 h-3.5" />} onClick={() => handleRelease(d)}>
                     Release
                   </Button>
                 ) : (
@@ -238,52 +227,50 @@ export function ReleasePage() {
 
         <div className="px-4 py-3 border-t border-slate-200">
           <Pagination
-            page={pagination.page}
-            totalPages={pagination.totalPages}
-            totalItems={list.length}
-            start={pagination.start}
-            end={pagination.end}
-            pageSize={pagination.pageSize}
-            onPageChange={pagination.setPage}
-            onPageSizeChange={pagination.setPageSize}
+            page={page}
+            totalPages={totalPages}
+            totalItems={total}
+            start={(page - 1) * pageSize}
+            end={Math.min(page * pageSize, total)}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
           />
         </div>
       </Card>
 
       <Modal
-        open={!!releaseModal}
-        onClose={() => setReleaseModal(null)}
+        open={!!releaseTarget}
+        onClose={() => setReleaseTarget(null)}
         title="Release Document"
         description="Finalize and release this document to the recipient"
         size="md"
         footer={
           <>
-            <Button variant="outline" onClick={() => setReleaseModal(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setReleaseTarget(null)}>Cancel</Button>
             <Button leftIcon={<Send className="w-4 h-4" />} onClick={submitRelease}>
               Confirm Release
             </Button>
           </>
         }
       >
-        {releaseModal && (() => {
-          const doc = documents.find(d => d.id === releaseModal);
-          if (!doc) return null;
-          return (
-            <div className="space-y-3">
-              <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
-                <p className="text-xs text-slate-500">Document</p>
-                <p className="text-sm font-semibold text-slate-900">{doc.trackingNumber} · {doc.title}</p>
-              </div>
-              <Textarea
-                label="Release Remarks"
-                rows={3}
-                value={remarks}
-                onChange={e => setRemarks(e.target.value)}
-                placeholder="Optional release notes…"
-              />
+        {releaseTarget && (
+          <div className="space-y-3">
+            <div className="p-3 rounded-md bg-slate-50 border border-slate-200">
+              <p className="text-xs text-slate-500">Document</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {releaseTarget.trackingNumber} · {releaseTarget.title}
+              </p>
             </div>
-          );
-        })()}
+            <Textarea
+              label="Release Remarks"
+              rows={3}
+              value={remarks}
+              onChange={e => setRemarks(e.target.value)}
+              placeholder="Optional release notes…"
+            />
+          </div>
+        )}
       </Modal>
     </div>
   );

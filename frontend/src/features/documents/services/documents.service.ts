@@ -47,6 +47,16 @@ function normalizeDocument<T extends DocumentListItem | DocumentDetail>(document
     ...document,
     type,
     attachments: 'attachments' in document ? (document.attachments ?? []) : undefined,
+    ...(document._count
+      ? {
+          attachmentCount: document._count.attachments,
+          counts: {
+            reviews: document._count.reviews,
+            releases: document._count.releases,
+            archives: document._count.archives,
+          },
+        }
+      : {}),
   } as T;
 }
 
@@ -120,10 +130,14 @@ export const documentsService = {
 
   checkDocumentNumberAvailability(
     documentNumber: string,
+    originatingOfficeId?: string,
     init?: RequestInit,
   ): Promise<DocumentNumberAvailability> {
+    const officeQuery = originatingOfficeId
+      ? `&originatingOfficeId=${encodeURIComponent(originatingOfficeId)}`
+      : '';
     return request<DocumentNumberAvailability>(
-      `/documents/check-document-number?documentNumber=${encodeURIComponent(documentNumber)}`,
+      `/documents/check-document-number?documentNumber=${encodeURIComponent(documentNumber)}${officeQuery}`,
       init,
     );
   },

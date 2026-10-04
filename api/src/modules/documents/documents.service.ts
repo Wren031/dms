@@ -53,7 +53,7 @@ export type DocumentListItem = Prisma.DocumentGetPayload<{
   include: {
     type: true;
     recipients: { include: { office: { select: { id: true; name: true; code: true } } } };
-    _count: { select: { reviews: true; releases: true; archives: true } };
+    _count: { select: { reviews: true; releases: true; archives: true; attachments: true } };
   };
 }>;
 
@@ -214,6 +214,19 @@ export class DocumentsService {
       recipientOfficeIds,
     );
 
+    // Postgres treats NULLs as distinct in a composite unique index, so a
+    // document with no originating office gets NO database-level guarantee
+    // that its number is unique. Enforce it here instead.
+    if (!dto.originatingOfficeId) {
+      const duplicate = await this.prisma.document.findFirst({
+        where: { documentNumber, originatingOfficeId: null },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw await this.buildDocumentNumberConflict(documentNumber, null);
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       try {
         const doc = await tx.document.create({
@@ -361,7 +374,7 @@ export class DocumentsService {
         include: {
           type: true,
           recipients: { include: { office: { select: { id: true, name: true, code: true } } } },
-          _count: { select: { reviews: true, releases: true, archives: true } },
+          _count: { select: { reviews: true, releases: true, archives: true, attachments: true } },
         },
         orderBy: { [sortBy ?? 'createdAt']: order },
         skip: (page - 1) * pageSize,
@@ -969,14 +982,17 @@ export class DocumentsService {
     });
   }
 
-  private async findExistingDocumentByNumber(documentNumber: string): Promise<{
+  private async findExistingDocumentByNumber(
+    documentNumber: string,
+    originatingOfficeId?: string | null,
+  ): Promise<{
     id: string;
     trackingNumber: string;
     originatingOfficeCode: string | null;
     originatingOfficeName: string | null;
   } | null> {
     const existing = await this.prisma.document.findFirst({
-      where: { documentNumber, deletedAt: null },
+      where: { documentNumber, originatingOfficeId: originatingOfficeId ?? null },
       select: {
         id: true,
         trackingNumber: true,
@@ -1006,8 +1022,12 @@ export class DocumentsService {
 
   private async buildDocumentNumberConflict(
     documentNumber: string,
+    originatingOfficeId?: string | null,
   ): Promise<ConflictException> {
-    const existing = await this.findExistingDocumentByNumber(documentNumber);
+    const existing = await this.findExistingDocumentByNumber(
+      documentNumber,
+      originatingOfficeId,
+    );
     if (!existing) {
       return new ConflictException(
         `Document number '${documentNumber}' is already used.`,
@@ -1027,7 +1047,10 @@ export class DocumentsService {
     });
   }
 
-  async checkDocumentNumberAvailability(documentNumber: string): Promise<{
+  async checkDocumentNumberAvailability(
+    documentNumber: string,
+    originatingOfficeId?: string | null,
+  ): Promise<{
     available: boolean;
     existing: {
       id: string;
@@ -1036,7 +1059,10 @@ export class DocumentsService {
       originatingOfficeName: string | null;
     } | null;
   }> {
-    const existing = await this.findExistingDocumentByNumber(documentNumber);
+    const existing = await this.findExistingDocumentByNumber(
+      documentNumber,
+      originatingOfficeId,
+    );
     return existing
       ? { available: false, existing }
       : { available: true, existing: null };
@@ -1049,11 +1075,13 @@ export class DocumentsService {
     }
     const year = new Date().getFullYear();
     const prefix = `${office.code}-${year}-`;
+    // Soft-deleted documents are included on purpose: the unique index has no
+    // `WHERE deletedAt IS NULL`, so their numbers stay reserved and the
+    // suggestion must step past them instead of proposing a taken value.
     const last = await this.prisma.document.findFirst({
       where: {
         originatingOfficeId: officeId,
         documentNumber: { startsWith: prefix },
-        deletedAt: null,
       },
       orderBy: { documentNumber: 'desc' },
       select: { documentNumber: true },
@@ -1097,8 +1125,9 @@ export class DocumentsService {
   private async generateManualDocumentNumber(): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `MAN-${year}-`;
+    // See suggestDocumentNumber: soft-deleted rows still reserve their number.
     const last = await this.prisma.document.findFirst({
-      where: { documentNumber: { startsWith: prefix }, deletedAt: null },
+      where: { documentNumber: { startsWith: prefix } },
       orderBy: { documentNumber: 'desc' },
       select: { documentNumber: true },
     });

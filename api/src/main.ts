@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { AppConfig } from './config/app.config';
 import { CorsConfig } from './config/cors.config';
+import { API_PREFIX } from './common/constants/api.constants';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
@@ -31,7 +32,7 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser());
 
   // Global API version prefix
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix(API_PREFIX);
 
   // CORS with credentials
   app.enableCors({

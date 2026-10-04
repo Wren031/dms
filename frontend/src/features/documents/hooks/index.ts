@@ -14,3 +14,5 @@ export type { UseDocumentHistoryReturn } from '@/features/documents/hooks/useDoc
 export { useDocumentTimeline } from '@/features/documents/hooks/useDocumentTimeline';
 export type { UseDocumentTimelineReturn } from '@/features/documents/hooks/useDocumentTimeline';
 export { useRoutingOptions } from '@/features/documents/hooks/useRoutingOptions';
+export { useReleaseQueue } from '@/features/documents/hooks/useReleaseQueue';
+export type { UseReleaseQueueReturn, ReleaseTab } from '@/features/documents/hooks/useReleaseQueue';

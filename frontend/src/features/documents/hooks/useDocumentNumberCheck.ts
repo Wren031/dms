@@ -18,6 +18,11 @@ export interface DocumentNumberCheckState {
 export interface UseDocumentNumberCheckOptions {
   documentNumber: string;
   enabled: boolean;
+  /**
+   * Numbers are unique per originating office, so the check must be scoped to
+   * the selected office. Empty means the manual-origin (`MAN-YYYY-NNNN`) pool.
+   */
+  originatingOfficeId?: string;
   debounceMs?: number;
 }
 
@@ -35,6 +40,7 @@ const IDLE: DocumentNumberCheckState = {
 export function useDocumentNumberCheck({
   documentNumber,
   enabled,
+  originatingOfficeId,
   debounceMs = 400,
 }: UseDocumentNumberCheckOptions): DocumentNumberCheckState {
   const [state, setState] = useState<DocumentNumberCheckState>(IDLE);
@@ -55,7 +61,9 @@ export function useDocumentNumberCheck({
 
     const timer = setTimeout(() => {
       documentsService
-        .checkDocumentNumberAvailability(number, { signal: controller.signal })
+        .checkDocumentNumberAvailability(number, originatingOfficeId || undefined, {
+          signal: controller.signal,
+        })
         .then(result => {
           if (controller.signal.aborted) return;
           if (result.available) {
@@ -82,7 +90,7 @@ export function useDocumentNumberCheck({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [documentNumber, enabled, debounceMs]);
+  }, [documentNumber, enabled, originatingOfficeId, debounceMs]);
 
   return state;
 }

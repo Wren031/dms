@@ -7,6 +7,7 @@ import {
   IsUUID,
   Length,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import {
   DocumentClassification,
   DocumentPriority,
@@ -27,6 +28,18 @@ export class FilterDocumentsDto extends PaginationDto {
   status?: DocumentStatus;
 
   @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    // Query strings arrive as `?statuses=a,b`; a JSON body would already be an
+    // array. Normalise both into a real array so @IsArray can pass.
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map((part: string) => part.trim())
+        .filter((part: string) => part.length > 0);
+    }
+    return value;
+  })
   @IsArray()
   @IsEnum(DocumentStatus, { each: true })
   statuses?: DocumentStatus[];

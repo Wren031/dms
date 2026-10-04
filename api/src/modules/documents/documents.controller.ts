@@ -66,6 +66,7 @@ export class DocumentsController {
   checkDocumentNumber(@Query() query: CheckDocumentNumberDto) {
     return this.documentsService.checkDocumentNumberAvailability(
       query.documentNumber,
+      query.originatingOfficeId,
     );
   }
 

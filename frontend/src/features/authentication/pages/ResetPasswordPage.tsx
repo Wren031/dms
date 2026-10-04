@@ -1,18 +1,17 @@
 import { useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
-  Archive as ArchiveIcon,
   ArrowLeft,
   Lock,
   Eye,
   EyeOff,
-  ShieldCheck,
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
 import { authService } from '@/features/authentication/services/authService';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Logo } from '@/components/ui/Logo';
 import { useToast } from '@/hooks/useToast';
 
 export function ResetPasswordPage() {
@@ -62,9 +61,7 @@ export function ResetPasswordPage() {
     <div className="flex min-h-screen w-full items-center justify-center bg-slate-50 px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-8 flex items-center justify-center gap-3 lg:hidden">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-white">
-            <ArchiveIcon className="h-5 w-5" />
-          </div>
+          <Logo />
           <div className="leading-tight">
             <p className="text-lg font-semibold text-slate-900">CityDocs DMS</p>
             <p className="text-xs text-slate-500">Document Management System</p>
@@ -172,11 +169,6 @@ export function ResetPasswordPage() {
               </form>
             </>
           )}
-
-          <p className="mt-7 flex items-center justify-center gap-1.5 border-t border-slate-100 pt-5 text-center text-xs text-slate-400">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Secured with role-based access control
-          </p>
         </div>
       </div>
     </div>

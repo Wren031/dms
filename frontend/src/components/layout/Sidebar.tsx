@@ -3,7 +3,7 @@ import { navigation, iconMap } from './navigation';
 import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { useUnreadNotifications } from '@/features/notifications/hooks/useUnreadNotifications';
 import { ROLE_LABELS } from '@/constants';
-import { Archive as ArchiveIcon } from 'lucide-react';
+import { Logo } from '@/components/ui/Logo';
 import {
   Sidebar,
   SidebarContent,
@@ -50,9 +50,7 @@ export function LayoutSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
               <div className="flex items-center gap-2 px-1">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-brand-600 text-sidebar-primary-foreground">
-                  <ArchiveIcon className="size-4" />
-                </div>
+                <Logo size="sm" alt="" />
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate text-sm font-semibold text-sidebar-foreground">CityDocs DMS</span>
                   <span className="truncate text-[11px] text-muted-foreground">Document Management</span>

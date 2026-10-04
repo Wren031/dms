@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/apiClient';
 
+
 export interface AuthUser {
   id: string;
   email: string | null;
@@ -136,5 +137,6 @@ export const authApi = {
     request<{ success: true }>(`/auth/sessions/${sessionId}`, { method: 'DELETE' }),
   revokeAllSessions: () => request<{ revoked: number }>('/auth/sessions', { method: 'DELETE' }),
 };
+
 
 export { API_BASE_URL } from '@/lib/apiConfig';

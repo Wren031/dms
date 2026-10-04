@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Navigate, Link } from 'react-router-dom';
 import {
-  Archive as ArchiveIcon,
   Lock,
   User,
   LogIn,
@@ -16,6 +15,7 @@ import {
 import { useAuth } from '@/features/authentication/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Logo } from '@/components/ui/Logo';
 import { useToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 
@@ -82,9 +82,7 @@ export function LoginPage() {
 
         <header className="relative z-10 flex items-center gap-3 px-12 pt-12">
           <div className="flex items-center gap-3.5">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 backdrop-blur">
-              <ArchiveIcon className="h-5 w-5" />
-            </div>
+            <Logo />
             <div className="leading-tight">
               <p className="text-lg font-semibold tracking-tight">CityDocs DMS</p>
               <p className="text-xs text-brand-200">Document Management System</p>
@@ -134,9 +132,7 @@ export function LoginPage() {
       <div className="flex items-center justify-center px-6 py-12 sm:px-10">
         <div className="w-full max-w-[26rem]">
           <div className="lg:hidden mb-9 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-white">
-              <ArchiveIcon className="h-5 w-5" />
-            </div>
+            <Logo />
             <div className="leading-tight">
               <p className="text-lg font-semibold text-slate-900">CityDocs DMS</p>
               <p className="text-xs text-slate-500">Document Management System</p>
@@ -222,11 +218,6 @@ export function LoginPage() {
               >
                 {loading ? 'Signing in…' : 'Sign in'}
               </Button>
-
-              <p className="flex items-center justify-center gap-1.5 pt-1 text-center text-xs text-slate-400">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Secured with role-based access control
-              </p>
             </form>
           </div>
 

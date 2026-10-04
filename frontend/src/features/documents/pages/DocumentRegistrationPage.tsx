@@ -143,6 +143,8 @@ export function DocumentRegistrationPage() {
   const docNumberCheck = useDocumentNumberCheck({
     documentNumber: form.documentNumber,
     enabled: !submitting,
+    originatingOfficeId:
+      form.originMode === 'select' ? form.originatingOfficeId : undefined,
   });
 
   const [files, setFiles] = useState<File[]>([]);

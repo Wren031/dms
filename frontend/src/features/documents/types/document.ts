@@ -138,6 +138,12 @@ export interface DocumentListItem {
   dueDate: string | null;
   attachmentCount: number;
   attachments?: DocumentAttachment[];
+  _count?: {
+    reviews: number;
+    releases: number;
+    archives: number;
+    attachments: number;
+  };
   counts: {
     reviews: number;
     releases: number;
