@@ -156,17 +156,6 @@ export const documentsService = {
     });
   },
 
-  remove(id: string): Promise<{ id: string }> {
-    return request<{ id: string }>(`/documents/${id}`, { method: 'DELETE' });
-  },
-
-  removeAll(): Promise<{ deletedCount: number }> {
-    return request<{ deletedCount: number }>('/documents', {
-      method: 'DELETE',
-      body: JSON.stringify({ confirmation: 'DELETE ALL DOCUMENTS' }),
-    });
-  },
-
   transition(id: string, payload: DocumentTransitionInput): Promise<DocumentListItem> {
     return request<DocumentListItem>(`/documents/${id}/transition`, {
       method: 'POST',

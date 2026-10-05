@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Check, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -39,11 +39,11 @@ export function Stepper({
           <div
             className="absolute top-4 left-0 h-0.5 bg-brand-600 transition-all duration-300"
             style={{
-              width: ${((currentStep - 1) / Math.max(steps.length - 1, 1)) * 100}%,
+            width: `${((currentStep - 1) / Math.max(steps.length - 1, 1)) * 100}%`,
             }}
           />
           <ol className="relative flex justify-between">
-            {steps.map((step, index) => {
+            {steps.map((step) => {
               const stepNumber = step.id;
               const isCompleted = stepNumber < currentStep;
               const isActive = stepNumber === currentStep;
@@ -70,7 +70,7 @@ export function Stepper({
                       !canNavigate && 'cursor-not-allowed opacity-60',
                     )}
                     style={{ width: '36px', height: '36px' }}
-                    aria-label={Step : }
+                    aria-label={`Step ${stepNumber}: ${step.title}`}
                   >
                     {isCompleted ? (
                       <Check className="h-5 w-5" />
@@ -106,7 +106,7 @@ export function Stepper({
         </div>
       ) : (
         <ol className="space-y-2">
-          {steps.map((step, index) => {
+          {steps.map((step) => {
             const stepNumber = step.id;
             const isCompleted = stepNumber < currentStep;
             const isActive = stepNumber === currentStep;
