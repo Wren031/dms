@@ -255,9 +255,9 @@ export const attachmentsService = {
     return `${API_BASE_URL}/document-attachments/${id}/download`;
   },
 
-  previewUrl(id: string): string {
-    return `${API_BASE_URL}/document-attachments/${id}/download?inline=1`;
-  },
+
+
+
 
   async head(id: string): Promise<{ available: boolean; status: number }> {
     const response = await fetch(`${API_BASE_URL}/document-attachments/${id}/download?inline=1`, {
@@ -267,3 +267,4 @@ export const attachmentsService = {
     return { available: response.ok, status: response.status };
   },
 };
+

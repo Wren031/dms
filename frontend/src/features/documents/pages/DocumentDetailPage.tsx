@@ -345,7 +345,7 @@ export function DocumentDetailPage() {
             isOverdue={!!isOverdue}
             onViewAttachment={(att) => {
               if (att.mimeType.toLowerCase() === 'application/pdf') {
-                window.open(attachmentsService.previewUrl(att.id), '_blank', 'noopener,noreferrer');
+              void downloadAttachment(att.id);
               } else {
                 void downloadAttachment(att.id);
               }
@@ -681,7 +681,6 @@ interface DocumentInfoSidebarProps {
   document: DocumentDetail;
   office: { code: string; name: string } | undefined;
   isOverdue: boolean;
-  onViewAttachment: (att: { id: string; fileName: string; mimeType: string }) => void;
   onDownloadAttachment: (id: string) => void;
 }
 
@@ -689,7 +688,6 @@ function DocumentInfoSidebar({
   document: d,
   office,
   isOverdue,
-  onViewAttachment,
   onDownloadAttachment,
 }: DocumentInfoSidebarProps) {
   return (
@@ -921,3 +919,4 @@ function HistoryPanel({ document, history, userById }: HistoryPanelProps) {
 function statusLabel(status: DocumentStatus): string {
   return DOCUMENT_STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
 }
+

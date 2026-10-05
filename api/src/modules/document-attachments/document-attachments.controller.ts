@@ -92,7 +92,7 @@ export class DocumentAttachmentsController {
     });
   }
 
-  @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
+    @Roles(ROLES.SYSTEM_ADMIN, ROLES.OFFICE_ADMIN, ROLES.DOCUMENT_ENCODER)
   @Permissions('documents.edit')
   @Patch(':id')
   update(
@@ -111,3 +111,7 @@ export class DocumentAttachmentsController {
     return this.attachmentsService.remove(id);
   }
 }
+
+
+
+

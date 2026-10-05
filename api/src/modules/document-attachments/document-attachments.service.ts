@@ -18,6 +18,8 @@ export interface DownloadInfo {
   sizeBytes: number;
 }
 
+
+
 @Injectable()
 export class DocumentAttachmentsService {
   constructor(
@@ -63,7 +65,7 @@ export class DocumentAttachmentsService {
     return this.findAll(documentId);
   }
 
-  async getDownloadInfo(id: string): Promise<DownloadInfo> {
+    async getDownloadInfo(id: string): Promise<DownloadInfo> {
     const att = await this.prisma.documentAttachment.findUnique({ where: { id } });
     if (!att || att.status !== 'uploaded') throw new NotFoundException('Attachment not found');
     const absolutePath = this.storage.getAbsolutePath(att.storageKey);
@@ -93,3 +95,5 @@ export class DocumentAttachmentsService {
     return { success: true };
   }
 }
+
+
