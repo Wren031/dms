@@ -229,3 +229,51 @@ export function DocumentRegistrationPage() {
   const assignedUsers = useMemo(() => {
     return routingUsers.filter(option => option.officeId === user.officeId);
   }, [routingUsers, user.officeId]);
+
+  useEffect(() => {
+    if (officesLoading || offices.length === 0) return;
+    const officeIds = new Set(offices.map(office => office.id));
+    const routingUserIds = new Set(routingUsers.map(option => option.id));
+    setForm(previous => {
+      const originatingOfficeId = officeIds.has(previous.originatingOfficeId)
+        ? previous.originatingOfficeId
+        : '';
+      const recipientOfficeIds = previous.recipientOfficeIds.filter(id => officeIds.has(id));
+      const assignedUserId = routingUserIds.has(previous.assignedUserId)
+        ? previous.assignedUserId
+        : '';
+
+      const originUntouched =
+        previous.originMode === '' &&
+        !previous.originatingOfficeId &&
+        !previous.originatingOfficeName;
+      const currentOfficeId = user.officeId && officeIds.has(user.officeId) ? user.officeId : '';
+      const origin = originUntouched && currentOfficeId
+        ? { originMode: 'select' as const, originatingOfficeId: currentOfficeId }
+        : { originMode: previous.originMode, originatingOfficeId };
+
+      if (
+        origin.originMode === previous.originMode &&
+        origin.originatingOfficeId === previous.originatingOfficeId &&
+        recipientOfficeIds.length === previous.recipientOfficeIds.length &&
+        assignedUserId === previous.assignedUserId
+      ) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        ...origin,
+        recipientOfficeIds,
+        assignedUserId,
+      };
+    });
+  }, [offices, officesLoading, routingUsers, user.officeId]);
+
+  useEffect(() => {
+    if (documentTypesLoading || documentTypes.length === 0) return;
+    setForm(previous => {
+      if (documentTypes.some(t => t.id === previous.type)) return previous;
+      return { ...previous, type: documentTypes[0].id };
+    });
+  }, [documentTypes, documentTypesLoading]);
